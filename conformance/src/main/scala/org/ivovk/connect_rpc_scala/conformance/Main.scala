@@ -5,8 +5,8 @@ import cats.effect.{IO, Sync}
 import com.comcast.ip4s.{Port, host, port}
 import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatRequest, ServerCompatResponse}
 import org.http4s.ember.server.EmberServerBuilder
-import org.http4s.server.middleware.GZip
-import org.ivovk.connect_rpc_scala.ConnectRpcHttpRoutes
+import org.ivovk.connect_rpc_scala.{Configuration, ConnectRpcHttpRoutes}
+import scalapb.json4s.TypeRegistry
 
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -35,7 +35,19 @@ object Main extends App {
       new ConformanceServiceImpl[IO]()
     )
 
-    httpApp <- ConnectRpcHttpRoutes.create[IO](Seq(service))
+    httpApp <- ConnectRpcHttpRoutes.create[IO](
+        Seq(service),
+        Configuration(
+          jsonPrinterConfiguration = { p =>
+            // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
+            // JSON-serialization conformance tests
+            p.withTypeRegistry(
+              TypeRegistry.default
+                .addMessage[connectrpc.conformance.v1.UnaryRequest]
+            )
+          }
+        )
+      )
       .map(r => r.orNotFound)
 
     server <- EmberServerBuilder.default[IO]

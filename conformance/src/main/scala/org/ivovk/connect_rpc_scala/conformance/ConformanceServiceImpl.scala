@@ -27,15 +27,13 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
           payload = ConformancePayload(
             data = bs,
             requestInfo = ConformancePayload.RequestInfo(
-              requestHeaders = ctx.keys().asScala.map { key =>
-                Header(key, ctx.getAll(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER)).asScala.toSeq)
-              }.toSeq,
+              requestHeaders = mkConformanceHeaders(ctx),
               timeoutMs = None,
               requests = Seq(
-//                com.google.protobuf.any.Any(
-//                  typeUrl = "type.googleapis.com/connectrpc.conformance.v1.UnaryRequest",
-//                  value = request.toByteString
-//                )
+                com.google.protobuf.any.Any(
+                  typeUrl = "type.googleapis.com/" + UnaryRequest.scalaDescriptor.fullName,
+                  value = request.toByteString
+                )
               ),
               connectGetInfo = None,
             ).some
@@ -54,6 +52,12 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
       case _ =>
         throw new RuntimeException("Unknown response type")
     }
+  }
+
+  private def mkConformanceHeaders(metadata: Metadata): Seq[Header] = {
+    metadata.keys().asScala.map { key =>
+      Header(key, metadata.getAll(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER)).asScala.toSeq)
+    }.toSeq
   }
 
   override def serverStream(

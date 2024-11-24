@@ -1,5 +1,6 @@
 package org.ivovk.connect_rpc_scala
 
+import cats.Endo
 import cats.data.EitherT
 import cats.effect.Async
 import cats.effect.kernel.Resource
@@ -15,7 +16,7 @@ import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
 import org.slf4j.{Logger, LoggerFactory}
 import org.typelevel.ci.{CIString, CIStringSyntax}
 import scalapb.grpc.ClientCalls
-import scalapb.json4s.JsonFormat
+import scalapb.json4s.{JsonFormat, Printer}
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 
 import java.util.concurrent.atomic.AtomicReference
@@ -23,6 +24,7 @@ import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 
 case class Configuration(
+  jsonPrinterConfiguration: Endo[Printer] = identity,
   waitForShutdown: Duration = 10.seconds,
 )
 
@@ -30,7 +32,9 @@ object ConnectRpcHttpRoutes {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  private given [F[_] : Async : Compression, A <: GeneratedMessage](using cmp: GeneratedMessageCompanion[A]): EntityDecoder[F, A] with {
+  private given [F[_] : Async : Compression, A <: GeneratedMessage](
+    using cmp: GeneratedMessageCompanion[A]
+  ): EntityDecoder[F, A] with {
     override def decode(m: Media[F], strict: Boolean): DecodeResult[F, A] = {
       val charset  = m.charset.getOrElse(Charset.`UTF-8`).nioCharset
       val encoding = m.headers.get[`Content-Encoding`].map(_.contentCoding)
@@ -59,9 +63,10 @@ object ConnectRpcHttpRoutes {
     override def consumes: Set[MediaRange] = Set(MediaRange.`application/*`)
   }
 
-  private given [F[_] : Async, A <: GeneratedMessage]: EntityEncoder[F, A] with {
-    override def toEntity(a: A): Entity[F] =
-      EntityEncoder.stringEncoder[F].toEntity(JsonFormat.toJsonString(a))
+  private given [F[_] : Async, A <: GeneratedMessage](using printer: Printer): EntityEncoder[F, A] with {
+    override def toEntity(a: A): Entity[F] = {
+      EntityEncoder.stringEncoder[F].toEntity(printer.print(a))
+    }
 
     override val headers: Headers =
       Headers(`Content-Type`(MediaType.application.`json`))
@@ -78,6 +83,8 @@ object ConnectRpcHttpRoutes {
   ): Resource[F, HttpRoutes[F]] = {
     val dsl = Http4sDsl[F]
     import dsl.*
+
+    given Printer = configuration.jsonPrinterConfiguration(JsonFormat.printer)
 
     val methodRegistry = services
       .flatMap(_.getMethods.asScala)
@@ -130,7 +137,7 @@ object ConnectRpcHttpRoutes {
     entry: ConnectRpcHttpRoutes.RegistryEntry,
     req: Request[F],
     channel: Channel
-  ): F[Response[F]] = {
+  )(using printer: Printer): F[Response[F]] = {
     import dsl.*
 
     req.headers.get(ci"X-Test-Case-Name") match {
@@ -164,7 +171,7 @@ object ConnectRpcHttpRoutes {
 
           Ok(response)
             .map { resp =>
-              val headers = mkHeaders(responseHeaderMetadata.get())
+              val headers  = mkHeaders(responseHeaderMetadata.get())
               val trailers = mkHeaders(responseTrailerMetadata.get())
               logger.trace(s"<<< Headers: $headers, Trailers: $trailers")
 
