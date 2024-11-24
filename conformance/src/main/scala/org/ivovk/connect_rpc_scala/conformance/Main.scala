@@ -1,7 +1,6 @@
 package org.ivovk.connect_rpc_scala.conformance
 
-import cats.effect.unsafe.IORuntime
-import cats.effect.{IO, Sync}
+import cats.effect.{IO, IOApp, Sync}
 import com.comcast.ip4s.{Port, host, port}
 import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatRequest, ServerCompatResponse}
 import org.http4s.ember.server.EmberServerBuilder
@@ -27,49 +26,54 @@ import java.nio.ByteBuffer
  *
  * [[https://github.com/connectrpc/conformance/blob/main/docs/configuring_and_running_tests.md]]
  */
-object Main extends App {
+object Main extends IOApp.Simple {
 
-  val res = for {
-    req <- ServerCompatSerDeser.readRequest[IO](System.in).toResource
-    service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
-      new ConformanceServiceImpl[IO]()
-    )
+  override def run: IO[Unit] = {
+    val res = for
+      req <- ServerCompatSerDeser.readRequest[IO](System.in).toResource
 
-    httpApp <- ConnectRpcHttpRoutes.create[IO](
-        Seq(service),
-        Configuration(
-          jsonPrinterConfiguration = { p =>
-            // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
-            // JSON-serialization conformance tests
-            p.withTypeRegistry(
-              TypeRegistry.default
-                .addMessage[connectrpc.conformance.v1.UnaryRequest]
-            )
-          }
-        )
+      service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
+        ConformanceServiceImpl[IO]()
       )
-      .map(r => r.orNotFound)
 
-    server <- EmberServerBuilder.default[IO]
-      .withHost(host"127.0.0.1")
-      .withPort(port"0") // random port
-      .withHttpApp(httpApp)
-      .build
+      httpApp <- ConnectRpcHttpRoutes
+        .create[IO](
+          Seq(service),
+          Configuration(
+            jsonPrinterConfiguration = { p =>
+              // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
+              // JSON-serialization conformance tests
+              p.withTypeRegistry(
+                TypeRegistry.default
+                  .addMessage[connectrpc.conformance.v1.UnaryRequest]
+              )
+            }
+          )
+        )
+        .map(r => r.orNotFound)
 
-    addr = server.address
-    resp = ServerCompatResponse(addr.getHostString, addr.getPort)
+      server <- EmberServerBuilder.default[IO]
+        .withHost(host"127.0.0.1")
+        .withPort(port"0") // random port
+        .withHttpApp(httpApp)
+        .build
 
-    _ <- ServerCompatSerDeser.writeResponse[IO](System.out, resp).toResource
+      addr = server.address
+      resp = ServerCompatResponse(addr.getHostString, addr.getPort)
 
-    _ = System.err.println(s"Server started on $addr...")
-  } yield ()
+      _ <- ServerCompatSerDeser.writeResponse[IO](System.out, resp).toResource
 
-  res.useForever
-    .recover { case e =>
-      System.err.println(s"Error in server:")
-      e.printStackTrace()
-    }
-    .unsafeRunSync()(IORuntime.global)
+      _ = System.err.println(s"Server started on $addr...")
+    yield ()
+
+    res
+      .useForever
+      .recover { case e =>
+        System.err.println(s"Error in server:")
+        e.printStackTrace()
+      }
+  }
+
 }
 
 object ServerCompatSerDeser {
@@ -86,7 +90,6 @@ object ServerCompatSerDeser {
       out.write(resp.toByteArray)
       out.flush()
     }
-
 }
 
 object IntSerDeser {
