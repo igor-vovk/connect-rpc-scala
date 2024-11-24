@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package connectrpc;
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  scope: PACKAGE
+  flat_package: true
+  lenses: false
+  enum_value_naming: CAMEL_CASE
+  enum_strip_prefix: true
+  preserve_unknown_fields: false
+};

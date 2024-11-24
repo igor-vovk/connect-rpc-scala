@@ -10,11 +10,11 @@ import fs2.text.decodeWithCharset
 import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.stub.MetadataUtils
-import org.http4s.*
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
+import org.http4s.{Status, *}
 import org.slf4j.{Logger, LoggerFactory}
-import org.typelevel.ci.{CIString, CIStringSyntax}
+import org.typelevel.ci.CIStringSyntax
 import scalapb.grpc.ClientCalls
 import scalapb.json4s.{JsonFormat, Printer}
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
@@ -29,6 +29,9 @@ case class Configuration(
 )
 
 object ConnectRpcHttpRoutes {
+
+  import Converters.*
+
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -65,7 +68,11 @@ object ConnectRpcHttpRoutes {
 
   private given [F[_] : Async, A <: GeneratedMessage](using printer: Printer): EntityEncoder[F, A] with {
     override def toEntity(a: A): Entity[F] = {
-      EntityEncoder.stringEncoder[F].toEntity(printer.print(a))
+      val string = printer.print(a)
+
+      logger.trace(s"<<< JSON: $string")
+
+      EntityEncoder.stringEncoder[F].toEntity(string)
     }
 
     override val headers: Headers =
@@ -159,7 +166,7 @@ object ConnectRpcHttpRoutes {
           ClientCalls.asyncUnaryCall[GeneratedMessage, GeneratedMessage](
             ClientInterceptors.intercept(
               channel,
-              MetadataUtils.newAttachHeadersInterceptor(mkMetadata(req.headers)),
+              MetadataUtils.newAttachHeadersInterceptor(http4sHeadersToGrpcMetadata(req.headers)),
               MetadataUtils.newCaptureMetadataInterceptor(responseHeaderMetadata, responseTrailerMetadata),
             ),
             entry.methodDescriptor,
@@ -171,8 +178,8 @@ object ConnectRpcHttpRoutes {
 
           Ok(response)
             .map { resp =>
-              val headers  = mkHeaders(responseHeaderMetadata.get())
-              val trailers = mkHeaders(responseTrailerMetadata.get())
+              val headers  = grpcMetadataToHttp4sHeaders(responseHeaderMetadata.get())
+              val trailers = grpcMetadataToHttp4sHeaders(responseTrailerMetadata.get())
               logger.trace(s"<<< Headers: $headers, Trailers: $trailers")
 
               resp
@@ -181,50 +188,34 @@ object ConnectRpcHttpRoutes {
             }
         }
       }
-      .recoverWith {
-        case e: StatusRuntimeException =>
-          logger.error("<<< Error processing request", e)
-
-          val description = e.getStatus.getDescription
-
-          e.getStatus.getCode match
-            case io.grpc.Status.Code.NOT_FOUND =>
-              NotFound(description)
-            case io.grpc.Status.Code.INVALID_ARGUMENT =>
-              BadRequest(description)
-            case io.grpc.Status.Code.UNIMPLEMENTED =>
-              NotImplemented(description)
-            case _ => // TODO: map other status codes
-              InternalServerError(description)
-        case e: StatusException =>
-          logger.error("<<< Error processing request", e)
-
-          InternalServerError(e.getStatus.getDescription)
-        case e: Throwable =>
-          logger.error("<<< Error processing request", e)
-
-          InternalServerError(e.getMessage)
-      }
-  }
-
-  private def mkMetadata(headers: Headers): Metadata = {
-    val metadata = new Metadata()
-    headers.foreach { header =>
-      metadata.put(Metadata.Key.of(header.name.toString, Metadata.ASCII_STRING_MARSHALLER), header.value)
-    }
-    metadata
-  }
-
-  private def mkHeaders(metadata: Metadata): Headers = {
-    val headers = metadata.keys()
-      .asScala.toList
-      .flatMap { key =>
-        metadata.getAll(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER)).asScala.map { value =>
-          Header.Raw(CIString(key), value)
+      .recover { case e =>
+        val grpcStatus = e match {
+          case e: StatusRuntimeException =>
+            e.getStatus.getDescription match {
+              case "an implementation is missing" => io.grpc.Status.UNIMPLEMENTED
+              case _ => e.getStatus
+            }
+          case e: StatusException => e.getStatus
+          case _ => io.grpc.Status.INTERNAL
         }
-      }
 
-    Headers(headers)
+        val message = e match {
+          case e: StatusRuntimeException => e.getStatus.getDescription
+          case e: StatusException => e.getStatus.getDescription
+          case e => e.getMessage
+        }
+
+        val httpStatus  = mapGrpcStatusCodeToHttpStatus(grpcStatus.getCode)
+        val connectCode = mapGrpcStatusCodeToConnectCode(grpcStatus.getCode)
+
+        logger.warn(s"<<< Error processing request", e)
+        logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: $message")
+
+        Response[F](httpStatus).withEntity(connectrpc.Error(
+          code = connectCode,
+          message = Option(message),
+        ))
+      }
   }
 
   private inline def grpcMethodName(service: String, method: String): String = service + "/" + method

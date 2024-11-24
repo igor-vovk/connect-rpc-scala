@@ -11,6 +11,17 @@ import scala.jdk.CollectionConverters.*
 
 object InProcessChannelBridge {
 
+  def create[F[_] : Sync](
+    services: Seq[ServerServiceDefinition],
+    waitForShutdown: Duration,
+  ): Resource[F, Channel] = {
+    for
+      name <- Resource.eval(Sync[F].delay(InProcessServerBuilder.generateName()))
+      server <- createServer(name, services, waitForShutdown)
+      channel <- createStub(name, waitForShutdown)
+    yield channel
+  }
+
   private def createServer[F[_] : Sync](
     name: String,
     services: Seq[ServerServiceDefinition],
@@ -42,17 +53,6 @@ object InProcessChannelBridge {
       Sync[F].delay(c.shutdown().awaitTermination(waitForShutdown.toMillis, TimeUnit.MILLISECONDS)).void
 
     Resource.make(acquire)(release)
-  }
-
-  def create[F[_] : Sync](
-    services: Seq[ServerServiceDefinition],
-    waitForShutdown: Duration,
-  ): Resource[F, Channel] = {
-    for
-      name <- Resource.eval(Sync[F].delay(InProcessServerBuilder.generateName()))
-      server <- createServer(name, services, waitForShutdown)
-      channel <- createStub(name, waitForShutdown)
-    yield channel
   }
 
 }

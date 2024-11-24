@@ -43,6 +43,19 @@ both GRPC and REST APIs at the same time on two ports.
 
 This simplifies overall setup: simpler CI, fewer network components, faster execution speed.
 
+## Features of the protocol supported by the library
+
+```yaml
+versions: [ HTTP_VERSION_1 ]
+protocols: [ PROTOCOL_CONNECT ]
+codecs: [ CODEC_JSON ]
+stream_types: [ STREAM_TYPE_UNARY ]
+supports_tls: false
+supports_trailers: false
+supports_connect_get: false
+supports_message_receive_limit: false
+```
+
 ## Usage
 
 TODO: Add usage instructions
@@ -62,8 +75,12 @@ Diagnostic data from the server itself is output in the `out/out.log` file.
 
 ### Conformance tests status
 
-* Current status: 2/150 tests passed
-* Not being able to set response headers from the fs2-grpc server implementation
+Current status: 4/78 tests pass
+
+Major issues:
+
+* fs2-grpc server implementation doesn't support setting response headers
+* Trailers that are set in http4s aren’t being sent to the client
 
 ## Future improvements
 

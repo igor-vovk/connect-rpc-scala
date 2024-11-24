@@ -1,5 +1,6 @@
-
+# https://github.com/connectrpc/conformance/blob/main/docs/configuring_and_running_tests.md#configuration-files
 features:
+  versions: [ HTTP_VERSION_1 ]
   protocols: [ PROTOCOL_CONNECT ]
   codecs: [ CODEC_JSON ]
   stream_types: [ STREAM_TYPE_UNARY ]

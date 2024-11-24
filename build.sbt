@@ -9,6 +9,10 @@ lazy val core = project
   .settings(
     name := "connect-rpc-scala",
 
+    Compile / PB.targets := Seq(
+      scalapb.gen() -> (Compile / sourceManaged).value
+    ),
+
     Test / PB.targets := Seq(
       scalapb.gen() -> (Test / sourceManaged).value
     ),
@@ -19,6 +23,8 @@ lazy val core = project
       "io.grpc" % "grpc-core" % Versions.grpc,
       "io.grpc" % "grpc-protobuf" % Versions.grpc,
       "io.grpc" % "grpc-inprocess" % Versions.grpc,
+
+      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
 
       "org.http4s" %% "http4s-dsl" % Versions.http4s,
       "org.http4s" %% "http4s-client" % Versions.http4s % Test,
@@ -37,7 +43,5 @@ lazy val `conformance` = project
       "org.http4s" %% "http4s-ember-server" % Versions.http4s,
 
       "ch.qos.logback" % "logback-classic" % "1.5.12" % Runtime,
-
-      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
     ),
   )

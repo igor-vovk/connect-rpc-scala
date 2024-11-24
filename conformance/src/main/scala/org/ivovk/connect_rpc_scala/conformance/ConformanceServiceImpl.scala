@@ -75,6 +75,7 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
     ctx: Metadata
   ): fs2.Stream[F, BidiStreamResponse] = ???
 
+  // This endpoint must stay unimplemented
   override def unimplemented(
     request: UnimplementedRequest,
     ctx: Metadata
