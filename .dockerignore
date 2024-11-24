@@ -1,5 +1,6 @@
 .bsp/
+.github/
 .idea/
 out/
 target/
-../target/
+**/target/

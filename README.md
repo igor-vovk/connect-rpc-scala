@@ -47,6 +47,24 @@ This simplifies overall setup: simpler CI, fewer network components, faster exec
 
 TODO: Add usage instructions
 
+## Development
+
+### Running Connect-RPC conformance tests
+
+Run the following command to run Connect-RPC conformance tests:
+
+```shell
+docker build . --output "out" --progress=plain
+```
+
+Execution results are output in STDOUT.
+Diagnostic data from the server itself is output in the `out/out.log` file.
+
+### Conformance tests status
+
+* Current status: 2/150 tests passed
+* Not being able to set response headers from the fs2-grpc server implementation
+
 ## Future improvements
 
 * Support GET-requests

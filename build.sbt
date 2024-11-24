@@ -1,5 +1,3 @@
-ThisBuild / version := "0.1.0-SNAPSHOT"
-
 ThisBuild / scalaVersion := "3.3.4"
 
 lazy val Versions = new {
@@ -26,5 +24,20 @@ lazy val core = project
       "org.http4s" %% "http4s-client" % Versions.http4s % Test,
 
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+    ),
+  )
+
+lazy val `conformance` = project
+  .dependsOn(core)
+  .enablePlugins(Fs2Grpc, JavaAppPackaging)
+  .settings(
+    publish / skip := true,
+
+    libraryDependencies ++= Seq(
+      "org.http4s" %% "http4s-ember-server" % Versions.http4s,
+
+      "ch.qos.logback" % "logback-classic" % "1.5.12" % Runtime,
+
+      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
     ),
   )
