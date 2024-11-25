@@ -3,18 +3,22 @@ package org.ivovk.connect_rpc_scala
 import io.grpc.{Metadata, Status}
 import org.http4s.{Header, Headers}
 import org.typelevel.ci.CIString
+import scalapb.GeneratedMessage
 
 import scala.jdk.CollectionConverters.*
 
-object Mappings extends HeaderMappings, StatusCodeMappings
+object Mappings extends HeaderMappings, StatusCodeMappings, AnyMappings
 
 trait HeaderMappings {
+
+  private inline def asciiKey(name: String): Metadata.Key[String] =
+    Metadata.Key.of(name, Metadata.ASCII_STRING_MARSHALLER)
 
   extension (headers: Headers) {
     def toMetadata: Metadata = {
       val metadata = new Metadata()
       headers.foreach { header =>
-        metadata.put(Metadata.Key.of(header.name.toString, Metadata.ASCII_STRING_MARSHALLER), header.value)
+        metadata.put(asciiKey(header.name.toString), header.value)
       }
       metadata
     }
@@ -25,7 +29,7 @@ trait HeaderMappings {
       val headers = metadata.keys()
         .asScala.toList
         .flatMap { key =>
-          metadata.getAll(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER)).asScala.map { value =>
+          metadata.getAll(asciiKey(key)).asScala.map { value =>
             Header.Raw(CIString(key), value)
           }
         }
@@ -85,6 +89,18 @@ trait StatusCodeMappings {
       case io.grpc.Status.Code.UNAUTHENTICATED => "unauthenticated"
       case _ => "internal"
     }
+  }
+
+}
+
+trait AnyMappings {
+
+  extension [T <: GeneratedMessage](t: T) {
+    def toAny: com.google.protobuf.any.Any =
+      com.google.protobuf.any.Any(
+        typeUrl = "type.googleapis.com/" + t.companion.scalaDescriptor.fullName,
+        value = t.toByteString
+      )
   }
 
 }

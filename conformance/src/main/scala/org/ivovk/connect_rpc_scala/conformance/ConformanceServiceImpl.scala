@@ -4,6 +4,7 @@ import cats.effect.Async
 import cats.implicits.*
 import connectrpc.conformance.v1.*
 import io.grpc.{Metadata, Status, StatusRuntimeException}
+import scalapb.TextFormat
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
@@ -11,6 +12,8 @@ import scala.jdk.CollectionConverters.*
 
 
 class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrailers[F, Metadata] {
+
+  import org.ivovk.connect_rpc_scala.Mappings.*
 
   override def unary(request: UnaryRequest, ctx: Metadata): F[(UnaryResponse, Metadata)] = {
     val responseDefinition = request.getResponseDefinition
@@ -29,12 +32,7 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
             requestInfo = ConformancePayload.RequestInfo(
               requestHeaders = mkConformanceHeaders(ctx),
               timeoutMs = None,
-              requests = Seq(
-                com.google.protobuf.any.Any(
-                  typeUrl = "type.googleapis.com/" + UnaryRequest.scalaDescriptor.fullName,
-                  value = request.toByteString
-                )
-              ),
+              requests = Seq(request.toAny),
               connectGetInfo = None,
             ).some
           ).some
@@ -42,13 +40,18 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
 
         Async[F].sleep(Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)) *>
           Async[F].pure((response, trailers))
-      case UnaryResponseDefinition.Response.Error(Error(code, message, details)) =>
-        val status     = Status.fromCodeValue(code.value).withDescription(message.orNull)
-        val augmStatus = details.foldLeft(status) { (s, d) =>
-          s.augmentDescription(d.toProtoString)
-        }
+      case UnaryResponseDefinition.Response.Error(Error(code, message, _)) =>
+        val status = Status.fromCodeValue(code.value)
+          .withDescription(message.orNull)
+          .augmentDescription(
+            TextFormat.printToSingleLineUnicodeString(
+              ConformancePayload.RequestInfo(
+                requests = Seq(request.toAny)
+              ).toAny
+            )
+          )
 
-        throw new StatusRuntimeException(augmStatus, trailers)
+        throw new StatusRuntimeException(status, trailers)
       case _ =>
         throw new RuntimeException("Unknown response type")
     }

@@ -10,14 +10,14 @@ import fs2.text.decodeWithCharset
 import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.stub.MetadataUtils
+import org.http4s.*
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
-import org.http4s.{Status, *}
 import org.slf4j.{Logger, LoggerFactory}
 import org.typelevel.ci.CIStringSyntax
 import scalapb.grpc.ClientCalls
 import scalapb.json4s.{JsonFormat, Printer}
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
+import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
 
 import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.*
@@ -30,7 +30,9 @@ case class Configuration(
 
 object ConnectRpcHttpRoutes {
 
-  import Mappings.{*, given}
+  import Mappings.*
+
+  val AugmentedDescriptionPrefix = "aud:"
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -202,21 +204,43 @@ object ConnectRpcHttpRoutes {
           case _ => io.grpc.Status.INTERNAL
         }
 
-        val message = e match {
+        val rawMessage = Option(e match {
           case e: StatusRuntimeException => e.getStatus.getDescription
           case e: StatusException => e.getStatus.getDescription
           case e => e.getMessage
-        }
+        })
+
+        val messageWithDetails = rawMessage
+          .map(
+            _.split("\n").partition(m => !m.startsWith("type_url: "))
+          )
+          .map((messageParts, additionalDetails) =>
+            val details = additionalDetails
+              .map(TextFormat.fromAscii(com.google.protobuf.any.Any, _) match {
+                case Right(details) => details
+                case Left(e) =>
+                  logger.warn(s"Failed to parse additional details", e)
+
+                  com.google.protobuf.wrappers.StringValue(e.msg).toAny
+              })
+              .toSeq
+
+            (messageParts.mkString("\n"), details)
+          )
+
+        val message = messageWithDetails.map(_._1)
+        val details = messageWithDetails.map(_._2).getOrElse(Seq.empty)
 
         val httpStatus  = grpcStatus.toHttpStatus
         val connectCode = grpcStatus.toConnectCode
 
         logger.warn(s"<<< Error processing request", e)
-        logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: $message")
+        logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: ${rawMessage.orNull}")
 
         Response[F](httpStatus).withEntity(connectrpc.Error(
           code = connectCode,
-          message = Option(message),
+          message = messageWithDetails.map(_._1),
+          details = Seq.empty // details
         ))
       }
   }
