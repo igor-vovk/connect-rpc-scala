@@ -178,20 +178,17 @@ object ConnectRpcHttpRoutes {
             CallOptions.DEFAULT,
             message
           )
-        }).flatMap { response =>
-          logger.trace(s"<<< Response: $response")
+        }).map { response =>
+          val headers  = responseHeaderMetadata.get().toHeaders
+          val trailers = responseTrailerMetadata.get().toHeaders
 
-          Ok(response)
-            .map { resp =>
-              val headers  = responseHeaderMetadata.get().toHeaders
-              val trailers = responseTrailerMetadata.get().toHeaders
+          if (logger.isTraceEnabled) {
+            logger.trace(s"<<< Headers: $headers, Trailers: $trailers")
+          }
 
-              logger.trace(s"<<< Headers: $headers, Trailers: $trailers")
-
-              resp
-                .transformHeaders(_ ++ headers)
-                .withTrailerHeaders(Async[F].pure(trailers))
-            }
+          Response(Ok, headers = headers)
+            .withEntity(response)
+            .withTrailerHeaders(Async[F].pure(trailers))
         }
       }
       .recover { case e =>
