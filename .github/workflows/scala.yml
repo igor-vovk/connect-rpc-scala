@@ -23,3 +23,13 @@ jobs:
 
       - name: Run tests
         run: sbt test
+
+  conformance-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run conformance tests
+        run: docker build . --progress=plain
