@@ -30,8 +30,7 @@ case class Configuration(
 
 object ConnectRpcHttpRoutes {
 
-  import Converters.*
-
+  import Mappings.{*, given}
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -130,9 +129,15 @@ object ConnectRpcHttpRoutes {
                 case MethodType.UNARY =>
                   handleUnary(dsl, entry, req, ipChannel)
                 case unsupported =>
-                  NotImplemented(s"Unsupported method type: $unsupported")
+                  NotImplemented(connectrpc.Error(
+                    code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
+                    message = s"Unsupported method type: $unsupported".some
+                  ))
             case None =>
-              NotFound(s"Method not found: ${grpcMethodName(serviceName, methodName)}")
+              NotFound(connectrpc.Error(
+                code = io.grpc.Status.NOT_FOUND.toConnectCode,
+                message = s"Method not found: ${grpcMethodName(serviceName, methodName)}".some
+              ))
           }
       }
 
@@ -166,7 +171,7 @@ object ConnectRpcHttpRoutes {
           ClientCalls.asyncUnaryCall[GeneratedMessage, GeneratedMessage](
             ClientInterceptors.intercept(
               channel,
-              MetadataUtils.newAttachHeadersInterceptor(http4sHeadersToGrpcMetadata(req.headers)),
+              MetadataUtils.newAttachHeadersInterceptor(req.headers.toMetadata),
               MetadataUtils.newCaptureMetadataInterceptor(responseHeaderMetadata, responseTrailerMetadata),
             ),
             entry.methodDescriptor,
@@ -178,8 +183,9 @@ object ConnectRpcHttpRoutes {
 
           Ok(response)
             .map { resp =>
-              val headers  = grpcMetadataToHttp4sHeaders(responseHeaderMetadata.get())
-              val trailers = grpcMetadataToHttp4sHeaders(responseTrailerMetadata.get())
+              val headers  = responseHeaderMetadata.get().toHeaders
+              val trailers = responseTrailerMetadata.get().toHeaders
+
               logger.trace(s"<<< Headers: $headers, Trailers: $trailers")
 
               resp
@@ -205,8 +211,8 @@ object ConnectRpcHttpRoutes {
           case e => e.getMessage
         }
 
-        val httpStatus  = mapGrpcStatusCodeToHttpStatus(grpcStatus.getCode)
-        val connectCode = mapGrpcStatusCodeToConnectCode(grpcStatus.getCode)
+        val httpStatus  = grpcStatus.toHttpStatus
+        val connectCode = grpcStatus.toConnectCode
 
         logger.warn(s"<<< Error processing request", e)
         logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: $message")
