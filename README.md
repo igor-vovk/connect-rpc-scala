@@ -2,11 +2,18 @@
 
 This library provides a bridge between [Connect-RPC](https://connectrpc.com/docs/protocol) protocol and
 [ScalaPB](https://scalapb.github.io) GRPC compiler for Scala.
-It is inspired and takes ideas from [grpc-json-bridge](https://github.com/avast/grpc-json-bridge) library, which don't
-seem to be supported anymore + the library doesn't follows a Connect-RPC standard (while being very close to it),
+It is inspired and takes ideas from [grpc-json-bridge](https://github.com/avast/grpc-json-bridge) library, which doesn't
+seem to be supported anymore + the library doesn't follow a Connect-RPC standard (while being very close to it),
 which makes using clients generated with ConnectRPC not possible.
 
-At the moment, only unary (non-streaming) methods are supported.
+Since integration happens on the foundational ScalaPB level, it works with all common GRPC code generation projects for
+Scala:
+
+* [ScalaPB](https://scalapb.github.io) services with `Future` monad
+* [fs2-grpc](https://github.com/typelevel/fs2-grpc), built on top of `cats-effect` and `fs2`
+* [ZIO gRPC](https://scalapb.github.io/zio-grpc/), built on top of `ZIO` monad (the most feature-rich implementation)
+
+*Note*: at the moment, only unary (non-streaming) methods are supported.
 
 ## Motivation
 
@@ -85,4 +92,4 @@ Major issues:
 ## Future improvements
 
 * Support GET-requests
-* Support non-unary methods
+* Support non-unary (streaming) methods
