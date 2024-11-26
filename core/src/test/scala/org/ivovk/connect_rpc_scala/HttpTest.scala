@@ -23,6 +23,11 @@ class HttpTest extends AnyFunSuite, Matchers {
       Future.successful(AddResponse(request.a + request.b))
   }
 
+  // String-JSON encoder
+  given [F[_]]: EntityEncoder[F, String] =
+    EntityEncoder.stringEncoder[F]
+      .withContentType(`Content-Type`(MediaType.application.json))
+
   test("basic") {
     val services: Seq[ServerServiceDefinition] = Seq(
       TestService.bindService(TestServiceImpl, ExecutionContext.global)

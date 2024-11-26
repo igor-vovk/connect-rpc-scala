@@ -1,18 +1,18 @@
 package org.ivovk.connect_rpc_scala
 
 import cats.Endo
-import cats.data.EitherT
 import cats.effect.Async
 import cats.effect.kernel.Resource
 import cats.implicits.*
 import fs2.compression.Compression
-import fs2.text.decodeWithCharset
 import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.stub.MetadataUtils
 import org.http4s.*
 import org.http4s.dsl.Http4sDsl
-import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
+import org.http4s.headers.`Content-Type`
+import org.ivovk.connect_rpc_scala.http.*
+import org.ivovk.connect_rpc_scala.http.MessageEncoder.given_EntityEncoder_F_A
 import org.slf4j.{Logger, LoggerFactory}
 import org.typelevel.ci.CIStringSyntax
 import scalapb.grpc.ClientCalls
@@ -32,53 +32,7 @@ object ConnectRpcHttpRoutes {
 
   import Mappings.*
 
-  val AugmentedDescriptionPrefix = "aud:"
-
   private val logger: Logger = LoggerFactory.getLogger(getClass)
-
-  private given [F[_] : Async : Compression, A <: GeneratedMessage](
-    using cmp: GeneratedMessageCompanion[A]
-  ): EntityDecoder[F, A] with {
-    override def decode(m: Media[F], strict: Boolean): DecodeResult[F, A] = {
-      val charset  = m.charset.getOrElse(Charset.`UTF-8`).nioCharset
-      val encoding = m.headers.get[`Content-Encoding`].map(_.contentCoding)
-
-      val f = m.body
-        .through(encoding match {
-          case Some(ContentCoding.gzip) =>
-            Compression[F].gunzip().andThen(_.flatMap(_.content))
-          case _ =>
-            identity
-        })
-        .through(decodeWithCharset(charset))
-        .compile.string
-        .flatMap { str =>
-          if (logger.isTraceEnabled) {
-            logger.trace(s">>> Headers: ${m.headers}")
-            logger.trace(s">>> JSON: $str")
-          }
-
-          Async[F].delay(JsonFormat.fromJsonString(str))
-        }
-
-      EitherT(f.map(Right(_)))
-    }
-
-    override def consumes: Set[MediaRange] = Set(MediaRange.`application/*`)
-  }
-
-  private given [F[_] : Async, A <: GeneratedMessage](using printer: Printer): EntityEncoder[F, A] with {
-    override def toEntity(a: A): Entity[F] = {
-      val string = printer.print(a)
-
-      logger.trace(s"<<< JSON: $string")
-
-      EntityEncoder.stringEncoder[F].toEntity(string)
-    }
-
-    override val headers: Headers =
-      Headers(`Content-Type`(MediaType.application.`json`))
-  }
 
   private case class RegistryEntry(
     requestMessageCompanion: GeneratedMessageCompanion[GeneratedMessage],
@@ -92,7 +46,12 @@ object ConnectRpcHttpRoutes {
     val dsl = Http4sDsl[F]
     import dsl.*
 
-    given Printer = configuration.jsonPrinterConfiguration(JsonFormat.printer)
+    val jsonPrinter = configuration.jsonPrinterConfiguration(JsonFormat.printer)
+
+    val coderRegistry = MessageCoderRegistry[F](
+      MCEntry(JsonMessageEncoder[F](jsonPrinter), JsonMessageDecoder[F]),
+      MCEntry(ProtoMessageEncoder[F], ProtoMessageDecoder[F]),
+    )
 
     val methodRegistry = services
       .flatMap(_.getMethods.asScala)
@@ -125,42 +84,57 @@ object ConnectRpcHttpRoutes {
     yield
       val httpApp = HttpRoutes.of[F] {
         case req@Method.POST -> Root / serviceName / methodName =>
-          methodRegistry.get(grpcMethodName(serviceName, methodName)) match {
+          val grpcMethod  = grpcMethodName(serviceName, methodName)
+          val contentType = req.headers.get[`Content-Type`].map(_.mediaType)
+
+          contentType.flatMap(coderRegistry.fromContentType) match {
             case Some(entry) =>
-              entry.methodDescriptor.getType match
-                case MethodType.UNARY =>
-                  handleUnary(dsl, entry, req, ipChannel)
-                case unsupported =>
-                  NotImplemented(connectrpc.Error(
-                    code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
-                    message = s"Unsupported method type: $unsupported".some
+              given MessageEncoder[F] = entry.encoder
+
+              given MessageDecoder[F] = entry.decoder
+
+              methodRegistry.get(grpcMethod) match {
+                case Some(entry) =>
+                  entry.methodDescriptor.getType match
+                    case MethodType.UNARY =>
+                      handleUnary(dsl, entry, req, ipChannel)
+                    case unsupported =>
+                      NotImplemented(connectrpc.Error(
+                        code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
+                        message = s"Unsupported method type: $unsupported".some
+                      ))
+                case None =>
+                  NotFound(connectrpc.Error(
+                    code = io.grpc.Status.NOT_FOUND.toConnectCode,
+                    message = s"Method not found: $grpcMethod".some
                   ))
+              }
             case None =>
-              NotFound(connectrpc.Error(
-                code = io.grpc.Status.NOT_FOUND.toConnectCode,
-                message = s"Method not found: ${grpcMethodName(serviceName, methodName)}".some
-              ))
+              UnsupportedMediaType(s"Unsupported Content-Type header ${contentType.map(_.show).orNull}")
           }
       }
 
       httpApp
   }
 
+
   private def handleUnary[F[_] : Async](
     dsl: Http4sDsl[F],
     entry: ConnectRpcHttpRoutes.RegistryEntry,
     req: Request[F],
     channel: Channel
-  )(using printer: Printer): F[Response[F]] = {
+  )(using encoder: MessageEncoder[F], decoder: MessageDecoder[F]): F[Response[F]] = {
     import dsl.*
 
     req.headers.get(ci"X-Test-Case-Name") match {
       case Some(headers) =>
-        logger.trace(s">>> Test case name: ${headers.head.value}")
+        logger.trace(s">>> Test Case: ${headers.head.value}")
       case None => // ignore
     }
 
     given GeneratedMessageCompanion[GeneratedMessage] = entry.requestMessageCompanion
+
+    given EntityDecoder[F, GeneratedMessage] = EntityDecoder.decodeBy(MediaRange.`application/*`)(decoder.decode)
 
     req.as[GeneratedMessage]
       .flatMap { message =>
@@ -221,7 +195,7 @@ object ConnectRpcHttpRoutes {
                 case Left(e) =>
                   logger.warn(s"Failed to parse additional details", e)
 
-                  com.google.protobuf.wrappers.StringValue(e.msg).toAny
+                  com.google.protobuf.wrappers.StringValue(e.msg).toProtoAny
               })
               .toSeq
 

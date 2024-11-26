@@ -24,37 +24,42 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
       h.value.foreach(v => trailers.put(key, v))
     }
 
-    responseDefinition.response match {
+    val payload: ConformancePayload = responseDefinition.response match {
       case UnaryResponseDefinition.Response.ResponseData(bs) =>
-        val response = UnaryResponse(
-          payload = ConformancePayload(
-            data = bs,
-            requestInfo = ConformancePayload.RequestInfo(
-              requestHeaders = mkConformanceHeaders(ctx),
-              timeoutMs = None,
-              requests = Seq(request.toAny),
-              connectGetInfo = None,
-            ).some
+        ConformancePayload(
+          data = bs,
+          requestInfo = ConformancePayload.RequestInfo(
+            requestHeaders = mkConformanceHeaders(ctx),
+            timeoutMs = None,
+            requests = Seq(request.toProtoAny),
+            connectGetInfo = None,
           ).some
         )
-
-        Async[F].sleep(Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)) *>
-          Async[F].pure((response, trailers))
+      case UnaryResponseDefinition.Response.Empty =>
+        ConformancePayload(
+          requestInfo = ConformancePayload.RequestInfo(
+            requestHeaders = mkConformanceHeaders(ctx),
+            timeoutMs = None,
+            requests = Seq(request.toProtoAny),
+            connectGetInfo = None,
+          ).some
+        )
       case UnaryResponseDefinition.Response.Error(Error(code, message, _)) =>
         val status = Status.fromCodeValue(code.value)
           .withDescription(message.orNull)
           .augmentDescription(
             TextFormat.printToSingleLineUnicodeString(
               ConformancePayload.RequestInfo(
-                requests = Seq(request.toAny)
-              ).toAny
+                requests = Seq(request.toProtoAny)
+              ).toProtoAny
             )
           )
 
         throw new StatusRuntimeException(status, trailers)
-      case _ =>
-        throw new RuntimeException("Unknown response type")
     }
+
+    Async[F].sleep(Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)) *>
+      Async[F].pure((UnaryResponse(payload.some), trailers))
   }
 
   private def mkConformanceHeaders(metadata: Metadata): Seq[Header] = {

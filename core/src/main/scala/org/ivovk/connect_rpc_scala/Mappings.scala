@@ -96,7 +96,7 @@ trait StatusCodeMappings {
 trait AnyMappings {
 
   extension [T <: GeneratedMessage](t: T) {
-    def toAny: com.google.protobuf.any.Any =
+    def toProtoAny: com.google.protobuf.any.Any =
       com.google.protobuf.any.Any(
         typeUrl = "type.googleapis.com/" + t.companion.scalaDescriptor.fullName,
         value = t.toByteString
