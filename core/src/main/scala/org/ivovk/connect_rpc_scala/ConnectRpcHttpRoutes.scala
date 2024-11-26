@@ -21,6 +21,7 @@ import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
 
 import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.*
+import scala.util.chaining.*
 import scala.jdk.CollectionConverters.*
 
 case class Configuration(
@@ -118,7 +119,12 @@ object ConnectRpcHttpRoutes {
               MetadataUtils.newCaptureMetadataInterceptor(responseHeaderMetadata, responseTrailerMetadata),
             ),
             entry.methodDescriptor,
-            CallOptions.DEFAULT,
+            CallOptions.DEFAULT
+              .pipe(
+                req.headers.get(ci"Connect-Timeout-Ms").fold[Endo[CallOptions]](identity) { headers =>
+                  _.withDeadlineAfter(headers.head.value.toInt, MILLISECONDS)
+                }
+              ),
             message
           )
         }).map { response =>

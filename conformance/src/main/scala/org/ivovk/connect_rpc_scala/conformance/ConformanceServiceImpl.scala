@@ -2,8 +2,10 @@ package org.ivovk.connect_rpc_scala.conformance
 
 import cats.effect.Async
 import cats.implicits.*
+import com.google.protobuf.ByteString
 import connectrpc.conformance.v1.*
 import io.grpc.{Metadata, Status, StatusRuntimeException}
+import org.slf4j.LoggerFactory
 import scalapb.TextFormat
 
 import java.util.concurrent.TimeUnit
@@ -15,6 +17,8 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
 
   import org.ivovk.connect_rpc_scala.Mappings.*
 
+  private val logger = LoggerFactory.getLogger(getClass)
+
   override def unary(request: UnaryRequest, ctx: Metadata): F[(UnaryResponse, Metadata)] = {
     val responseDefinition = request.getResponseDefinition
 
@@ -24,26 +28,11 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
       h.value.foreach(v => trailers.put(key, v))
     }
 
-    val payload: ConformancePayload = responseDefinition.response match {
+    val responseData = responseDefinition.response match {
       case UnaryResponseDefinition.Response.ResponseData(bs) =>
-        ConformancePayload(
-          data = bs,
-          requestInfo = ConformancePayload.RequestInfo(
-            requestHeaders = mkConformanceHeaders(ctx),
-            timeoutMs = None,
-            requests = Seq(request.toProtoAny),
-            connectGetInfo = None,
-          ).some
-        )
+        bs.some
       case UnaryResponseDefinition.Response.Empty =>
-        ConformancePayload(
-          requestInfo = ConformancePayload.RequestInfo(
-            requestHeaders = mkConformanceHeaders(ctx),
-            timeoutMs = None,
-            requests = Seq(request.toProtoAny),
-            connectGetInfo = None,
-          ).some
-        )
+        none
       case UnaryResponseDefinition.Response.Error(Error(code, message, _)) =>
         val status = Status.fromCodeValue(code.value)
           .withDescription(message.orNull)
@@ -57,6 +46,19 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
 
         throw new StatusRuntimeException(status, trailers)
     }
+
+    val timeout = Option(ctx.get(Metadata.Key.of("grpc-timeout", Metadata.ASCII_STRING_MARSHALLER)))
+      .map(v => v.substring(0, v.length - 1).toLong / 1000)
+
+    val payload = ConformancePayload(
+      data = responseData.getOrElse(ByteString.EMPTY),
+      requestInfo = ConformancePayload.RequestInfo(
+        requestHeaders = mkConformanceHeaders(ctx),
+        timeoutMs = timeout,
+        requests = Seq(request.toProtoAny),
+        connectGetInfo = None,
+      ).some
+    )
 
     Async[F].sleep(Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)) *>
       Async[F].pure((UnaryResponse(payload.some), trailers))

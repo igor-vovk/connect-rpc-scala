@@ -17,7 +17,7 @@
         <immediateFlush>true</immediateFlush>
 
         <encoder>
-            <pattern>%-4relative [%thread] %-5level %logger{35} -%kvp- %msg%n</pattern>
+            <pattern>%-4relative %-5level %logger{35} -%kvp- %msg%n</pattern>
         </encoder>
     </appender>
 

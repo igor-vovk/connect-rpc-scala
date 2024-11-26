@@ -85,12 +85,13 @@ Diagnostic data from the server itself is output in the `out/out.log` file.
 
 ### Conformance tests status
 
-Current status: 4/78 tests pass
+Current status: 6/78 tests pass
 
-Major issues:
+Known issues:
 
 * fs2-grpc server implementation doesn't support setting response headers
 * Trailers that are set in http4s aren’t being sent to the client
+* `google.protobuf.Any` serialization doesn't follow Connect-RPC spec
 
 ## Future improvements
 
