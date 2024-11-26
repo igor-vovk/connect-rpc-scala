@@ -34,11 +34,6 @@ object ConnectRpcHttpRoutes {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  private case class RegistryEntry(
-    requestMessageCompanion: GeneratedMessageCompanion[GeneratedMessage],
-    methodDescriptor: MethodDescriptor[GeneratedMessage, GeneratedMessage],
-  )
-
   def create[F[_] : Async](
     services: Seq[ServerServiceDefinition],
     configuration: Configuration = Configuration()
@@ -53,31 +48,7 @@ object ConnectRpcHttpRoutes {
       ProtoMessageCodec[F],
     )
 
-    val methodRegistry = services
-      .flatMap(_.getMethods.asScala)
-      .map(_.asInstanceOf[ServerMethodDefinition[GeneratedMessage, GeneratedMessage]])
-      .map { smd =>
-        val methodDescriptor = smd.getMethodDescriptor
-
-        val requestMarshaller = methodDescriptor.getRequestMarshaller match
-          case m: scalapb.grpc.Marshaller[_] => m
-          case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => tm
-          case unsupported => throw new RuntimeException(s"Unsupported marshaller $unsupported")
-
-        val companionField = requestMarshaller.getClass.getDeclaredField("companion")
-        companionField.setAccessible(true)
-
-        val requestCompanion = companionField.get(requestMarshaller)
-          .asInstanceOf[GeneratedMessageCompanion[GeneratedMessage]]
-
-        val entry = RegistryEntry(
-          requestMessageCompanion = requestCompanion,
-          methodDescriptor = methodDescriptor,
-        )
-
-        methodDescriptor.getFullMethodName -> entry
-      }
-      .toMap
+    val methodRegistry = MethodRegistry(services)
 
     for
       ipChannel <- InProcessChannelBridge.create(services, configuration.waitForShutdown)
@@ -116,7 +87,7 @@ object ConnectRpcHttpRoutes {
 
   private def handleUnary[F[_] : Async](
     dsl: Http4sDsl[F],
-    entry: ConnectRpcHttpRoutes.RegistryEntry,
+    entry: RegistryEntry,
     req: Request[F],
     channel: Channel
   )(using codec: MessageCodec[F]): F[Response[F]] = {
