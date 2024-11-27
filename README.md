@@ -1,3 +1,5 @@
+![](docs/connect-rpc-scala-logo.png)
+
 # Connect-RPC ↔ ScalaPB GRPC Bridge
 
 This library provides a bridge between [Connect-RPC](https://connectrpc.com/docs/protocol) protocol and
@@ -30,7 +32,7 @@ They are similar, but GRPC-WEB target is to be as close to GRPC as possible, whi
 web-friendly: it has better client libraries, better web semantics:
 content-type is `application/json` instead of `application/grpc-web+json`, error codes are just normal http codes
 instead of being sent in headers, errors are output in the body of the response JSON-encoded, it supports GET-requests,
-etc.
+etc (you can also read this [blog post describing why ConnectRPC is better](https://buf.build/blog/connect-a-better-grpc)).
 
 Both protocols support encoding data in Protobuf and JSON.
 JSON is more web-friendly, but it requires having some component in the middle, providing JSON → Protobuf
