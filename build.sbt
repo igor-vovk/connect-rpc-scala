@@ -28,7 +28,7 @@ lazy val Versions = new {
 
 lazy val core = project
   .settings(
-    name := "connect-rpc-scala",
+    name := "connect-rpc-scala-core",
 
     Compile / PB.targets := Seq(
       scalapb.gen() -> (Compile / sourceManaged).value
@@ -58,6 +58,8 @@ lazy val conformance = project
   .dependsOn(core)
   .enablePlugins(Fs2Grpc, JavaAppPackaging)
   .settings(
+    noPublish,
+
     libraryDependencies ++= Seq(
       "org.http4s" %% "http4s-ember-server" % Versions.http4s,
 
@@ -65,7 +67,7 @@ lazy val conformance = project
     ),
   )
 
-lazy val root = project
+lazy val root = (project in file("."))
   .aggregate(
     core,
     conformance,
