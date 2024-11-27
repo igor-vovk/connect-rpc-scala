@@ -12,9 +12,9 @@ import org.http4s.*
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.`Content-Type`
 import org.ivovk.connect_rpc_scala.http.*
+import org.ivovk.connect_rpc_scala.http.Headers.{`Connect-Timeout-Ms`, `X-Test-Case-Name`}
 import org.ivovk.connect_rpc_scala.http.MessageCodec.given
 import org.slf4j.{Logger, LoggerFactory}
-import org.typelevel.ci.CIStringSyntax
 import scalapb.grpc.ClientCalls
 import scalapb.json4s.{JsonFormat, Printer}
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
@@ -22,7 +22,6 @@ import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
 import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.*
 import scala.util.chaining.*
-import scala.jdk.CollectionConverters.*
 
 case class Configuration(
   jsonPrinterConfiguration: Endo[Printer] = identity,
@@ -95,9 +94,10 @@ object ConnectRpcHttpRoutes {
     import dsl.*
 
     if (logger.isTraceEnabled) {
-      req.headers.get(ci"X-Test-Case-Name") match {
-        case Some(headers) =>
-          logger.trace(s">>> Test Case: ${headers.head.value}")
+      // Used in conformance tests
+      req.headers.get[`X-Test-Case-Name`] match {
+        case Some(header) =>
+          logger.trace(s">>> Test Case: ${header.value}")
         case None => // ignore
       }
     }
@@ -109,7 +109,9 @@ object ConnectRpcHttpRoutes {
         val responseHeaderMetadata  = new AtomicReference[Metadata]()
         val responseTrailerMetadata = new AtomicReference[Metadata]()
 
-        logger.trace(s">>> Method: ${entry.methodDescriptor.getFullMethodName}, Entity: $message")
+        if (logger.isTraceEnabled) {
+          logger.trace(s">>> Method: ${entry.methodDescriptor.getFullMethodName}, Entity: $message")
+        }
 
         Async[F].fromFuture(Async[F].delay {
           ClientCalls.asyncUnaryCall[GeneratedMessage, GeneratedMessage](
@@ -121,8 +123,8 @@ object ConnectRpcHttpRoutes {
             entry.methodDescriptor,
             CallOptions.DEFAULT
               .pipe(
-                req.headers.get(ci"Connect-Timeout-Ms").fold[Endo[CallOptions]](identity) { headers =>
-                  _.withDeadlineAfter(headers.head.value.toInt, MILLISECONDS)
+                req.headers.get[`Connect-Timeout-Ms`].fold[Endo[CallOptions]](identity) { header =>
+                  _.withDeadlineAfter(header.value, MILLISECONDS)
                 }
               ),
             message
@@ -181,8 +183,10 @@ object ConnectRpcHttpRoutes {
         val httpStatus  = grpcStatus.toHttpStatus
         val connectCode = grpcStatus.toConnectCode
 
-        logger.warn(s"<<< Error processing request", e)
-        logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: ${rawMessage.orNull}")
+        if (logger.isTraceEnabled) {
+          logger.warn(s"<<< Error processing request", e)
+          logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: ${rawMessage.orNull}")
+        }
 
         Response[F](httpStatus).withEntity(connectrpc.Error(
           code = connectCode,

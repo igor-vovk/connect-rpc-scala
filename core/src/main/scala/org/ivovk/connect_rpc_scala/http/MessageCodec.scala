@@ -5,7 +5,7 @@ import cats.data.EitherT
 import cats.effect.{Async, Sync}
 import cats.implicits.*
 import fs2.compression.Compression
-import fs2.io.toInputStreamResource
+import fs2.io.{readOutputStream, toInputStreamResource}
 import fs2.text.decodeWithCharset
 import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
 import org.http4s.{Charset, ContentCoding, DecodeResult, Entity, EntityDecoder, EntityEncoder, Media, MediaRange, MediaType}
@@ -102,7 +102,7 @@ class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
     }
 
     Entity(
-      body = fs2.Stream.emits(message.toByteArray).covary[F],
+      body = readOutputStream(2048)(os => Async[F].delay(message.writeTo(os))),
       length = Some(message.serializedSize.toLong),
     )
   }
