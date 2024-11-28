@@ -1,11 +1,13 @@
 package org.ivovk.connect_rpc_scala
 
+import com.google.protobuf.struct.{ListValue, NullValue, Struct, Value}
 import io.grpc.{Metadata, Status}
 import org.http4s.{Header, Headers}
 import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
+import scalapb.descriptors.*
 
-object Mappings extends HeaderMappings, StatusCodeMappings, AnyMappings
+object Mappings extends HeaderMappings, StatusCodeMappings, ProtoMappings
 
 trait HeaderMappings {
 
@@ -103,7 +105,7 @@ trait StatusCodeMappings {
 
 }
 
-trait AnyMappings {
+trait ProtoMappings {
 
   extension [T <: GeneratedMessage](t: T) {
     def toProtoAny: com.google.protobuf.any.Any =
@@ -111,6 +113,27 @@ trait AnyMappings {
         typeUrl = "type.googleapis.com/" + t.companion.scalaDescriptor.fullName,
         value = t.toByteString
       )
+
+    def toProtoStruct: Struct = toValue(t.toPMessage).kind match {
+      case Value.Kind.StructValue(struct) => struct
+      case _ => throw new IllegalArgumentException("Expected a struct value")
+    }
+  }
+
+  def toValue(value: PValue): Value = {
+    value match {
+      case PEmpty => Value.of(Value.Kind.NullValue(NullValue.NULL_VALUE))
+      case PInt(value) => Value.of(Value.Kind.NumberValue(value.toDouble))
+      case PLong(value) => Value.of(Value.Kind.NumberValue(value.toDouble))
+      case PString(value) => Value.of(Value.Kind.StringValue(value))
+      case PDouble(value) => Value.of(Value.Kind.NumberValue(value))
+      case PFloat(value) => Value.of(Value.Kind.NumberValue(value.toDouble))
+      case PByteString(value) => Value.of(Value.Kind.StringValue(value.toStringUtf8))
+      case PBoolean(value) => Value.of(Value.Kind.BoolValue(value))
+      case PEnum(value) => Value.of(Value.Kind.StringValue(value.index.toString))
+      case PMessage(value) => Value.of(Value.Kind.StructValue(Struct(value.map((k, v) => k.name -> toValue(v)))))
+      case PRepeated(value) => Value.of(Value.Kind.ListValue(ListValue(value.map(toValue))))
+    }
   }
 
 }

@@ -180,7 +180,7 @@ class ConnectHandler[F[_] : Async](
         Response[F](httpStatus).withEntity(connectrpc.Error(
           code = connectCode,
           message = messageWithDetails.map(_._1),
-          details = Seq.empty // details
+          details = details
         ))
       }
   }

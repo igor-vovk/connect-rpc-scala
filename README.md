@@ -154,7 +154,7 @@ Current status: 11/79 tests pass.
 
 Known issues:
 
-* `google.protobuf.Any` serialization doesn't follow Connect-RPC
+* `google.protobuf.Any` serialization [doesn't follow](https://github.com/connectrpc/conformance/issues/948) Connect-RPC
   spec: [#32](https://github.com/igor-vovk/connect-rpc-scala/issues/32)
 
 ## Future improvements
