@@ -4,6 +4,11 @@ package org.ivovk.connect_rpc_scala.test;
 
 service TestService {
   rpc Add(AddRequest) returns (AddResponse) {}
+
+  // This method can be called using GET request
+  rpc Get(GetRequest) returns (GetResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
 }
 
 message AddRequest {
@@ -13,4 +18,12 @@ message AddRequest {
 
 message AddResponse {
   int32 sum = 1;
+}
+
+message GetRequest {
+  string key = 1;
+}
+
+message GetResponse {
+  string value = 1;
 }

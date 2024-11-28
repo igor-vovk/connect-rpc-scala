@@ -4,6 +4,7 @@ import cats.Endo
 import cats.effect.Async
 import cats.effect.kernel.Resource
 import cats.implicits.*
+import fs2.{Chunk, Stream}
 import fs2.compression.Compression
 import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
@@ -19,6 +20,7 @@ import scalapb.grpc.ClientCalls
 import scalapb.json4s.{JsonFormat, Printer}
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
 
+import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.*
 import scala.util.chaining.*
@@ -71,7 +73,12 @@ object ConnectRpcHttpRoutes {
                 case Some(entry) if entry.methodDescriptor.isSafe =>
                   entry.methodDescriptor.getType match
                     case MethodType.UNARY =>
-                      handleUnary(dsl, entry, req, ipChannel)
+                      val body = Stream.fromOption(req.uri.query.params.get("value"))
+                        .map(URLDecoder.decode(_, Charset.`UTF-8`.nioCharset))
+                        .flatMap(s => Stream.chunk(Chunk.array(s.getBytes)))
+                      val media = Media[F](body, req.headers)
+
+                      handleUnary(dsl, entry, media, ipChannel)
                     case unsupported =>
                       NotImplemented(connectrpc.Error(
                         code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
@@ -125,7 +132,7 @@ object ConnectRpcHttpRoutes {
   private def handleUnary[F[_] : Async](
     dsl: Http4sDsl[F],
     entry: RegistryEntry,
-    req: Request[F],
+    req: Media[F],
     channel: Channel
   )(using codec: MessageCodec[F]): F[Response[F]] = {
     import dsl.*

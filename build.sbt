@@ -24,6 +24,7 @@ lazy val noPublish = List(
 lazy val Versions = new {
   val grpc   = "1.68.1"
   val http4s = "0.23.29"
+  val logback = "1.5.12"
 }
 
 lazy val core = project
@@ -51,6 +52,8 @@ lazy val core = project
       "org.http4s" %% "http4s-client" % Versions.http4s % Test,
 
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+
+      "ch.qos.logback" % "logback-classic" % Versions.logback % Test,
     ),
   )
 
@@ -63,7 +66,7 @@ lazy val conformance = project
     libraryDependencies ++= Seq(
       "org.http4s" %% "http4s-ember-server" % Versions.http4s,
 
-      "ch.qos.logback" % "logback-classic" % "1.5.12" % Runtime,
+      "ch.qos.logback" % "logback-classic" % Versions.logback % Runtime,
     ),
   )
 
