@@ -6,5 +6,5 @@ features:
   stream_types: [ STREAM_TYPE_UNARY ]
   supports_tls: false
   supports_trailers: false
-  supports_connect_get: false
+  supports_connect_get: true
   supports_message_receive_limit: false

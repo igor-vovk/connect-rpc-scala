@@ -54,6 +54,43 @@ object ConnectRpcHttpRoutes {
       ipChannel <- InProcessChannelBridge.create(services, configuration.waitForShutdown)
     yield
       HttpRoutes.of[F] {
+        case req@Method.GET -> Root / serviceName / methodName =>
+          val grpcMethod  = grpcMethodName(serviceName, methodName)
+          val encoding    = req.uri.query.params.get("encoding")
+          val contentType = encoding match {
+            case Some("json") => MediaType.application.`json`.some
+            case Some("proto") => MediaType.unsafeParse("application/proto").some
+            case _ => none
+          }
+
+          contentType.flatMap(codecRegistry.byContentType) match {
+            case Some(codec) =>
+              given MessageCodec[F] = codec
+
+              methodRegistry.get(grpcMethod) match {
+                case Some(entry) if entry.methodDescriptor.isSafe =>
+                  entry.methodDescriptor.getType match
+                    case MethodType.UNARY =>
+                      handleUnary(dsl, entry, req, ipChannel)
+                    case unsupported =>
+                      NotImplemented(connectrpc.Error(
+                        code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
+                        message = s"Unsupported method type: $unsupported".some
+                      ))
+                case Some(_) =>
+                  Forbidden(connectrpc.Error(
+                    code = io.grpc.Status.PERMISSION_DENIED.toConnectCode,
+                    message = s"Method supports calling using POST: $grpcMethod".some
+                  ))
+                case None =>
+                  NotFound(connectrpc.Error(
+                    code = io.grpc.Status.NOT_FOUND.toConnectCode,
+                    message = s"Method not found: $grpcMethod".some
+                  ))
+              }
+            case None =>
+              UnsupportedMediaType(s"Unsupported Content-Type ${contentType.map(_.show).orNull}")
+          }
         case req@Method.POST -> Root / serviceName / methodName =>
           val grpcMethod  = grpcMethodName(serviceName, methodName)
           val contentType = req.headers.get[`Content-Type`].map(_.mediaType)

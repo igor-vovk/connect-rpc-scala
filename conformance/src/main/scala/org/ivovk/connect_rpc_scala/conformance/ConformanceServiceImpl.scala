@@ -19,14 +19,48 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
 
   private val logger = LoggerFactory.getLogger(getClass)
 
-  override def unary(request: UnaryRequest, ctx: Metadata): F[(UnaryResponse, Metadata)] = {
-    val responseDefinition = request.getResponseDefinition
+  override def unary(
+    request: UnaryRequest,
+    ctx: Metadata
+  ): F[(UnaryResponse, Metadata)] = {
+    for
+      payload <- handleUnaryRequest(
+        request.getResponseDefinition,
+        Seq(request.toProtoAny),
+        ctx
+      )
+    yield (UnaryResponse(payload.some), new Metadata())
+  }
 
-    val trailers = new Metadata()
-    responseDefinition.responseTrailers.foreach { h =>
-      val key = Metadata.Key.of(h.name, Metadata.ASCII_STRING_MARSHALLER)
-      h.value.foreach(v => trailers.put(key, v))
-    }
+  override def idempotentUnary(
+    request: IdempotentUnaryRequest,
+    ctx: Metadata,
+  ): F[(IdempotentUnaryResponse, Metadata)] = {
+    for
+      payload <- handleUnaryRequest(
+        request.getResponseDefinition,
+        Seq(request.toProtoAny),
+        ctx
+      )
+    yield (IdempotentUnaryResponse(payload.some), new Metadata())
+  }
+
+  private def handleUnaryRequest(
+    responseDefinition: UnaryResponseDefinition,
+    requests: Seq[com.google.protobuf.any.Any],
+    ctx: Metadata,
+  ): F[ConformancePayload] = {
+    //val trailers = new Metadata()
+    //responseDefinition.responseTrailers.foreach { h =>
+    //  val key = Metadata.Key.of(h.name, Metadata.ASCII_STRING_MARSHALLER)
+    //  h.value.foreach(v => trailers.put(key, v))
+    //}
+
+    val requestInfo = ConformancePayload.RequestInfo(
+      requestHeaders = mkConformanceHeaders(ctx),
+      timeoutMs = extractTimeout(ctx),
+      requests = requests
+    )
 
     val responseData = responseDefinition.response match {
       case UnaryResponseDefinition.Response.ResponseData(bs) =>
@@ -37,37 +71,31 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
         val status = Status.fromCodeValue(code.value)
           .withDescription(message.orNull)
           .augmentDescription(
-            TextFormat.printToSingleLineUnicodeString(
-              ConformancePayload.RequestInfo(
-                requests = Seq(request.toProtoAny)
-              ).toProtoAny
-            )
+            TextFormat.printToSingleLineUnicodeString(requestInfo.toProtoAny)
           )
 
-        throw new StatusRuntimeException(status, trailers)
+        throw new StatusRuntimeException(status)
     }
 
-    val timeout = Option(ctx.get(Metadata.Key.of("grpc-timeout", Metadata.ASCII_STRING_MARSHALLER)))
-      .map(v => v.substring(0, v.length - 1).toLong / 1000)
-
-    val payload = ConformancePayload(
-      data = responseData.getOrElse(ByteString.EMPTY),
-      requestInfo = ConformancePayload.RequestInfo(
-        requestHeaders = mkConformanceHeaders(ctx),
-        timeoutMs = timeout,
-        requests = Seq(request.toProtoAny),
-        connectGetInfo = None,
-      ).some
-    )
-
     Async[F].sleep(Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)) *>
-      Async[F].pure((UnaryResponse(payload.some), trailers))
+      Async[F].pure(ConformancePayload(
+        responseData.getOrElse(ByteString.EMPTY),
+        requestInfo.some
+      ))
   }
+
+  private def keyof(key: String): Metadata.Key[String] =
+    Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER)
 
   private def mkConformanceHeaders(metadata: Metadata): Seq[Header] = {
     metadata.keys().asScala.map { key =>
-      Header(key, metadata.getAll(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER)).asScala.toSeq)
+      Header(key, metadata.getAll(keyof(key)).asScala.toSeq)
     }.toSeq
+  }
+
+  private def extractTimeout(metadata: Metadata): Option[Long] = {
+    Option(metadata.get(keyof("grpc-timeout")))
+      .map(v => v.substring(0, v.length - 1).toLong / 1000)
   }
 
   override def serverStream(
@@ -91,8 +119,4 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
     ctx: Metadata
   ): F[(UnimplementedResponse, Metadata)] = ???
 
-  override def idempotentUnary(
-    request: IdempotentUnaryRequest,
-    ctx: Metadata
-  ): F[(IdempotentUnaryResponse, Metadata)] = ???
 }
