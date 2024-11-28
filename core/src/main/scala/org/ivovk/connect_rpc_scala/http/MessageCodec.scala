@@ -12,28 +12,24 @@ import org.http4s.{Charset, ContentCoding, DecodeResult, Entity, EntityDecoder, 
 import org.ivovk.connect_rpc_scala.ConnectRpcHttpRoutes.getClass
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.json4s.{JsonFormat, Printer}
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
+import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
+
+object MessageCodec {
+  given [F[_] : Applicative, A <: Message](using codec: MessageCodec[F], cmp: Companion[A]): EntityDecoder[F, A] =
+    EntityDecoder.decodeBy(MediaRange.`*/*`)(codec.decode)
+
+  given [F[_], A <: Message](using codec: MessageCodec[F]): EntityEncoder[F, A] =
+    EntityEncoder.encodeBy(`Content-Type`(codec.mediaType))(codec.encode)
+}
 
 trait MessageCodec[F[_]] {
 
   val mediaType: MediaType
 
-  def decode[A <: GeneratedMessage](m: Media[F])(using cmp: GeneratedMessageCompanion[A]): DecodeResult[F, A]
+  def decode[A <: Message](m: Media[F])(using cmp: Companion[A]): DecodeResult[F, A]
 
-  def encode[A <: GeneratedMessage](message: A): Entity[F]
+  def encode[A <: Message](message: A): Entity[F]
 
-}
-
-object MessageCodec {
-  given [F[_] : Applicative, A <: GeneratedMessage](
-    using codec: MessageCodec[F], cmp: GeneratedMessageCompanion[A]
-  ): EntityDecoder[F, A] =
-    EntityDecoder.decodeBy(MediaRange.`*/*`)(codec.decode)
-
-  given [F[_], A <: GeneratedMessage](
-    using codec: MessageCodec[F]
-  ): EntityEncoder[F, A] =
-    EntityEncoder.encodeBy(`Content-Type`(codec.mediaType))(codec.encode)
 }
 
 class JsonMessageCodec[F[_] : Sync : Compression](jsonPrinter: Printer) extends MessageCodec[F] {
@@ -42,7 +38,7 @@ class JsonMessageCodec[F[_] : Sync : Compression](jsonPrinter: Printer) extends 
 
   override val mediaType: MediaType = MediaType.application.`json`
 
-  override def decode[A <: GeneratedMessage](m: Media[F])(using cmp: GeneratedMessageCompanion[A]): DecodeResult[F, A] = {
+  override def decode[A <: Message](m: Media[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
     val charset = m.charset.getOrElse(Charset.`UTF-8`).nioCharset
 
     val f = decompressed(m)
@@ -60,7 +56,7 @@ class JsonMessageCodec[F[_] : Sync : Compression](jsonPrinter: Printer) extends 
     EitherT.right(f)
   }
 
-  override def encode[A <: GeneratedMessage](message: A): Entity[F] = {
+  override def encode[A <: Message](message: A): Entity[F] = {
     val string = jsonPrinter.print(message)
 
     if (logger.isTraceEnabled) {
@@ -79,7 +75,7 @@ class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
   override val mediaType: MediaType =
     MediaType.unsafeParse("application/proto")
 
-  override def decode[A <: GeneratedMessage](m: Media[F])(using cmp: GeneratedMessageCompanion[A]): DecodeResult[F, A] = {
+  override def decode[A <: Message](m: Media[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
     val f = toInputStreamResource(decompressed(m)).use { is =>
       Async[F].delay {
         val message = cmp.parseFrom(is)
@@ -96,7 +92,7 @@ class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
     EitherT.right(f)
   }
 
-  override def encode[A <: GeneratedMessage](message: A): Entity[F] = {
+  override def encode[A <: Message](message: A): Entity[F] = {
     if (logger.isTraceEnabled) {
       logger.trace(s"<<< Proto: ${message.toProtoString}")
     }
