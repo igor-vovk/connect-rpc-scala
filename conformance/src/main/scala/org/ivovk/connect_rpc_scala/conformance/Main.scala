@@ -46,6 +46,7 @@ object Main extends IOApp.Simple {
               p.withTypeRegistry(
                 TypeRegistry.default
                   .addMessage[connectrpc.conformance.v1.UnaryRequest]
+                  .addMessage[connectrpc.conformance.v1.IdempotentUnaryRequest]
                   .addMessage[connectrpc.conformance.v1.ConformancePayload.RequestInfo]
               )
             }

@@ -9,6 +9,7 @@ import org.http4s.dsl.io.Root
 import org.http4s.headers.`Content-Type`
 import org.http4s.implicits.*
 import org.http4s.{Method, *}
+import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.test.TestService.TestServiceGrpc.TestService
 import org.ivovk.connect_rpc_scala.test.TestService.{AddRequest, AddResponse, GetRequest, GetResponse}
 import org.scalatest.funsuite.AnyFunSuite
@@ -31,7 +32,7 @@ class HttpTest extends AnyFunSuite, Matchers {
 
   // String-JSON encoder
   given [F[_]]: EntityEncoder[F, String] = EntityEncoder.stringEncoder[F]
-    .withContentType(`Content-Type`(MediaType.application.json))
+    .withContentType(`Content-Type`(MediaTypes.`application/json`))
 
   test("basic") {
     val services: Seq[ServerServiceDefinition] = Seq(
@@ -54,13 +55,13 @@ class HttpTest extends AnyFunSuite, Matchers {
         } yield {
           assert(body == """{"sum":3}""")
           assert(status == Status.Ok)
-          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaType.application.json))
+          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
         }
       }
       .unsafeRunSync()
   }
 
-  test("GET requests") {
+  test("GET request") {
     val services: Seq[ServerServiceDefinition] = Seq(
       TestService.bindService(TestServiceImpl, ExecutionContext.global)
     )
@@ -76,7 +77,7 @@ class HttpTest extends AnyFunSuite, Matchers {
             Method.GET,
             Uri(
               path = Root / "org.ivovk.connect_rpc_scala.test.TestService" / "Get",
-              query = Query.fromPairs("encoding" -> "json", "value" -> requestJson)
+              query = Query.fromPairs("encoding" -> "json", "message" -> requestJson)
             )
           )
         )
@@ -88,7 +89,7 @@ class HttpTest extends AnyFunSuite, Matchers {
         } yield {
           assert(body == """{"value":"Key is: 123"}""")
           assert(status == Status.Ok)
-          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaType.application.json))
+          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
         }
       }
       .unsafeRunSync()

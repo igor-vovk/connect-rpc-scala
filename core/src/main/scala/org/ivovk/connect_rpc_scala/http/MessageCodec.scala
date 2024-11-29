@@ -36,7 +36,7 @@ class JsonMessageCodec[F[_] : Sync : Compression](jsonPrinter: Printer) extends 
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  override val mediaType: MediaType = MediaType.application.`json`
+  override val mediaType: MediaType = MediaTypes.`application/json`
 
   override def decode[A <: Message](m: Media[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
     val charset = m.charset.getOrElse(Charset.`UTF-8`).nioCharset
@@ -72,8 +72,7 @@ class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  override val mediaType: MediaType =
-    MediaType.unsafeParse("application/proto")
+  override val mediaType: MediaType = MediaTypes.`application/proto`
 
   override def decode[A <: Message](m: Media[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
     val f = toInputStreamResource(decompressed(m)).use { is =>

@@ -4,8 +4,8 @@ import cats.Endo
 import cats.effect.Async
 import cats.effect.kernel.Resource
 import cats.implicits.*
-import fs2.{Chunk, Stream}
 import fs2.compression.Compression
+import fs2.{Chunk, Stream}
 import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.stub.MetadataUtils
@@ -13,14 +13,14 @@ import org.http4s.*
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.`Content-Type`
 import org.ivovk.connect_rpc_scala.http.*
-import org.ivovk.connect_rpc_scala.http.Headers.{`Connect-Timeout-Ms`, `X-Test-Case-Name`}
+import org.ivovk.connect_rpc_scala.http.Headers.*
 import org.ivovk.connect_rpc_scala.http.MessageCodec.given
+import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.grpc.ClientCalls
 import scalapb.json4s.{JsonFormat, Printer}
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
 
-import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.*
 import scala.util.chaining.*
@@ -56,28 +56,20 @@ object ConnectRpcHttpRoutes {
       ipChannel <- InProcessChannelBridge.create(services, configuration.waitForShutdown)
     yield
       HttpRoutes.of[F] {
-        case req@Method.GET -> Root / serviceName / methodName =>
-          val grpcMethod  = grpcMethodName(serviceName, methodName)
-          val encoding    = req.uri.query.params.get("encoding")
-          val contentType = encoding match {
-            case Some("json") => MediaType.application.`json`.some
-            case Some("proto") => MediaType.unsafeParse("application/proto").some
-            case _ => none
-          }
+        case req@Method.GET -> Root / serviceName / methodName :? EncodingQP(contentType) +& MessageQP(message) =>
+          val grpcMethod = grpcMethodName(serviceName, methodName)
 
-          contentType.flatMap(codecRegistry.byContentType) match {
+          codecRegistry.byContentType(contentType) match {
             case Some(codec) =>
               given MessageCodec[F] = codec
 
+              val media = Media[F](Stream.chunk(Chunk.array(message.getBytes)), req.headers)
+
               methodRegistry.get(grpcMethod) match {
-                case Some(entry) if entry.methodDescriptor.isSafe =>
+                // Support GET-requests for all methods until https://github.com/scalapb/ScalaPB/pull/1774 is merged
+                case Some(entry) if entry.methodDescriptor.isSafe || true =>
                   entry.methodDescriptor.getType match
                     case MethodType.UNARY =>
-                      val body = Stream.fromOption(req.uri.query.params.get("value"))
-                        .map(URLDecoder.decode(_, Charset.`UTF-8`.nioCharset))
-                        .flatMap(s => Stream.chunk(Chunk.array(s.getBytes)))
-                      val media = Media[F](body, req.headers)
-
                       handleUnary(dsl, entry, media, ipChannel)
                     case unsupported =>
                       NotImplemented(connectrpc.Error(
@@ -96,7 +88,8 @@ object ConnectRpcHttpRoutes {
                   ))
               }
             case None =>
-              UnsupportedMediaType(s"Unsupported Content-Type ${contentType.map(_.show).orNull}")
+              UnsupportedMediaType(s"Unsupported content-type ${contentType.show}. " +
+                s"Supported content types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}")
           }
         case req@Method.POST -> Root / serviceName / methodName =>
           val grpcMethod  = grpcMethodName(serviceName, methodName)
@@ -123,7 +116,8 @@ object ConnectRpcHttpRoutes {
                   ))
               }
             case None =>
-              UnsupportedMediaType(s"Unsupported Content-Type header ${contentType.map(_.show).orNull}")
+              UnsupportedMediaType(s"Unsupported content-type ${contentType.map(_.show).orNull}. " +
+                s"Supported content types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}")
           }
       }
   }

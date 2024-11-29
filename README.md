@@ -64,7 +64,7 @@ codecs: [ CODEC_JSON ]
 stream_types: [ STREAM_TYPE_UNARY ]
 supports_tls: false
 supports_trailers: false
-supports_connect_get: false
+supports_connect_get: true
 supports_message_receive_limit: false
 ```
 
@@ -87,7 +87,7 @@ Diagnostic data from the server itself is output in the `out/out.log` file.
 
 ### Conformance tests status
 
-Current status: 6/78 tests pass
+Current status: 6/79 tests pass
 
 Known issues:
 
