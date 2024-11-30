@@ -70,7 +70,44 @@ supports_message_receive_limit: false
 
 ## Usage
 
-TODO: Add usage instructions
+Library is installed via SBT (you also need to install particular `http4s` server implementation):
+
+```scala
+libraryDependencies ++= Seq(
+  "io.github.igor-vovk" %% "connect-rpc-scala-core" % "<version>",
+  "org.http4s" %% "http4s-ember-server" % "0.23.29"
+)
+```
+
+After installing the library, you can expose your GRPC service to the clients using Connect-RPC protocol (suppose you
+already have a GRPC services generated with ScalaPB):
+
+```scala
+import org.ivovk.connect_rpc_scala.ConnectRpcHttpRoutes
+
+// Your GRPC service(s)
+val grpcServices: Seq[io.grpc.ServiceDefinition] = ???
+
+val httpServer: Resource[IO, org.http4s.server.Server] = {
+  import com.comcast.ip4s.*
+
+  for {
+    // Create httpApp with Connect-RPC routes, specifying your GRPC services
+    httpApp <- ConnectRpcHttpRoutes.create[IO](grpcServices)
+      .map(_.orNotFound)
+
+    // Create http server
+    httpServer <- EmberServerBuilder.default[IO]
+      .withHost(host"0.0.0.0")
+      .withPort(port"8080")
+      .withHttpApp(httpApp)
+      .build
+  } yield httpServer
+}
+
+// Start the server
+httpServer.use(_ => IO.never).unsafeRunSync()
+```
 
 ## Development
 
