@@ -10,7 +10,7 @@ object Headers {
   @targetName("ConnectTimeoutMs")
   case class `Connect-Timeout-Ms`(value: Long)
 
-  @targetName("HeaderConnectTimeoutMs")
+  @targetName("ConnectTimeoutMs$")
   object `Connect-Timeout-Ms` {
     def parse(s: String): ParseResult[`Connect-Timeout-Ms`] = {
       ParseResult.fromTryCatchNonFatal(s)(`Connect-Timeout-Ms`(s.toLong))
@@ -26,7 +26,7 @@ object Headers {
   @targetName("XTestCaseName")
   case class `X-Test-Case-Name`(value: String)
 
-  @targetName("HeaderXTestCaseName")
+  @targetName("XTestCaseName$")
   object `X-Test-Case-Name` {
     @targetName("HeaderXTestCaseName")
     implicit val header: Header[`X-Test-Case-Name`, Header.Single] = Header.createRendered(
