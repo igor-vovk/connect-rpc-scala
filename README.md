@@ -2,7 +2,7 @@
 
 # Connect-RPC ↔ ScalaPB GRPC Bridge
 
-This library provides a bridge between [Connect-RPC](https://connectrpc.com/docs/protocol) protocol and
+This library provides a bridge between [Connect](https://connectrpc.com/docs/protocol) protocol and
 [ScalaPB](https://scalapb.github.io) GRPC compiler for Scala.
 It is inspired and takes ideas from [grpc-json-bridge](https://github.com/avast/grpc-json-bridge) library, which doesn't
 seem to be supported anymore + the library doesn't follow a Connect-RPC standard (while being very close to it),
@@ -26,14 +26,14 @@ So the most common approach is to expose REST APIs, which will be translated to 
 There are two main protocols for this:
 
 * [GRPC-WEB](https://github.com/grpc/grpc-web)
-* [Connect-RPC](https://connectrpc.com/docs/introduction)
+* [Connect](https://connectrpc.com/docs/introduction)
 
-They are similar, but GRPC-WEB target is to be as close to GRPC as possible, while Connect-RPC is more
+They are similar, but GRPC-WEB target is to be as close to GRPC as possible, while Connect is more
 web-friendly: it has better client libraries, better web semantics:
 content-type is `application/json` instead of `application/grpc-web+json`, error codes are just normal http codes
 instead of being sent in headers, errors are output in the body of the response JSON-encoded, it supports GET-requests,
 etc (you can also read
-this [blog post describing why ConnectRPC is better](https://buf.build/blog/connect-a-better-grpc)).
+this [blog post describing why Connect is better](https://buf.build/blog/connect-a-better-grpc)).
 
 Both protocols support encoding data in Protobuf and JSON.
 JSON is more web-friendly, but it requires having some component in the middle, providing JSON → Protobuf
@@ -51,7 +51,7 @@ To support JSON, Envoy needs to be configured with Protobuf descriptors, which i
 *That's where this library comes in*:
 
 It allows exposing GRPC services, built with [ScalaPB](https://scalapb.github.io), to the clients
-using Connect-RPC protocol (with JSON messages), without Envoy or any other proxy, so a web service can expose
+using Connect protocol (with JSON messages), without Envoy or any other proxy, so a web service can expose
 both GRPC and REST APIs at the same time on two ports.
 
 This simplifies overall setup: simpler CI, fewer network components, faster execution speed.
@@ -80,7 +80,7 @@ libraryDependencies ++= Seq(
 )
 ```
 
-After installing the library, you can expose your GRPC service to the clients using Connect-RPC protocol (suppose you
+After installing the library, you can expose your GRPC service to the clients using Connect protocol (suppose you
 already have a GRPC services generated with ScalaPB):
 
 ```scala
@@ -110,12 +110,12 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
 httpServer.use(_ => IO.never).unsafeRunSync()
 ```
 
-### Tip: GRPC Opentelemetry integration
+### Tip: GRPC OpenTelemetry integration
 
-Since the library creates a separate "fake" grpc server, traffic going through it won't be captured by the
-instrumentation of the main grpc server.
+Since the library creates a separate "fake" GRPC server, traffic going through it won't be captured by the
+instrumentation of the main GRPC server.
 
-Here is how you can integrate the Opentelemetry with the Connect-RPC server:
+Here is how you can integrate OpenTelemetry with the Connect-RPC server:
 
 ```scala
 val grpcServices: Seq[io.grpc.ServiceDefinition] = ??? // Your GRPC service(s)
@@ -154,7 +154,7 @@ Current status: 6/79 tests pass
 
 Known issues:
 
-* fs2-grpc server implementation doesn't support setting response headers
+* `fs2-grpc` server implementation doesn't support setting response headers (which is required by the tests)
 * `google.protobuf.Any` serialization doesn't follow Connect-RPC spec
 
 ## Future improvements
