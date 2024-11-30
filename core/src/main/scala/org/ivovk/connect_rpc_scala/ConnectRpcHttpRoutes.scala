@@ -159,8 +159,8 @@ object ConnectRpcHttpRoutes {
           )
         }).map { response =>
           val headers = org.http4s.Headers.empty ++
-            responseHeaderMetadata.get().toHeaders ++
-            responseTrailerMetadata.get().toTrailingHeaders
+            responseHeaderMetadata.get.toHeaders ++
+            responseTrailerMetadata.get.toTrailingHeaders
 
           if (logger.isTraceEnabled) {
             logger.trace(s"<<< Headers: ${headers.redactSensitive}")

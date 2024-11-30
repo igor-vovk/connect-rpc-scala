@@ -2,8 +2,8 @@ package org.ivovk.connect_rpc_scala.http
 
 import cats.MonadThrow
 import fs2.Stream
-import org.http4s.headers.`Content-Type`
-import org.http4s.{Charset, Headers, Media}
+import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
+import org.http4s.{Charset, ContentCoding, Headers, Media}
 import org.ivovk.connect_rpc_scala.http.Headers.`Connect-Timeout-Ms`
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
@@ -26,6 +26,9 @@ case class RequestEntity[F[_]](
 
   def charset: Charset =
     contentType.flatMap(_.charset).getOrElse(Charset.`UTF-8`)
+
+  def encoding: Option[ContentCoding] =
+    headers.get[`Content-Encoding`].map(_.contentCoding)
 
   def timeout: Option[Long] =
     headers.get[`Connect-Timeout-Ms`].map(_.value)

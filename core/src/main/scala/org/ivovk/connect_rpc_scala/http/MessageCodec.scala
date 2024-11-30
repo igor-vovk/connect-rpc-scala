@@ -4,12 +4,13 @@ import cats.Applicative
 import cats.data.EitherT
 import cats.effect.{Async, Sync}
 import cats.implicits.*
-import fs2.Stream
+import com.google.protobuf.CodedOutputStream
 import fs2.compression.Compression
 import fs2.io.{readOutputStream, toInputStreamResource}
 import fs2.text.decodeWithCharset
-import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
-import org.http4s.{ContentCoding, DecodeResult, Entity, EntityDecoder, EntityEncoder, Headers, MediaRange, MediaType}
+import fs2.{Chunk, Stream}
+import org.http4s.headers.`Content-Type`
+import org.http4s.{ContentCoding, DecodeResult, Entity, EntityDecoder, EntityEncoder, MediaRange, MediaType}
 import org.ivovk.connect_rpc_scala.ConnectRpcHttpRoutes.getClass
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.json4s.{JsonFormat, Printer}
@@ -48,7 +49,7 @@ class JsonMessageCodec[F[_] : Sync : Compression](printer: Printer) extends Mess
       case str: String =>
         Sync[F].delay(URLDecoder.decode(str, charset))
       case stream: Stream[F, Byte] =>
-        decompressed(entity.headers, stream)
+        decompressed(entity.encoding, stream)
           .through(decodeWithCharset(charset))
           .compile.string
     }
@@ -73,7 +74,12 @@ class JsonMessageCodec[F[_] : Sync : Compression](printer: Printer) extends Mess
       logger.trace(s"<<< JSON: $string")
     }
 
-    EntityEncoder.stringEncoder[F].toEntity(string)
+    val bytes = string.getBytes()
+
+    Entity(
+      body = Stream.chunk(Chunk.array(bytes)),
+      length = Some(bytes.length.toLong),
+    )
   }
 
 }
@@ -92,7 +98,7 @@ class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
         Async[F].delay(base64dec.decode(str.getBytes(entity.charset.nioCharset)))
           .flatMap(arr => Async[F].delay(cmp.parseFrom(arr)))
       case stream: Stream[F, Byte] =>
-        toInputStreamResource(decompressed(entity.headers, stream))
+        toInputStreamResource(decompressed(entity.encoding, stream))
           .use(is => Async[F].delay(cmp.parseFrom(is)))
     }
 
@@ -111,17 +117,18 @@ class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
       logger.trace(s"<<< Proto: ${message.toProtoString}")
     }
 
+    val dataLength = message.serializedSize
+    val chunkSize  = CodedOutputStream.DEFAULT_BUFFER_SIZE min dataLength
+
     Entity(
-      body = readOutputStream(2048)(os => Async[F].delay(message.writeTo(os))),
-      length = Some(message.serializedSize.toLong),
+      body = readOutputStream(chunkSize)(os => Async[F].delay(message.writeTo(os))),
+      length = Some(dataLength.toLong),
     )
   }
 
 }
 
-def decompressed[F[_] : Compression](headers: Headers, body: Stream[F, Byte]): Stream[F, Byte] = {
-  val encoding = headers.get[`Content-Encoding`].map(_.contentCoding)
-
+def decompressed[F[_] : Compression](encoding: Option[ContentCoding], body: Stream[F, Byte]): Stream[F, Byte] = {
   body.through(encoding match {
     case Some(ContentCoding.gzip) =>
       Compression[F].gunzip().andThen(_.flatMap(_.content))
