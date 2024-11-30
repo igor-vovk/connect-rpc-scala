@@ -1,9 +1,7 @@
 package org.ivovk.connect_rpc_scala.http
 
 import org.http4s.dsl.impl.QueryParamDecoderMatcher
-import org.http4s.{Charset, MediaType, ParseFailure, QueryParamDecoder}
-
-import java.net.URLDecoder
+import org.http4s.{MediaType, ParseFailure, QueryParamDecoder}
 
 object QueryParams {
 
@@ -15,9 +13,6 @@ object QueryParams {
 
   object EncodingQP extends QueryParamDecoderMatcher[MediaType]("encoding")(encodingQPDecoder)
 
-  private val messageQPDecoder = QueryParamDecoder[String]
-    .map(URLDecoder.decode(_, Charset.`UTF-8`.nioCharset))
-
-  object MessageQP extends QueryParamDecoderMatcher[String]("message")(messageQPDecoder)
+  object MessageQP extends QueryParamDecoderMatcher[String]("message")
 
 }
