@@ -10,6 +10,8 @@ import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import scalapb.json4s.{JsonFormat, Printer}
 
+import java.util.concurrent.Executor
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 
 object ConnectRouteBuilder {
@@ -28,8 +30,9 @@ object ConnectRouteBuilder {
 case class ConnectRouteBuilder[F[_] : Async] private(
   services: Seq[ServerServiceDefinition],
   jsonPrinterConfigurator: Endo[Printer] = identity,
-  serverBuilderConfigurator: Endo[ServerBuilder[_]] = identity,
-  channelBuilderConfigurator: Endo[ManagedChannelBuilder[_]] = identity,
+  serverConfigurator: Endo[ServerBuilder[_]] = identity,
+  channelConfigurator: Endo[ManagedChannelBuilder[_]] = identity,
+  executor: Executor = ExecutionContext.global,
   waitForShutdown: Duration = 5.seconds,
 ) {
 
@@ -38,11 +41,14 @@ case class ConnectRouteBuilder[F[_] : Async] private(
   def withJsonPrinterConfigurator(method: Endo[Printer]): ConnectRouteBuilder[F] =
     copy(jsonPrinterConfigurator = method)
 
-  def withServerBuilderConfigurator(method: Endo[ServerBuilder[_]]): ConnectRouteBuilder[F] =
-    copy(serverBuilderConfigurator = method)
+  def withServerConfigurator(method: Endo[ServerBuilder[_]]): ConnectRouteBuilder[F] =
+    copy(serverConfigurator = method)
 
-  def withChannelBuilderConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectRouteBuilder[F] =
-    copy(channelBuilderConfigurator = method)
+  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectRouteBuilder[F] =
+    copy(channelConfigurator = method)
+
+  def withExecutor(executor: Executor): ConnectRouteBuilder[F] =
+    copy(executor = executor)
 
   def withWaitForShutdown(duration: Duration): ConnectRouteBuilder[F] =
     copy(waitForShutdown = duration)
@@ -68,8 +74,9 @@ case class ConnectRouteBuilder[F[_] : Async] private(
     for
       channel <- InProcessChannelBridge.create(
         services,
-        serverBuilderConfigurator,
-        channelBuilderConfigurator,
+        serverConfigurator,
+        channelConfigurator,
+        executor,
         waitForShutdown,
       )
     yield
