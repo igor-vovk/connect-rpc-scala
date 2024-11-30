@@ -40,7 +40,7 @@ object Main extends IOApp.Simple {
         .create[IO](
           Seq(service),
           Configuration(
-            jsonPrinterConfiguration = { p =>
+            jsonPrinterConfigurer = { p =>
               // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
               // JSON-serialization conformance tests
               p.withTypeRegistry(

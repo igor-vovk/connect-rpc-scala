@@ -25,7 +25,9 @@ import scala.concurrent.duration.*
 import scala.util.chaining.*
 
 case class Configuration(
-  jsonPrinterConfiguration: Endo[Printer] = identity,
+  jsonPrinterConfigurer: Endo[Printer] = identity,
+  serverBuilderConfigurer: Endo[ServerBuilder[_]] = identity,
+  channelBuilderConfigurer: Endo[ManagedChannelBuilder[_]] = identity,
   waitForShutdown: Duration = 10.seconds,
 )
 
@@ -42,7 +44,7 @@ object ConnectRpcHttpRoutes {
     val dsl = Http4sDsl[F]
     import dsl.*
 
-    val jsonPrinter = configuration.jsonPrinterConfiguration(JsonFormat.printer)
+    val jsonPrinter = configuration.jsonPrinterConfigurer(JsonFormat.printer)
 
     val codecRegistry = MessageCodecRegistry[F](
       JsonMessageCodec[F](jsonPrinter),
@@ -52,7 +54,12 @@ object ConnectRpcHttpRoutes {
     val methodRegistry = MethodRegistry(services)
 
     for
-      ipChannel <- InProcessChannelBridge.create(services, configuration.waitForShutdown)
+      ipChannel <- InProcessChannelBridge.create(
+        services,
+        configuration.serverBuilderConfigurer,
+        configuration.channelBuilderConfigurer,
+        configuration.waitForShutdown,
+      )
     yield
       def handle(
         httpMethod: Method,
