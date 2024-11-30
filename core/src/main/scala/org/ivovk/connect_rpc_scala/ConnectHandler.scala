@@ -2,125 +2,84 @@ package org.ivovk.connect_rpc_scala
 
 import cats.Endo
 import cats.data.EitherT
-import cats.effect.{Async, Resource}
+import cats.effect.Async
 import cats.implicits.*
-import fs2.compression.Compression
-import io.grpc.*
+import io.grpc.{CallOptions, Channel, ClientInterceptors, Metadata, StatusException, StatusRuntimeException}
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.stub.MetadataUtils
-import org.http4s.*
 import org.http4s.dsl.Http4sDsl
-import org.ivovk.connect_rpc_scala.http.*
+import org.http4s.{MediaType, Method, Response}
+import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
 import org.ivovk.connect_rpc_scala.http.MessageCodec.given
-import org.ivovk.connect_rpc_scala.http.QueryParams.*
+import org.ivovk.connect_rpc_scala.http.{MediaTypes, MessageCodec, MessageCodecRegistry, RequestEntity}
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.grpc.ClientCalls
-import scalapb.json4s.JsonFormat
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
 
 import java.util.concurrent.atomic.AtomicReference
-import scala.concurrent.duration.MILLISECONDS
+import scala.concurrent.duration.*
 import scala.util.chaining.*
 
-
-object ConnectRpcHttpRoutes {
-
-  import Mappings.*
+class ConnectHandler[F[_]: Async](
+  codecRegistry: MessageCodecRegistry[F],
+  methodRegistry: MethodRegistry,
+  channel: Channel,
+  httpDsl: Http4sDsl[F],
+) {
+  import httpDsl.*
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  def create[F[_] : Async](
-    services: Seq[ServerServiceDefinition],
-    configuration: Configuration = Configuration.default
-  ): Resource[F, HttpRoutes[F]] = {
-    val dsl = Http4sDsl[F]
-    import dsl.*
-
-    val jsonPrinter = configuration.jsonPrinterConfigurator(JsonFormat.printer)
-
-    val codecRegistry = MessageCodecRegistry[F](
-      JsonMessageCodec[F](jsonPrinter),
-      ProtoMessageCodec[F],
-    )
-
-    val methodRegistry = MethodRegistry(services)
-
-    for
-      ipChannel <- InProcessChannelBridge.create(
-        services,
-        configuration.serverBuilderConfigurator,
-        configuration.channelBuilderConfigurator,
-        configuration.waitForShutdown,
+  def handle(
+    httpMethod: Method,
+    contentType: Option[MediaType],
+    entity: RequestEntity[F],
+    grpcMethodName: String,
+  ): F[Response[F]] = {
+    val eitherT = for
+      given MessageCodec[F] <- EitherT.fromOptionM(
+        contentType.flatMap(codecRegistry.byContentType).pure[F],
+        UnsupportedMediaType(s"Unsupported content-type ${contentType.show}. " +
+          s"Supported content types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}")
       )
-    yield
-      def handle(
-        httpMethod: Method,
-        contentType: Option[MediaType],
-        entity: RequestEntity[F],
-        grpcMethod: String,
-      ): F[Response[F]] = {
-        val eitherT = for
-          given MessageCodec[F] <- EitherT.fromOptionM(
-            contentType.flatMap(codecRegistry.byContentType).pure[F],
-            UnsupportedMediaType(s"Unsupported content-type ${contentType.show}. " +
-              s"Supported content types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}")
-          )
 
-          method <- EitherT.fromOptionM(
-            methodRegistry.get(grpcMethod).pure[F],
-            NotFound(connectrpc.Error(
-              code = io.grpc.Status.NOT_FOUND.toConnectCode,
-              message = s"Method not found: $grpcMethod".some
-            ))
-          )
+      method <- EitherT.fromOptionM(
+        methodRegistry.get(grpcMethodName).pure[F],
+        NotFound(connectrpc.Error(
+          code = io.grpc.Status.NOT_FOUND.toConnectCode,
+          message = s"Method not found: $grpcMethodName".some
+        ))
+      )
 
-          _ <- EitherT.cond[F](
-            // Support GET-requests for all methods until https://github.com/scalapb/ScalaPB/pull/1774 is merged
-            httpMethod == Method.POST || (httpMethod == Method.GET && method.descriptor.isSafe) || true,
-            (),
-            Forbidden(connectrpc.Error(
-              code = io.grpc.Status.PERMISSION_DENIED.toConnectCode,
-              message = s"Only POST-requests are allowed for method: $grpcMethod".some
-            ))
-          ).leftSemiflatMap(identity)
+      _ <- EitherT.cond[F](
+        // Support GET-requests for all methods until https://github.com/scalapb/ScalaPB/pull/1774 is merged
+        httpMethod == Method.POST || (httpMethod == Method.GET && method.descriptor.isSafe) || true,
+        (),
+        Forbidden(connectrpc.Error(
+          code = io.grpc.Status.PERMISSION_DENIED.toConnectCode,
+          message = s"Only POST-requests are allowed for method: $grpcMethodName".some
+        ))
+      ).leftSemiflatMap(identity)
 
-          response <- method.descriptor.getType match
-            case MethodType.UNARY =>
-              EitherT.right(handleUnary(dsl, method, entity, ipChannel))
-            case unsupported =>
-              EitherT.left(NotImplemented(connectrpc.Error(
-                code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
-                message = s"Unsupported method type: $unsupported".some
-              )))
-        yield response
+      response <- method.descriptor.getType match
+        case MethodType.UNARY =>
+          EitherT.right(handleUnary(method, entity, channel))
+        case unsupported =>
+          EitherT.left(NotImplemented(connectrpc.Error(
+            code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
+            message = s"Unsupported method type: $unsupported".some
+          )))
+    yield response
 
-        eitherT.merge
-      }
-
-      HttpRoutes.of[F] {
-        case req@Method.GET -> Root / serviceName / methodName :? EncodingQP(contentType) +& MessageQP(message) =>
-          val grpcMethod = grpcMethodName(serviceName, methodName)
-          val entity     = RequestEntity[F](message, req.headers)
-
-          handle(Method.GET, contentType.some, entity, grpcMethod)
-        case req@Method.POST -> Root / serviceName / methodName =>
-          val grpcMethod  = grpcMethodName(serviceName, methodName)
-          val contentType = req.contentType.map(_.mediaType)
-          val entity      = RequestEntity[F](req)
-
-          handle(Method.POST, contentType, entity, grpcMethod)
-      }
+    eitherT.merge
   }
 
-  private def handleUnary[F[_] : Async](
-    dsl: Http4sDsl[F],
+  private def handleUnary(
     method: MethodRegistry.Entry,
     req: RequestEntity[F],
     channel: Channel
   )(using codec: MessageCodec[F]): F[Response[F]] = {
-    import dsl.*
-
     if (logger.isTraceEnabled) {
       // Used in conformance tests
       req.headers.get[`X-Test-Case-Name`] match {
@@ -204,8 +163,8 @@ object ConnectRpcHttpRoutes {
             (messageParts.mkString("\n"), details)
           )
 
-        val message = messageWithDetails.map(_._1)
-        val details = messageWithDetails.map(_._2).getOrElse(Seq.empty)
+        //val message = messageWithDetails.map(_._1)
+        //val details = messageWithDetails.map(_._2).getOrElse(Seq.empty)
 
         val httpStatus  = grpcStatus.toHttpStatus
         val connectCode = grpcStatus.toConnectCode
@@ -222,7 +181,5 @@ object ConnectRpcHttpRoutes {
         ))
       }
   }
-
-  private inline def grpcMethodName(service: String, method: String): String = service + "/" + method
 
 }

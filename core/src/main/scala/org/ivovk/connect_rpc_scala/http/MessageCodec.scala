@@ -10,7 +10,6 @@ import fs2.text.decodeWithCharset
 import fs2.{Chunk, Stream}
 import org.http4s.headers.`Content-Type`
 import org.http4s.{ContentCoding, DecodeResult, Entity, EntityDecoder, EntityEncoder, InvalidMessageBodyFailure, MediaRange, MediaType}
-import org.ivovk.connect_rpc_scala.ConnectRpcHttpRoutes.getClass
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.json4s.{JsonFormat, Printer}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}

@@ -94,8 +94,7 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
 
   for {
     // Create httpApp with Connect-RPC routes, specifying your GRPC services
-    httpApp <- ConnectRpcHttpRoutes.create[IO](grpcServices)
-      .map(_.orNotFound)
+    httpApp <- ConnectRouteBuilder.forServices[IO](grpcServices).build
 
     // Create http server
     httpServer <- EmberServerBuilder.default[IO]
@@ -121,15 +120,13 @@ Here is how you can integrate OpenTelemetry with the Connect-RPC server:
 val grpcServices: Seq[io.grpc.ServiceDefinition] = ??? // Your GRPC service(s)
 val grpcOtel    : GrpcOpenTelemetry              = ??? // GrpcOpenTelemetry instance
 
-ConnectRpcHttpRoutes.create[IO](
-  grpcServices,
-  Configuration.default
-    // Configure the server to use the same opentelemetry instance as the main server
-    .withServerConfigurator { sb =>
-      grpcOtel.configureServerBuilder(sb)
-      sb
-    }
-)
+ConnectRouteBuilder.forServices[IO](grpcServices)
+  // Configure the server to use the same opentelemetry instance as the main server
+  .withServerConfigurator { sb =>
+    grpcOtel.configureServerBuilder(sb)
+    sb
+  }
+  .build
 ```
 
 This will make sure that all the traffic going through the Connect-RPC server will be captured by the same

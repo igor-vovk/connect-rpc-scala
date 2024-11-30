@@ -1,3 +1,5 @@
+import org.typelevel.scalacoptions.ScalacOptions
+
 ThisBuild / scalaVersion := "3.3.4"
 
 ThisBuild / organization := "io.github.igor-vovk"
@@ -13,6 +15,12 @@ ThisBuild / developers := List(
   )
 )
 ThisBuild / sonatypeCredentialHost := xerial.sbt.Sonatype.sonatypeCentralHost
+
+ThisBuild / tpolecatExcludeOptions ++= Set(
+  ScalacOptions.warnNonUnitStatement,
+  ScalacOptions.warnValueDiscard,
+)
+
 
 lazy val noPublish = List(
   publish := {},

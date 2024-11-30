@@ -3,7 +3,6 @@ package org.ivovk.connect_rpc_scala
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
-import io.grpc.ServerServiceDefinition
 import org.http4s.client.Client
 import org.http4s.dsl.io.Root
 import org.http4s.headers.`Content-Type`
@@ -35,13 +34,11 @@ class HttpTest extends AnyFunSuite, Matchers {
     .withContentType(`Content-Type`(MediaTypes.`application/json`))
 
   test("basic") {
-    val services: Seq[ServerServiceDefinition] = Seq(
-      TestService.bindService(TestServiceImpl, ExecutionContext.global)
-    )
+    val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
 
-    ConnectRpcHttpRoutes.create[IO](services.toList)
+    ConnectRouteBuilder.forService[IO](service).build
       .flatMap { routes =>
-        val client = Client.fromHttpApp(routes.orNotFound)
+        val client = Client.fromHttpApp(routes)
 
         client.run(
           Request[IO](Method.POST, uri"/org.ivovk.connect_rpc_scala.test.TestService/Add")
@@ -62,13 +59,11 @@ class HttpTest extends AnyFunSuite, Matchers {
   }
 
   test("GET request") {
-    val services: Seq[ServerServiceDefinition] = Seq(
-      TestService.bindService(TestServiceImpl, ExecutionContext.global)
-    )
+    val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
 
-    ConnectRpcHttpRoutes.create[IO](services.toList)
-      .flatMap { routes =>
-        val client = Client.fromHttpApp(routes.orNotFound)
+    ConnectRouteBuilder.forService[IO](service).build
+      .flatMap { app =>
+        val client = Client.fromHttpApp(app)
 
         val requestJson = URLEncoder.encode("""{"key":"123"}""", Charset.`UTF-8`.nioCharset)
 

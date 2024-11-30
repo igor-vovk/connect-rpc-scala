@@ -4,7 +4,7 @@ import cats.effect.{IO, IOApp, Sync}
 import com.comcast.ip4s.{Port, host, port}
 import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatRequest, ServerCompatResponse}
 import org.http4s.ember.server.EmberServerBuilder
-import org.ivovk.connect_rpc_scala.{Configuration, ConnectRpcHttpRoutes}
+import org.ivovk.connect_rpc_scala.ConnectRouteBuilder
 import scalapb.json4s.TypeRegistry
 
 import java.io.InputStream
@@ -36,27 +36,23 @@ object Main extends IOApp.Simple {
         ConformanceServiceImpl[IO]()
       )
 
-      httpApp <- ConnectRpcHttpRoutes
-        .create[IO](
-          Seq(service),
-          Configuration.default
-            // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
-            // JSON-serialization conformance tests
-            .withJsonPrinterConfigurator { p =>
-              p.withTypeRegistry(
-                TypeRegistry.default
-                  .addMessage[connectrpc.conformance.v1.UnaryRequest]
-                  .addMessage[connectrpc.conformance.v1.IdempotentUnaryRequest]
-                  .addMessage[connectrpc.conformance.v1.ConformancePayload.RequestInfo]
-              )
-            }
-        )
-        .map(r => r.orNotFound)
+      app <- ConnectRouteBuilder.forService[IO](service)
+        // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
+        // JSON-serialization conformance tests
+        .withJsonPrinterConfigurator { p =>
+          p.withTypeRegistry(
+            TypeRegistry.default
+              .addMessage[connectrpc.conformance.v1.UnaryRequest]
+              .addMessage[connectrpc.conformance.v1.IdempotentUnaryRequest]
+              .addMessage[connectrpc.conformance.v1.ConformancePayload.RequestInfo]
+          )
+        }
+        .build
 
       server <- EmberServerBuilder.default[IO]
         .withHost(host"127.0.0.1")
         .withPort(port"0") // random port
-        .withHttpApp(httpApp)
+        .withHttpApp(app)
         .build
 
       addr = server.address
