@@ -151,8 +151,8 @@ Current status: 6/79 tests pass
 
 Known issues:
 
-* `fs2-grpc` server implementation doesn't support setting response headers (which is required by the tests)
-* `google.protobuf.Any` serialization doesn't follow Connect-RPC spec
+* `fs2-grpc` server implementation doesn't support setting response headers (which is required by the tests): [#31](https://github.com/igor-vovk/connect-rpc-scala/issues/31)
+* `google.protobuf.Any` serialization doesn't follow Connect-RPC spec: [#32](https://github.com/igor-vovk/connect-rpc-scala/issues/32)
 
 ## Future improvements
 
