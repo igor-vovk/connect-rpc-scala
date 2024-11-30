@@ -3,7 +3,6 @@ package org.ivovk.connect_rpc_scala
 import cats.Endo
 import cats.effect.{Async, Resource}
 import cats.implicits.*
-import fs2.compression.Compression
 import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpApp, HttpRoutes, Method}
@@ -15,18 +14,18 @@ import scala.concurrent.duration.*
 
 object ConnectRouteBuilder {
 
-  def forService[F[_] : Async: Compression](service: ServerServiceDefinition): ConnectRouteBuilder[F] =
+  def forService[F[_] : Async](service: ServerServiceDefinition): ConnectRouteBuilder[F] =
     ConnectRouteBuilder(Seq(service))
 
-  def forServices[F[_] : Async: Compression](service: ServerServiceDefinition, other: ServerServiceDefinition*): ConnectRouteBuilder[F] =
+  def forServices[F[_] : Async](service: ServerServiceDefinition, other: ServerServiceDefinition*): ConnectRouteBuilder[F] =
     ConnectRouteBuilder(service +: other)
 
-  def forServices[F[_] : Async: Compression](services: Seq[ServerServiceDefinition]): ConnectRouteBuilder[F] =
+  def forServices[F[_] : Async](services: Seq[ServerServiceDefinition]): ConnectRouteBuilder[F] =
     ConnectRouteBuilder(services)
 
 }
 
-case class ConnectRouteBuilder[F[_] : Async: Compression] private(
+case class ConnectRouteBuilder[F[_] : Async] private(
   services: Seq[ServerServiceDefinition],
   jsonPrinterConfigurator: Endo[Printer] = identity,
   serverBuilderConfigurator: Endo[ServerBuilder[_]] = identity,
@@ -56,11 +55,12 @@ case class ConnectRouteBuilder[F[_] : Async: Compression] private(
     val httpDsl = Http4sDsl[F]
     import httpDsl.*
 
+    val compressor  = Compressor[F]
     val jsonPrinter = jsonPrinterConfigurator(JsonFormat.printer)
 
     val codecRegistry = MessageCodecRegistry[F](
-      JsonMessageCodec[F](jsonPrinter),
-      ProtoMessageCodec[F],
+      JsonMessageCodec[F](compressor, jsonPrinter),
+      ProtoMessageCodec[F](compressor)
     )
 
     val methodRegistry = MethodRegistry(services)

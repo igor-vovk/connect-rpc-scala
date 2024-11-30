@@ -35,7 +35,7 @@ trait MessageCodec[F[_]] {
 
 }
 
-class JsonMessageCodec[F[_] : Sync : Compression](printer: Printer) extends MessageCodec[F] {
+class JsonMessageCodec[F[_] : Sync](compressor: Compressor[F], printer: Printer) extends MessageCodec[F] {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -47,7 +47,7 @@ class JsonMessageCodec[F[_] : Sync : Compression](printer: Printer) extends Mess
       case str: String =>
         Sync[F].delay(URLDecoder.decode(str, charset))
       case stream: Stream[F, Byte] =>
-        decompressed(entity.encoding, stream)
+        compressor.decompressed(entity.encoding, stream)
           .through(decodeWithCharset(charset))
           .compile.string
     }
@@ -82,7 +82,7 @@ class JsonMessageCodec[F[_] : Sync : Compression](printer: Printer) extends Mess
 
 }
 
-class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
+class ProtoMessageCodec[F[_] : Async](compressor: Compressor[F]) extends MessageCodec[F] {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -96,7 +96,7 @@ class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
         Async[F].delay(base64dec.decode(str.getBytes(entity.charset.nioCharset)))
           .flatMap(arr => Async[F].delay(cmp.parseFrom(arr)))
       case stream: Stream[F, Byte] =>
-        toInputStreamResource(decompressed(entity.encoding, stream))
+        toInputStreamResource(compressor.decompressed(entity.encoding, stream))
           .use(is => Async[F].delay(cmp.parseFrom(is)))
     }
 
@@ -129,11 +129,16 @@ class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
 
 }
 
-def decompressed[F[_] : Compression](encoding: Option[ContentCoding], body: Stream[F, Byte]): Stream[F, Byte] = {
-  body.through(encoding match {
-    case Some(ContentCoding.gzip) =>
-      Compression[F].gunzip().andThen(_.flatMap(_.content))
-    case _ =>
-      identity
-  })
+class Compressor[F[_]: Sync] {
+
+  given Compression[F] = Compression.forSync[F]
+
+  def decompressed(encoding: Option[ContentCoding], body: Stream[F, Byte]): Stream[F, Byte] =
+    body.through(encoding match {
+      case Some(ContentCoding.gzip) =>
+        Compression[F].gunzip().andThen(_.flatMap(_.content))
+      case _ =>
+        identity
+    })
+
 }
