@@ -1,6 +1,7 @@
 name: Release
 on:
   push:
+    branches: [main]
     tags: ["v*"]
 
 jobs:
@@ -15,6 +16,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: 'sbt'
+      - uses: sbt/setup-sbt@v1
       - run: sbt ci-release
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
