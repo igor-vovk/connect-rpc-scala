@@ -92,7 +92,6 @@ Current status: 6/79 tests pass
 Known issues:
 
 * fs2-grpc server implementation doesn't support setting response headers
-* Trailers that are set in http4s aren’t being sent to the client
 * `google.protobuf.Any` serialization doesn't follow Connect-RPC spec
 
 ## Future improvements

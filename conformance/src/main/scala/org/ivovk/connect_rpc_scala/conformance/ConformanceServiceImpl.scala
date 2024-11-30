@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.jdk.CollectionConverters.*
 
+case class UnaryHandlerResponse(payload: ConformancePayload, trailers: Metadata)
 
 class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrailers[F, Metadata] {
 
@@ -24,12 +25,15 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
     ctx: Metadata
   ): F[(UnaryResponse, Metadata)] = {
     for
-      payload <- handleUnaryRequest(
+      res <- handleUnaryRequest(
         request.getResponseDefinition,
         Seq(request.toProtoAny),
         ctx
       )
-    yield (UnaryResponse(payload.some), new Metadata())
+    yield (
+      UnaryResponse(res.payload.some),
+      res.trailers
+    )
   }
 
   override def idempotentUnary(
@@ -37,25 +41,22 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
     ctx: Metadata,
   ): F[(IdempotentUnaryResponse, Metadata)] = {
     for
-      payload <- handleUnaryRequest(
+      res <- handleUnaryRequest(
         request.getResponseDefinition,
         Seq(request.toProtoAny),
         ctx
       )
-    yield (IdempotentUnaryResponse(payload.some), new Metadata())
+    yield (
+      IdempotentUnaryResponse(res.payload.some),
+      res.trailers
+    )
   }
 
   private def handleUnaryRequest(
     responseDefinition: UnaryResponseDefinition,
     requests: Seq[com.google.protobuf.any.Any],
     ctx: Metadata,
-  ): F[ConformancePayload] = {
-    //val trailers = new Metadata()
-    //responseDefinition.responseTrailers.foreach { h =>
-    //  val key = Metadata.Key.of(h.name, Metadata.ASCII_STRING_MARSHALLER)
-    //  h.value.foreach(v => trailers.put(key, v))
-    //}
-
+  ): F[UnaryHandlerResponse] = {
     val requestInfo = ConformancePayload.RequestInfo(
       requestHeaders = mkConformanceHeaders(ctx),
       timeoutMs = extractTimeout(ctx),
@@ -77,10 +78,15 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
         throw new StatusRuntimeException(status)
     }
 
+    val trailers = mkMetadata(responseDefinition.responseTrailers)
+
     Async[F].sleep(Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)) *>
-      Async[F].pure(ConformancePayload(
-        responseData.getOrElse(ByteString.EMPTY),
-        requestInfo.some
+      Async[F].pure(UnaryHandlerResponse(
+        payload = ConformancePayload(
+          responseData.getOrElse(ByteString.EMPTY),
+          requestInfo.some
+        ),
+        trailers = trailers
       ))
   }
 
@@ -91,6 +97,16 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
     metadata.keys().asScala.map { key =>
       Header(key, metadata.getAll(keyof(key)).asScala.toSeq)
     }.toSeq
+  }
+
+  private def mkMetadata(headers: Seq[Header]): Metadata = {
+    val metadata = new Metadata()
+    headers.foreach { h =>
+      h.value.foreach { v =>
+        metadata.put(keyof(h.name), v)
+      }
+    }
+    metadata
   }
 
   private def extractTimeout(metadata: Metadata): Option[Long] = {

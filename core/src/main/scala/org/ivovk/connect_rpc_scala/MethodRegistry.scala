@@ -5,12 +5,12 @@ import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 
 import scala.jdk.CollectionConverters.*
 
-case class RegistryEntry(
-  requestMessageCompanion: GeneratedMessageCompanion[GeneratedMessage],
-  methodDescriptor: MethodDescriptor[GeneratedMessage, GeneratedMessage],
-)
-
 object MethodRegistry {
+
+  case class Entry(
+    requestMessageCompanion: GeneratedMessageCompanion[GeneratedMessage],
+    descriptor: MethodDescriptor[GeneratedMessage, GeneratedMessage],
+  )
 
   def apply(services: Seq[ServerServiceDefinition]): MethodRegistry = {
     val entries = services
@@ -30,12 +30,12 @@ object MethodRegistry {
         val requestCompanion = companionField.get(requestMarshaller)
           .asInstanceOf[GeneratedMessageCompanion[GeneratedMessage]]
 
-        val entry = RegistryEntry(
+        val methodEntry = Entry(
           requestMessageCompanion = requestCompanion,
-          methodDescriptor = methodDescriptor,
+          descriptor = methodDescriptor,
         )
 
-        methodDescriptor.getFullMethodName -> entry
+        methodDescriptor.getFullMethodName -> methodEntry
       }
       .toMap
 
@@ -44,9 +44,9 @@ object MethodRegistry {
 
 }
 
-class MethodRegistry private(entries: Map[String, RegistryEntry]) {
+class MethodRegistry private(entries: Map[String, MethodRegistry.Entry]) {
 
-  def get(fullMethodName: String): Option[RegistryEntry] =
+  def get(fullMethodName: String): Option[MethodRegistry.Entry] =
     entries.get(fullMethodName)
 
 }

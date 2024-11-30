@@ -56,7 +56,7 @@ class JsonMessageCodec[F[_] : Sync : Compression](printer: Printer) extends Mess
     val f = string
       .flatMap { str =>
         if (logger.isTraceEnabled) {
-          logger.trace(s">>> Headers: ${entity.headers}")
+          logger.trace(s">>> Headers: ${entity.headers.redactSensitive}")
           logger.trace(s">>> JSON: $str")
         }
 
@@ -98,7 +98,7 @@ class ProtoMessageCodec[F[_] : Async : Compression] extends MessageCodec[F] {
 
     EitherT.right(f.map { message =>
       if (logger.isTraceEnabled) {
-        logger.trace(s">>> Headers: ${entity.headers}")
+        logger.trace(s">>> Headers: ${entity.headers.redactSensitive}")
         logger.trace(s">>> Proto: ${message.toProtoString}")
       }
 

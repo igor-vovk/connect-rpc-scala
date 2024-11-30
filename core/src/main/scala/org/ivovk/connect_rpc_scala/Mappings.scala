@@ -5,8 +5,6 @@ import org.http4s.{Header, Headers}
 import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
 
-import scala.jdk.CollectionConverters.*
-
 object Mappings extends HeaderMappings, StatusCodeMappings, AnyMappings
 
 trait HeaderMappings {
@@ -25,17 +23,26 @@ trait HeaderMappings {
   }
 
   extension (metadata: Metadata) {
-    def toHeaders: Headers = {
-      val headers = metadata.keys()
-        .asScala.toList
-        .flatMap { key =>
-          metadata.getAll(asciiKey(key)).asScala.map { value =>
-            Header.Raw(CIString(key), value)
-          }
-        }
+    private def headers(prefix: String = ""): Headers = {
+      val keys = metadata.keys()
+      if (keys.isEmpty) return Headers.empty
 
-      Headers(headers)
+      val b = List.newBuilder[Header.Raw]
+
+      keys.forEach { key =>
+        val name = CIString(prefix + key)
+
+        metadata.getAll(asciiKey(key)).forEach { value =>
+          b += Header.Raw(name, value)
+        }
+      }
+
+      new Headers(b.result())
     }
+
+    def toHeaders: Headers = headers()
+
+    def toTrailingHeaders: Headers = headers("trailer-")
   }
 
 }
