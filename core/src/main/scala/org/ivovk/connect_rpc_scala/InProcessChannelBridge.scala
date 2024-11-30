@@ -15,14 +15,14 @@ object InProcessChannelBridge {
 
   def create[F[_] : Sync](
     services: Seq[ServerServiceDefinition],
-    serverBuilderConfigurer: Endo[ServerBuilder[?]] = identity,
-    channelBuilderConfigurer: Endo[ManagedChannelBuilder[?]] = identity,
+    serverBuilderConfigurator: Endo[ServerBuilder[?]] = identity,
+    channelBuilderConfigurator: Endo[ManagedChannelBuilder[?]] = identity,
     waitForShutdown: Duration,
   ): Resource[F, Channel] = {
     for
       name <- Resource.eval(Sync[F].delay(InProcessServerBuilder.generateName()))
-      server <- createServer(name, services, waitForShutdown, serverBuilderConfigurer)
-      channel <- createStub(name, waitForShutdown, channelBuilderConfigurer)
+      server <- createServer(name, services, waitForShutdown, serverBuilderConfigurator)
+      channel <- createStub(name, waitForShutdown, channelBuilderConfigurator)
     yield channel
   }
 
@@ -30,13 +30,13 @@ object InProcessChannelBridge {
     name: String,
     services: Seq[ServerServiceDefinition],
     waitForShutdown: Duration,
-    serverBuilderConfigurer: Endo[ServerBuilder[?]] = identity,
+    serverBuilderConfigurator: Endo[ServerBuilder[?]] = identity,
   ): Resource[F, Server] = {
     val acquire = Sync[F].delay {
       InProcessServerBuilder.forName(name)
         .directExecutor()
         .addServices(services.asJava)
-        .pipe(serverBuilderConfigurer)
+        .pipe(serverBuilderConfigurator)
         .build()
         .start()
     }
@@ -49,12 +49,12 @@ object InProcessChannelBridge {
   private def createStub[F[_] : Sync](
     name: String,
     waitForShutdown: Duration,
-    channelBuilderConfigurer: Endo[ManagedChannelBuilder[?]] = identity,
+    channelBuilderConfigurator: Endo[ManagedChannelBuilder[?]] = identity,
   ): Resource[F, ManagedChannel] = {
     val acquire = Sync[F].delay {
       InProcessChannelBuilder.forName(name)
         .directExecutor()
-        .pipe(channelBuilderConfigurer)
+        .pipe(channelBuilderConfigurator)
         .build()
     }
     val release = (c: ManagedChannel) =>

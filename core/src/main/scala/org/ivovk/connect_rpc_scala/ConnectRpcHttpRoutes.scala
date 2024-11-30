@@ -2,8 +2,7 @@ package org.ivovk.connect_rpc_scala
 
 import cats.Endo
 import cats.data.EitherT
-import cats.effect.Async
-import cats.effect.kernel.Resource
+import cats.effect.{Async, Resource}
 import cats.implicits.*
 import fs2.compression.Compression
 import io.grpc.*
@@ -17,19 +16,13 @@ import org.ivovk.connect_rpc_scala.http.MessageCodec.given
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.grpc.ClientCalls
-import scalapb.json4s.{JsonFormat, Printer}
+import scalapb.json4s.JsonFormat
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
 
 import java.util.concurrent.atomic.AtomicReference
-import scala.concurrent.duration.*
+import scala.concurrent.duration.MILLISECONDS
 import scala.util.chaining.*
 
-case class Configuration(
-  jsonPrinterConfigurer: Endo[Printer] = identity,
-  serverBuilderConfigurer: Endo[ServerBuilder[_]] = identity,
-  channelBuilderConfigurer: Endo[ManagedChannelBuilder[_]] = identity,
-  waitForShutdown: Duration = 10.seconds,
-)
 
 object ConnectRpcHttpRoutes {
 
@@ -39,12 +32,12 @@ object ConnectRpcHttpRoutes {
 
   def create[F[_] : Async](
     services: Seq[ServerServiceDefinition],
-    configuration: Configuration = Configuration()
+    configuration: Configuration = Configuration.default
   ): Resource[F, HttpRoutes[F]] = {
     val dsl = Http4sDsl[F]
     import dsl.*
 
-    val jsonPrinter = configuration.jsonPrinterConfigurer(JsonFormat.printer)
+    val jsonPrinter = configuration.jsonPrinterConfigurator(JsonFormat.printer)
 
     val codecRegistry = MessageCodecRegistry[F](
       JsonMessageCodec[F](jsonPrinter),
@@ -56,8 +49,8 @@ object ConnectRpcHttpRoutes {
     for
       ipChannel <- InProcessChannelBridge.create(
         services,
-        configuration.serverBuilderConfigurer,
-        configuration.channelBuilderConfigurer,
+        configuration.serverBuilderConfigurator,
+        configuration.channelBuilderConfigurator,
         configuration.waitForShutdown,
       )
     yield

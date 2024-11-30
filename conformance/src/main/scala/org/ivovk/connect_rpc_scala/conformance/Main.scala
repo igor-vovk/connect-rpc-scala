@@ -39,10 +39,10 @@ object Main extends IOApp.Simple {
       httpApp <- ConnectRpcHttpRoutes
         .create[IO](
           Seq(service),
-          Configuration(
-            jsonPrinterConfigurer = { p =>
-              // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
-              // JSON-serialization conformance tests
+          Configuration.default
+            // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
+            // JSON-serialization conformance tests
+            .withJsonPrinterConfigurator { p =>
               p.withTypeRegistry(
                 TypeRegistry.default
                   .addMessage[connectrpc.conformance.v1.UnaryRequest]
@@ -50,7 +50,6 @@ object Main extends IOApp.Simple {
                   .addMessage[connectrpc.conformance.v1.ConformancePayload.RequestInfo]
               )
             }
-          )
         )
         .map(r => r.orNotFound)
 
