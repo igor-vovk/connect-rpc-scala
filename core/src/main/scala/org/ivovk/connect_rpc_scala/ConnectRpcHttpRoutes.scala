@@ -12,7 +12,7 @@ import io.grpc.stub.MetadataUtils
 import org.http4s.*
 import org.http4s.dsl.Http4sDsl
 import org.ivovk.connect_rpc_scala.http.*
-import org.ivovk.connect_rpc_scala.http.Headers.*
+import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
 import org.ivovk.connect_rpc_scala.http.MessageCodec.given
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.slf4j.{Logger, LoggerFactory}
@@ -151,8 +151,8 @@ object ConnectRpcHttpRoutes {
             method.descriptor,
             CallOptions.DEFAULT
               .pipe(
-                req.headers.get[`Connect-Timeout-Ms`].fold[Endo[CallOptions]](identity) { header =>
-                  _.withDeadlineAfter(header.value, MILLISECONDS)
+                req.timeout.fold[Endo[CallOptions]](identity) { timeout =>
+                  _.withDeadlineAfter(timeout, MILLISECONDS)
                 }
               ),
             message
