@@ -32,7 +32,8 @@ They are similar, but GRPC-WEB target is to be as close to GRPC as possible, whi
 web-friendly: it has better client libraries, better web semantics:
 content-type is `application/json` instead of `application/grpc-web+json`, error codes are just normal http codes
 instead of being sent in headers, errors are output in the body of the response JSON-encoded, it supports GET-requests,
-etc (you can also read this [blog post describing why ConnectRPC is better](https://buf.build/blog/connect-a-better-grpc)).
+etc (you can also read
+this [blog post describing why ConnectRPC is better](https://buf.build/blog/connect-a-better-grpc)).
 
 Both protocols support encoding data in Protobuf and JSON.
 JSON is more web-friendly, but it requires having some component in the middle, providing JSON → Protobuf
@@ -108,6 +109,31 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
 // Start the server
 httpServer.use(_ => IO.never).unsafeRunSync()
 ```
+
+### Tip: GRPC Opentelemetry integration
+
+Since the library creates a separate "fake" grpc server, traffic going through it won't be captured by the
+instrumentation of the main grpc server.
+
+Here is how you can integrate the Opentelemetry with the Connect-RPC server:
+
+```scala
+val grpcServices: Seq[io.grpc.ServiceDefinition] = ??? // Your GRPC service(s)
+val grpcOtel    : GrpcOpenTelemetry              = ??? // GrpcOpenTelemetry instance
+
+ConnectRpcHttpRoutes.create[IO](
+  grpcServices,
+  Configuration.default
+    // Configure the server to use the same opentelemetry instance as the main server
+    .withServerConfigurator { sb =>
+      grpcOtel.configureServerBuilder(sb)
+      sb
+    }
+)
+```
+
+This will make sure that all the traffic going through the Connect-RPC server will be captured by the same
+opentelemetry.
 
 ## Development
 
