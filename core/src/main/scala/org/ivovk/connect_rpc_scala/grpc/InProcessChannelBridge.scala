@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala
+package org.ivovk.connect_rpc_scala.grpc
 
 import cats.Endo
 import cats.effect.{Resource, Sync}

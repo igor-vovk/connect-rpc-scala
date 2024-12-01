@@ -4,12 +4,13 @@ import cats.Endo
 import cats.data.EitherT
 import cats.effect.Async
 import cats.implicits.*
-import io.grpc.{CallOptions, Channel, ClientInterceptors, Metadata, StatusException, StatusRuntimeException}
+import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.stub.MetadataUtils
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{MediaType, Method, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
+import org.ivovk.connect_rpc_scala.grpc.{MethodName, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
 import org.ivovk.connect_rpc_scala.http.MessageCodec.given
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, MessageCodec, MessageCodecRegistry, RequestEntity}
@@ -35,7 +36,7 @@ class ConnectHandler[F[_]: Async](
     httpMethod: Method,
     contentType: Option[MediaType],
     entity: RequestEntity[F],
-    grpcMethodName: String,
+    grpcMethodName: MethodName,
   ): F[Response[F]] = {
     val eitherT = for
       given MessageCodec[F] <- EitherT.fromOptionM(
@@ -48,7 +49,7 @@ class ConnectHandler[F[_]: Async](
         methodRegistry.get(grpcMethodName).pure[F],
         NotFound(connectrpc.Error(
           code = io.grpc.Status.NOT_FOUND.toConnectCode,
-          message = s"Method not found: $grpcMethodName".some
+          message = s"Method not found: ${grpcMethodName.fullyQualifiedName}".some
         ))
       )
 
@@ -58,7 +59,7 @@ class ConnectHandler[F[_]: Async](
         (),
         Forbidden(connectrpc.Error(
           code = io.grpc.Status.PERMISSION_DENIED.toConnectCode,
-          message = s"Only POST-requests are allowed for method: $grpcMethodName".some
+          message = s"Only POST-requests are allowed for method: ${grpcMethodName.fullyQualifiedName}".some
         ))
       ).leftSemiflatMap(identity)
 

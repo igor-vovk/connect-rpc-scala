@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala
+package org.ivovk.connect_rpc_scala.grpc
 
 import io.grpc.{MethodDescriptor, ServerMethodDefinition, ServerServiceDefinition}
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
@@ -35,18 +35,18 @@ object MethodRegistry {
           descriptor = methodDescriptor,
         )
 
-        methodDescriptor.getFullMethodName -> methodEntry
+        MethodName(methodDescriptor) -> methodEntry
       }
-      .toMap
+      .groupMapReduce((mn, _) => mn.service)((mn, m) => Map(mn.method -> m))(_ ++ _)
 
     new MethodRegistry(entries)
   }
 
 }
 
-class MethodRegistry private(entries: Map[String, MethodRegistry.Entry]) {
+class MethodRegistry private(entries: Map[Service, Map[Method, MethodRegistry.Entry]]) {
 
-  def get(fullMethodName: String): Option[MethodRegistry.Entry] =
-    entries.get(fullMethodName)
+  def get(methodName: MethodName): Option[MethodRegistry.Entry] =
+    entries.getOrElse(methodName.service, Map.empty).get(methodName.method)
 
 }

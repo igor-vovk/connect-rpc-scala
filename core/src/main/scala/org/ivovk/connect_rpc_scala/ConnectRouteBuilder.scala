@@ -6,6 +6,7 @@ import cats.implicits.*
 import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpApp, HttpRoutes, Method}
+import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import scalapb.json4s.{JsonFormat, Printer}
@@ -89,12 +90,12 @@ case class ConnectRouteBuilder[F[_] : Async] private(
 
       HttpRoutes.of[F] {
         case req@Method.GET -> Root / serviceName / methodName :? EncodingQP(contentType) +& MessageQP(message) =>
-          val grpcMethod = grpcMethodName(serviceName, methodName)
+          val grpcMethod = MethodName(serviceName, methodName)
           val entity     = RequestEntity[F](message, req.headers)
 
           handler.handle(Method.GET, contentType.some, entity, grpcMethod)
         case req@Method.POST -> Root / serviceName / methodName =>
-          val grpcMethod  = grpcMethodName(serviceName, methodName)
+          val grpcMethod  = MethodName(serviceName, methodName)
           val contentType = req.contentType.map(_.mediaType)
           val entity      = RequestEntity[F](req)
 
@@ -104,8 +105,5 @@ case class ConnectRouteBuilder[F[_] : Async] private(
 
   def build: Resource[F, HttpApp[F]] =
     buildRoutes.map(_.orNotFound)
-
-  private inline def grpcMethodName(service: String, method: String): String =
-    service + "/" + method
 
 }
