@@ -74,6 +74,8 @@ lazy val conformance = project
     libraryDependencies ++= Seq(
       "org.http4s" %% "http4s-ember-server" % Versions.http4s,
 
+      "dev.zio" %% "zio-interop-cats" % "23.1.0.3",
+
       "ch.qos.logback" % "logback-classic" % Versions.logback % Runtime,
     ),
 

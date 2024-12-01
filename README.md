@@ -132,6 +132,11 @@ ConnectRouteBuilder.forServices[IO](grpcServices)
 This will make sure that all the traffic going through the Connect-RPC server will be captured by the same
 opentelemetry.
 
+## ZIO Interop
+
+It is perfectly possible to use the library with ZIO, since it's built on top of `cats-effect` and use Tagless pattern.
+Conformance tests actually use `ZIO` and `ZIO-GRPC`, to know more check inside the `conformance` folder.
+
 ## Development
 
 ### Running Connect-RPC conformance tests
@@ -151,8 +156,10 @@ Current status: 6/79 tests pass
 
 Known issues:
 
-* `fs2-grpc` server implementation doesn't support setting response headers (which is required by the tests): [#31](https://github.com/igor-vovk/connect-rpc-scala/issues/31)
-* `google.protobuf.Any` serialization doesn't follow Connect-RPC spec: [#32](https://github.com/igor-vovk/connect-rpc-scala/issues/32)
+* `fs2-grpc` server implementation doesn't support setting response headers (which is required by the
+  tests): [#31](https://github.com/igor-vovk/connect-rpc-scala/issues/31)
+* `google.protobuf.Any` serialization doesn't follow Connect-RPC
+  spec: [#32](https://github.com/igor-vovk/connect-rpc-scala/issues/32)
 
 ## Future improvements
 

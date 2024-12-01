@@ -1,11 +1,15 @@
 package org.ivovk.connect_rpc_scala.conformance
 
-import cats.effect.{IO, IOApp, Sync}
+import cats.effect.Resource
 import com.comcast.ip4s.{Port, host, port}
-import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatRequest, ServerCompatResponse}
+import connectrpc.conformance.v1.{ServerCompatRequest, ServerCompatResponse}
+import fs2.io.net.Network
 import org.http4s.ember.server.EmberServerBuilder
 import org.ivovk.connect_rpc_scala.ConnectRouteBuilder
 import scalapb.json4s.TypeRegistry
+import scalapb.zio_grpc.ServiceList
+import zio.interop.catz.*
+import zio.{Task, ZIO, ZIOAppDefault}
 
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -26,17 +30,15 @@ import java.nio.ByteBuffer
  *
  * [[https://github.com/connectrpc/conformance/blob/main/docs/configuring_and_running_tests.md]]
  */
-object Main extends IOApp.Simple {
+object Main extends ZIOAppDefault {
 
-  override def run: IO[Unit] = {
+  def run: Task[Nothing] = {
     val res = for
-      req <- ServerCompatSerDeser.readRequest[IO](System.in).toResource
+      req <- Resource.eval(ServerCompatSerDeser.readRequest(System.in))
 
-      service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
-        ConformanceServiceImpl[IO]()
-      )
+      services <- Resource.eval(ServiceList.empty.add(ConformanceServiceImpl).bindAll)
 
-      app <- ConnectRouteBuilder.forService[IO](service)
+      app <- ConnectRouteBuilder.forServices[Task](services)
         // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
         // JSON-serialization conformance tests
         .withJsonPrinterConfigurator { p =>
@@ -49,7 +51,9 @@ object Main extends IOApp.Simple {
         }
         .build
 
-      server <- EmberServerBuilder.default[IO]
+      given Network[Task] = Network.forAsync[Task]
+
+      server <- EmberServerBuilder.default[Task]
         .withHost(host"127.0.0.1")
         .withPort(port"0") // random port
         .withHttpApp(app)
@@ -58,30 +62,25 @@ object Main extends IOApp.Simple {
       addr = server.address
       resp = ServerCompatResponse(addr.getHostString, addr.getPort)
 
-      _ <- ServerCompatSerDeser.writeResponse[IO](System.out, resp).toResource
+      _ <- Resource.eval(ServerCompatSerDeser.writeResponse(System.out, resp))
 
       _ = System.err.println(s"Server started on $addr...")
     yield ()
 
-    res
-      .useForever
-      .recover { case e =>
-        System.err.println(s"Error in server:")
-        e.printStackTrace()
-      }
+    res.useForever
   }
 
 }
 
 object ServerCompatSerDeser {
-  def readRequest[F[_] : Sync](in: InputStream): F[ServerCompatRequest] =
-    Sync[F].delay {
+  def readRequest(in: InputStream): Task[ServerCompatRequest] =
+    ZIO.attempt {
       val length = IntSerDeser.read(in)
       ServerCompatRequest.parseFrom(in.readNBytes(length))
     }
 
-  def writeResponse[F[_] : Sync](out: java.io.OutputStream, resp: ServerCompatResponse): F[Unit] =
-    Sync[F].delay {
+  def writeResponse(out: java.io.OutputStream, resp: ServerCompatResponse): Task[Unit] =
+    ZIO.attempt {
       IntSerDeser.write(out, resp.serializedSize)
       out.flush()
       out.write(resp.toByteArray)
