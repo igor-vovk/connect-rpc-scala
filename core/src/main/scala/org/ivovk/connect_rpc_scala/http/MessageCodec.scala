@@ -16,6 +16,7 @@ import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Compan
 
 import java.net.URLDecoder
 import java.util.Base64
+import scala.util.chaining.*
 
 object MessageCodec {
   given [F[_] : Applicative, A <: Message](using codec: MessageCodec[F], cmp: Companion[A]): EntityDecoder[F, A] =
@@ -93,22 +94,22 @@ class ProtoMessageCodec[F[_] : Async](compressor: Compressor[F]) extends Message
   override def decode[A <: Message](entity: RequestEntity[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
     val msg = entity.message match {
       case str: String =>
-        Async[F].delay(base64dec.decode(str.getBytes(entity.charset.nioCharset)))
-          .flatMap(arr => Async[F].delay(cmp.parseFrom(arr)))
+        Async[F].delay(cmp.parseFrom(base64dec.decode(str.getBytes(entity.charset.nioCharset))))
       case stream: Stream[F, Byte] =>
         toInputStreamResource(compressor.decompressed(entity.encoding, stream))
           .use(is => Async[F].delay(cmp.parseFrom(is)))
     }
 
     msg
-      .map { message =>
-        if (logger.isTraceEnabled) {
-          logger.trace(s">>> Headers: ${entity.headers.redactSensitive()}")
-          logger.trace(s">>> Proto: ${message.toProtoString}")
-        }
-
-        message
-      }
+      .pipe(
+        if logger.isTraceEnabled then
+          _.map { msg =>
+            logger.trace(s">>> Headers: ${entity.headers.redactSensitive()}")
+            logger.trace(s">>> Proto: ${msg.toProtoString}")
+            msg
+          }
+        else identity
+      )
       .attemptT
       .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
@@ -129,7 +130,7 @@ class ProtoMessageCodec[F[_] : Async](compressor: Compressor[F]) extends Message
 
 }
 
-class Compressor[F[_]: Sync] {
+class Compressor[F[_] : Sync] {
 
   given Compression[F] = Compression.forSync[F]
 
