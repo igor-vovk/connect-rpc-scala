@@ -76,6 +76,10 @@ lazy val conformance = project
 
       "ch.qos.logback" % "logback-classic" % Versions.logback % Runtime,
     ),
+
+    Compile / PB.targets ++= Seq(
+      scalapb.zio_grpc.ZioCodeGenerator -> (Compile / sourceManaged).value / "scalapb"
+    )
   )
 
 lazy val root = (project in file("."))
