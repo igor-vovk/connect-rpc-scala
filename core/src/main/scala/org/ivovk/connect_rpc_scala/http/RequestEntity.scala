@@ -21,6 +21,7 @@ case class RequestEntity[F[_]](
   message: String | Stream[F, Byte],
   headers: Headers,
 ) {
+
   def contentType: Option[`Content-Type`] =
     headers.get[`Content-Type`]
 
@@ -36,11 +37,4 @@ case class RequestEntity[F[_]](
   def as[A <: Message](using M: MonadThrow[F], codec: MessageCodec[F], cmp: Companion[A]): F[A] =
     M.rethrow(codec.decode(this).value)
 
-  def fold[A](string: String => A)(stream: Stream[F, Byte] => A): A =
-    message match {
-      case s: String =>
-        string(s)
-      case b: Stream[F, Byte] =>
-        stream(b)
-    }
 }

@@ -8,7 +8,7 @@ import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.stub.MetadataUtils
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{MediaType, Method, Response}
+import org.http4s.{MediaType, MessageFailure, Method, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{MethodName, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
@@ -22,12 +22,13 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.*
 import scala.util.chaining.*
 
-class ConnectHandler[F[_]: Async](
+class ConnectHandler[F[_] : Async](
   codecRegistry: MessageCodecRegistry[F],
   methodRegistry: MethodRegistry,
   channel: Channel,
   httpDsl: Http4sDsl[F],
 ) {
+
   import httpDsl.*
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -137,6 +138,7 @@ class ConnectHandler[F[_]: Async](
               case _ => e.getStatus
             }
           case e: StatusException => e.getStatus
+          case e: MessageFailure => io.grpc.Status.INVALID_ARGUMENT
           case _ => io.grpc.Status.INTERNAL
         }
 
