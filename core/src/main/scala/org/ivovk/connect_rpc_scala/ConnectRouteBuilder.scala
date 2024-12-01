@@ -35,6 +35,7 @@ case class ConnectRouteBuilder[F[_] : Async] private(
   channelConfigurator: Endo[ManagedChannelBuilder[_]] = identity,
   executor: Executor = ExecutionContext.global,
   waitForShutdown: Duration = 5.seconds,
+  treatTrailersAsHeaders: Boolean = true,
 ) {
 
   import Mappings.*
@@ -53,6 +54,17 @@ case class ConnectRouteBuilder[F[_] : Async] private(
 
   def withWaitForShutdown(duration: Duration): ConnectRouteBuilder[F] =
     copy(waitForShutdown = duration)
+
+  /**
+   * If enabled, trailers will be treated as headers (no "trailer-" prefix).
+   *
+   * Both `fs2-grpc` and `zio-grpc` support trailing headers only, so enabling this option is a single way to
+   * send headers from the server to the client.
+   *
+   * Enabled by default.
+   */
+  def withTreatTrailersAsHeaders(enabled: Boolean): ConnectRouteBuilder[F] =
+    copy(treatTrailersAsHeaders = enabled)
 
   /**
    * Method can be used if you want to add additional routes to the server.
@@ -86,6 +98,7 @@ case class ConnectRouteBuilder[F[_] : Async] private(
         methodRegistry,
         channel,
         httpDsl,
+        treatTrailersAsHeaders,
       )
 
       HttpRoutes.of[F] {

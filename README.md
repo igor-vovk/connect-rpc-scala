@@ -13,7 +13,7 @@ Scala:
 
 * [ScalaPB](https://scalapb.github.io) services with `Future` monad
 * [fs2-grpc](https://github.com/typelevel/fs2-grpc), built on top of `cats-effect` and `fs2`
-* [ZIO gRPC](https://scalapb.github.io/zio-grpc/), built on top of `ZIO` monad (the most feature-rich implementation)
+* [ZIO gRPC](https://scalapb.github.io/zio-grpc/), built on top of `ZIO`
 
 *Note*: at the moment, only unary (non-streaming) methods are supported.
 
@@ -71,7 +71,7 @@ supports_message_receive_limit: false
 
 ## Usage
 
-Library is installed via SBT (you also need to install particular `http4s` server implementation):
+Installing with SBT (you also need to install particular `http4s` server implementation):
 
 ```scala
 libraryDependencies ++= Seq(
@@ -109,10 +109,10 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
 httpServer.use(_ => IO.never).unsafeRunSync()
 ```
 
-### Tip: GRPC OpenTelemetry integration
+### Hint: GRPC OpenTelemetry integration
 
 Since the library creates a separate "fake" GRPC server, traffic going through it won't be captured by the
-instrumentation of the main GRPC server.
+instrumentation of your main GRPC server (if any).
 
 Here is how you can integrate OpenTelemetry with the Connect-RPC server:
 
@@ -129,8 +129,11 @@ ConnectRouteBuilder.forServices[IO](grpcServices)
   .build
 ```
 
-This will make sure that all the traffic going through the Connect-RPC server will be captured by the same
-opentelemetry.
+### ZIO Interop
+
+Because the library uses the Tagless Final pattern, it is perfectly possible to use it with ZIO. You might check
+`zio_interop` branch, where conformance is implemented with `ZIO` and `ZIO-gRPC`.
+You can read [this](https://zio.dev/guides/interop/with-cats-effect/).
 
 ## Development
 
@@ -147,14 +150,14 @@ Diagnostic data from the server itself is written to the log file `out/out.log`.
 
 ### Conformance tests status
 
-Current status: 6/79 tests pass
+Current status: 11/79 tests pass.
 
 Known issues:
 
-* `fs2-grpc` server implementation doesn't support setting response headers (which is required by the tests): [#31](https://github.com/igor-vovk/connect-rpc-scala/issues/31)
-* `google.protobuf.Any` serialization doesn't follow Connect-RPC spec: [#32](https://github.com/igor-vovk/connect-rpc-scala/issues/32)
+* `google.protobuf.Any` serialization doesn't follow Connect-RPC
+  spec: [#32](https://github.com/igor-vovk/connect-rpc-scala/issues/32)
 
 ## Future improvements
 
-* Support GET-requests
-* Support non-unary (streaming) methods
+[x] Support GET-requests
+[ ] Support non-unary (streaming) methods

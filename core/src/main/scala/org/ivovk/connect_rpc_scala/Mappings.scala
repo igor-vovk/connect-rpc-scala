@@ -40,9 +40,12 @@ trait HeaderMappings {
       new Headers(b.result())
     }
 
-    def toHeaders: Headers = headers()
+    def toHeaders(trailing: Boolean = false): Headers = {
+      val prefix = if trailing then "trailer-" else ""
 
-    def toTrailingHeaders: Headers = headers("trailer-")
+      headers(prefix)
+    }
+
   }
 
 }

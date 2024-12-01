@@ -27,6 +27,7 @@ class ConnectHandler[F[_] : Async](
   methodRegistry: MethodRegistry,
   channel: Channel,
   httpDsl: Http4sDsl[F],
+  treatTrailersAsHeaders: Boolean,
 ) {
 
   import httpDsl.*
@@ -119,12 +120,11 @@ class ConnectHandler[F[_] : Async](
             message
           )
         }).map { response =>
-          val headers = org.http4s.Headers.empty ++
-            responseHeaderMetadata.get.toHeaders ++
-            responseTrailerMetadata.get.toTrailingHeaders
+          val headers = responseHeaderMetadata.get.toHeaders() ++
+            responseTrailerMetadata.get.toHeaders(trailing = !treatTrailersAsHeaders)
 
           if (logger.isTraceEnabled) {
-            logger.trace(s"<<< Headers: ${headers.redactSensitive}")
+            logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
           }
 
           Response(Ok, headers = headers).withEntity(response)

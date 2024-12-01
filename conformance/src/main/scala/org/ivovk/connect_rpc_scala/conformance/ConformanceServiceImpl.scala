@@ -75,7 +75,10 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
         throw new StatusRuntimeException(status)
     }
 
-    val trailers = mkMetadata(responseDefinition.responseTrailers)
+    val trailers = mkMetadata(Seq.concat(
+      responseDefinition.responseHeaders,
+      responseDefinition.responseTrailers.map(h => h.copy(name = s"trailer-${h.name}")),
+    ))
 
     Async[F].sleep(Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)) *>
       Async[F].pure(UnaryHandlerResponse(
