@@ -4,9 +4,8 @@ import cats.effect.{IO, IOApp, Sync}
 import com.comcast.ip4s.{Port, host, port}
 import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatRequest, ServerCompatResponse}
 import org.http4s.ember.server.EmberServerBuilder
-import org.ivovk.connect_rpc_scala.http.ConnectAnyFormat
 import org.ivovk.connect_rpc_scala.ConnectRouteBuilder
-import scalapb.json4s.{AnyFormat, JsonFormat, TypeRegistry}
+import scalapb.json4s.TypeRegistry
 
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -46,13 +45,7 @@ object Main extends IOApp.Simple {
               .addMessage[connectrpc.conformance.v1.UnaryRequest]
               .addMessage[connectrpc.conformance.v1.IdempotentUnaryRequest]
               .addMessage[connectrpc.conformance.v1.ConformancePayload.RequestInfo]
-          ).withFormatRegistry(
-                JsonFormat.DefaultRegistry
-                  .registerMessageFormatter[com.google.protobuf.any.Any](
-                    ConnectAnyFormat.anyWriter,
-                    AnyFormat.anyParser
-                  )
-              )
+          )
         }
         .build
 

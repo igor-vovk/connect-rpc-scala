@@ -1,6 +1,5 @@
 package org.ivovk.connect_rpc_scala
 
-import cats.Endo
 import cats.data.EitherT
 import cats.effect.Async
 import cats.implicits.*
@@ -111,12 +110,12 @@ class ConnectHandler[F[_] : Async](
               MetadataUtils.newCaptureMetadataInterceptor(responseHeaderMetadata, responseTrailerMetadata),
             ),
             method.descriptor,
-            CallOptions.DEFAULT
-              .pipe(
-                req.timeout.fold[Endo[CallOptions]](identity) { timeout =>
-                  _.withDeadlineAfter(timeout, MILLISECONDS)
-                }
-              ),
+            CallOptions.DEFAULT.pipe(
+              req.timeout match {
+                case Some(timeout) => _.withDeadlineAfter(timeout, MILLISECONDS)
+                case None => identity
+              }
+            ),
             message
           )
         }).map { response =>
@@ -166,8 +165,8 @@ class ConnectHandler[F[_] : Async](
             (messageParts.mkString("\n"), details)
           )
 
-        //val message = messageWithDetails.map(_._1)
-        //val details = messageWithDetails.map(_._2).getOrElse(Seq.empty)
+        val message = messageWithDetails.map(_._1)
+        val details = messageWithDetails.map(_._2).getOrElse(Seq.empty)
 
         val httpStatus  = grpcStatus.toHttpStatus
         val connectCode = grpcStatus.toConnectCode
@@ -179,7 +178,7 @@ class ConnectHandler[F[_] : Async](
 
         Response[F](httpStatus).withEntity(connectrpc.Error(
           code = connectCode,
-          message = messageWithDetails.map(_._1),
+          message = message,
           details = details
         ))
       }

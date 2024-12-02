@@ -108,11 +108,15 @@ trait StatusCodeMappings {
 trait ProtoMappings {
 
   extension [T <: GeneratedMessage](t: T) {
-    def toProtoAny: com.google.protobuf.any.Any =
+    private def any(typeUrlPrefix: String = "type.googleapis.com/"): com.google.protobuf.any.Any =
       com.google.protobuf.any.Any(
-        typeUrl = "type.googleapis.com/" + t.companion.scalaDescriptor.fullName,
+        typeUrl = typeUrlPrefix + t.companion.scalaDescriptor.fullName,
         value = t.toByteString
       )
+
+    def toProtoAny: com.google.protobuf.any.Any = any()
+
+    def toProtoErrorAny: com.google.protobuf.any.Any = any("")
 
     def toProtoStruct: Struct = toValue(t.toPMessage).kind match {
       case Value.Kind.StructValue(struct) => struct

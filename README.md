@@ -150,14 +150,13 @@ Diagnostic data from the server itself is written to the log file `out/out.log`.
 
 ### Conformance tests status
 
-Current status: 11/79 tests pass.
+Current status: __77/79__ tests pass.
 
 Known issues:
 
-* `google.protobuf.Any` serialization [doesn't follow](https://github.com/connectrpc/conformance/issues/948) Connect-RPC
-  spec: [#32](https://github.com/igor-vovk/connect-rpc-scala/issues/32)
+* Response headers are ignored in case of an error from the server
 
 ## Future improvements
 
-[x] Support GET-requests
-[ ] Support non-unary (streaming) methods
+- [x] Support GET-requests
+- [ ] Support non-unary (streaming) methods

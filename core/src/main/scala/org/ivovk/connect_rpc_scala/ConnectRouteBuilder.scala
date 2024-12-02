@@ -9,11 +9,13 @@ import org.http4s.{HttpApp, HttpRoutes, Method}
 import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
+import org.ivovk.connect_rpc_scala.http.json.ConnectJsonRegistry
 import scalapb.json4s.{JsonFormat, Printer}
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
+import scala.util.chaining.*
 
 object ConnectRouteBuilder {
 
@@ -75,7 +77,9 @@ case class ConnectRouteBuilder[F[_] : Async] private(
     import httpDsl.*
 
     val compressor  = Compressor[F]
-    val jsonPrinter = jsonPrinterConfigurator(JsonFormat.printer)
+    val jsonPrinter = JsonFormat.printer
+      .withFormatRegistry(ConnectJsonRegistry.default)
+      .pipe(jsonPrinterConfigurator)
 
     val codecRegistry = MessageCodecRegistry[F](
       JsonMessageCodec[F](compressor, jsonPrinter),
