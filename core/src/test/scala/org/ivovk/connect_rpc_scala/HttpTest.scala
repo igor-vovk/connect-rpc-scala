@@ -2,7 +2,6 @@ package org.ivovk.connect_rpc_scala
 
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
-import cats.syntax.all.*
 import org.http4s.client.Client
 import org.http4s.dsl.io.Root
 import org.http4s.headers.`Content-Type`
@@ -46,12 +45,11 @@ class HttpTest extends AnyFunSuite, Matchers {
         )
       }
       .use { response =>
-        for {
+        for
           body <- response.as[String]
-          status <- response.status.pure[IO]
-        } yield {
+        yield {
           assert(body == """{"sum":3}""")
-          assert(status == Status.Ok)
+          assert(response.status == Status.Ok)
           assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
         }
       }
@@ -78,12 +76,11 @@ class HttpTest extends AnyFunSuite, Matchers {
         )
       }
       .use { response =>
-        for {
+        for
           body <- response.as[String]
-          status <- response.status.pure[IO]
-        } yield {
+        yield {
           assert(body == """{"value":"Key is: 123"}""")
-          assert(status == Status.Ok)
+          assert(response.status == Status.Ok)
           assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
         }
       }
@@ -105,12 +102,35 @@ class HttpTest extends AnyFunSuite, Matchers {
         )
       }
       .use { response =>
+        for
+          body <- response.as[String]
+        yield {
+          assert(body == """{"sum":3}""")
+          assert(response.status == Status.Ok)
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("return 404 on unknown prefix") {
+    val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
+
+    ConnectRouteBuilder.forService[IO](service)
+      .withPathPrefix(Root / "connect")
+      .build
+      .flatMap { app =>
+        val client = Client.fromHttpApp(app)
+
+        client.run(
+          Request[IO](Method.POST, uri"/api/org.ivovk.connect_rpc_scala.test.TestService/Add")
+            .withEntity(""" { "a": 1, "b": 2} """)
+        )
+      }
+      .use { response =>
         for {
           body <- response.as[String]
-          status <- response.status.pure[IO]
         } yield {
-          assert(body == """{"sum":3}""")
-          assert(status == Status.Ok)
+          assert(response.status == Status.NotFound)
         }
       }
       .unsafeRunSync()

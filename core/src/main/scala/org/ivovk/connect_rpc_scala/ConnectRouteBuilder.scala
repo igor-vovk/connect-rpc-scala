@@ -110,12 +110,12 @@ case class ConnectRouteBuilder[F[_] : Async] private(
       )
 
       HttpRoutes.of[F] {
-        case req@Method.GET -> pathPrefix / serviceName / methodName :? EncodingQP(contentType) +& MessageQP(message) =>
+        case req@Method.GET -> `pathPrefix` / serviceName / methodName :? EncodingQP(contentType) +& MessageQP(message) =>
           val grpcMethod = MethodName(serviceName, methodName)
           val entity     = RequestEntity[F](message, req.headers)
 
           handler.handle(Method.GET, contentType.some, entity, grpcMethod)
-        case req@Method.POST -> pathPrefix / serviceName / methodName =>
+        case req@Method.POST -> `pathPrefix` / serviceName / methodName =>
           val grpcMethod  = MethodName(serviceName, methodName)
           val contentType = req.contentType.map(_.mediaType)
           val entity      = RequestEntity[F](req)
