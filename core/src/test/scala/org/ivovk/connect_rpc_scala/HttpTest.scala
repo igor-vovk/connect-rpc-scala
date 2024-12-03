@@ -90,4 +90,30 @@ class HttpTest extends AnyFunSuite, Matchers {
       .unsafeRunSync()
   }
 
+  test("support path prefixes") {
+    val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
+
+    ConnectRouteBuilder.forService[IO](service)
+      .withPathPrefix(Root / "connect")
+      .build
+      .flatMap { app =>
+        val client = Client.fromHttpApp(app)
+
+        client.run(
+          Request[IO](Method.POST, uri"/connect/org.ivovk.connect_rpc_scala.test.TestService/Add")
+            .withEntity(""" { "a": 1, "b": 2} """)
+        )
+      }
+      .use { response =>
+        for {
+          body <- response.as[String]
+          status <- response.status.pure[IO]
+        } yield {
+          assert(body == """{"sum":3}""")
+          assert(status == Status.Ok)
+        }
+      }
+      .unsafeRunSync()
+  }
+
 }

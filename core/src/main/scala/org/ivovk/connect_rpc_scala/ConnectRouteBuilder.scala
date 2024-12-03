@@ -5,7 +5,7 @@ import cats.effect.{Async, Resource}
 import cats.implicits.*
 import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{HttpApp, HttpRoutes, Method}
+import org.http4s.{HttpApp, HttpRoutes, Method, Uri}
 import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
@@ -35,6 +35,7 @@ case class ConnectRouteBuilder[F[_] : Async] private(
   jsonPrinterConfigurator: Endo[Printer] = identity,
   serverConfigurator: Endo[ServerBuilder[_]] = identity,
   channelConfigurator: Endo[ManagedChannelBuilder[_]] = identity,
+  pathPrefix: Uri.Path = Uri.Path.Root,
   executor: Executor = ExecutionContext.global,
   waitForShutdown: Duration = 5.seconds,
   treatTrailersAsHeaders: Boolean = true,
@@ -50,6 +51,9 @@ case class ConnectRouteBuilder[F[_] : Async] private(
 
   def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectRouteBuilder[F] =
     copy(channelConfigurator = method)
+
+  def withPathPrefix(path: Uri.Path): ConnectRouteBuilder[F] =
+    copy(pathPrefix = path)
 
   def withExecutor(executor: Executor): ConnectRouteBuilder[F] =
     copy(executor = executor)
@@ -106,12 +110,12 @@ case class ConnectRouteBuilder[F[_] : Async] private(
       )
 
       HttpRoutes.of[F] {
-        case req@Method.GET -> Root / serviceName / methodName :? EncodingQP(contentType) +& MessageQP(message) =>
+        case req@Method.GET -> pathPrefix / serviceName / methodName :? EncodingQP(contentType) +& MessageQP(message) =>
           val grpcMethod = MethodName(serviceName, methodName)
           val entity     = RequestEntity[F](message, req.headers)
 
           handler.handle(Method.GET, contentType.some, entity, grpcMethod)
-        case req@Method.POST -> Root / serviceName / methodName =>
+        case req@Method.POST -> pathPrefix / serviceName / methodName =>
           val grpcMethod  = MethodName(serviceName, methodName)
           val contentType = req.contentType.map(_.mediaType)
           val entity      = RequestEntity[F](req)
