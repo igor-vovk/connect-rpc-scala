@@ -11,8 +11,9 @@ import org.http4s.{Header, MediaType, MessageFailure, Method, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{MethodName, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
-import org.ivovk.connect_rpc_scala.http.MessageCodec.given
-import org.ivovk.connect_rpc_scala.http.{MediaTypes, MessageCodec, MessageCodecRegistry, RequestEntity}
+import org.ivovk.connect_rpc_scala.http.codec.MessageCodec.given
+import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
+import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.grpc.ClientCalls
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
@@ -149,16 +150,16 @@ class ConnectHandler[F[_] : Async](
 
         val messageWithDetails = rawMessage
           .map(
-            _.split("\n").partition(m => !m.startsWith("type_url: "))
+            _.split("\n").partition(m => !m.startsWith("type: "))
           )
           .map((messageParts, additionalDetails) =>
             val details = additionalDetails
-              .map(TextFormat.fromAscii(com.google.protobuf.any.Any, _) match {
+              .map(TextFormat.fromAscii(connectrpc.ErrorDetailsAny, _) match {
                 case Right(details) => details
                 case Left(e) =>
                   logger.warn(s"Failed to parse additional details", e)
 
-                  com.google.protobuf.wrappers.StringValue(e.msg).toProtoAny
+                  com.google.protobuf.wrappers.StringValue(e.msg).toProtoErrorDetailsAny
               })
               .toSeq
 

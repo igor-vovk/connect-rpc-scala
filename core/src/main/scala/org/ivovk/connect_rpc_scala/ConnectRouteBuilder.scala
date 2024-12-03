@@ -9,13 +9,11 @@ import org.http4s.{HttpApp, HttpRoutes, Method, Uri}
 import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
-import org.ivovk.connect_rpc_scala.http.json.ConnectJsonRegistry
-import scalapb.json4s.{JsonFormat, Printer}
+import org.ivovk.connect_rpc_scala.http.codec.{JsonMessageCodec, JsonMessageCodecBuilder, MessageCodecRegistry, ProtoMessageCodec}
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
-import scala.util.chaining.*
 
 object ConnectRouteBuilder {
 
@@ -32,9 +30,9 @@ object ConnectRouteBuilder {
 
 case class ConnectRouteBuilder[F[_] : Async] private(
   services: Seq[ServerServiceDefinition],
-  jsonPrinterConfigurator: Endo[Printer] = identity,
   serverConfigurator: Endo[ServerBuilder[_]] = identity,
   channelConfigurator: Endo[ManagedChannelBuilder[_]] = identity,
+  customJsonCodec: Option[JsonMessageCodec[F]] = None,
   pathPrefix: Uri.Path = Uri.Path.Root,
   executor: Executor = ExecutionContext.global,
   waitForShutdown: Duration = 5.seconds,
@@ -43,8 +41,8 @@ case class ConnectRouteBuilder[F[_] : Async] private(
 
   import Mappings.*
 
-  def withJsonPrinterConfigurator(method: Endo[Printer]): ConnectRouteBuilder[F] =
-    copy(jsonPrinterConfigurator = method)
+  def withJsonCodec(codec: JsonMessageCodec[F]): ConnectRouteBuilder[F] =
+    copy(customJsonCodec = Some(codec))
 
   def withServerConfigurator(method: Endo[ServerBuilder[_]]): ConnectRouteBuilder[F] =
     copy(serverConfigurator = method)
@@ -80,14 +78,9 @@ case class ConnectRouteBuilder[F[_] : Async] private(
     val httpDsl = Http4sDsl[F]
     import httpDsl.*
 
-    val compressor  = Compressor[F]
-    val jsonPrinter = JsonFormat.printer
-      .withFormatRegistry(ConnectJsonRegistry.default)
-      .pipe(jsonPrinterConfigurator)
-
     val codecRegistry = MessageCodecRegistry[F](
-      JsonMessageCodec[F](compressor, jsonPrinter),
-      ProtoMessageCodec[F](compressor)
+      customJsonCodec.getOrElse(JsonMessageCodecBuilder[F]().build),
+      ProtoMessageCodec[F](),
     )
 
     val methodRegistry = MethodRegistry(services)

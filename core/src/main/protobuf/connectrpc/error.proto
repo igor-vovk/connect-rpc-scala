@@ -16,7 +16,15 @@ syntax = "proto3";
 
 package connectrpc;
 
-import "google/protobuf/any.proto";
+// This message is similar to the google.protobuf.Any message.
+//
+// Separate type was needed to introduce a separate JSON serializer for this message, since Any in error details
+// has different JSON serialization rules compared to a generic google.protobuf.Any.
+// See https://github.com/connectrpc/conformance/issues/948#issuecomment-2511130448 for some details.
+message ErrorDetailsAny {
+  string type = 1;
+  bytes value = 2;
+}
 
 // An error definition used for specifying a desired error response
 message Error {
@@ -30,5 +38,5 @@ message Error {
   optional string message = 2;
   // Errors in Connect and gRPC protocols can have arbitrary messages
   // attached to them, which are known as error details.
-  repeated google.protobuf.Any details = 3;
+  repeated ErrorDetailsAny details = 3;
 }

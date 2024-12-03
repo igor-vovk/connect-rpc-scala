@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala.http
+package org.ivovk.connect_rpc_scala.http.codec
 
 import org.http4s.MediaType
 

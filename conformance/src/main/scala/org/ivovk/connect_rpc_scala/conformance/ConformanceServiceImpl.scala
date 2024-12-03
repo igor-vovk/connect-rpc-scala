@@ -69,7 +69,7 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
         val status = Status.fromCodeValue(code.value)
           .withDescription(message.orNull)
           .augmentDescription(
-            TextFormat.printToSingleLineUnicodeString(requestInfo.toProtoErrorAny)
+            TextFormat.printToSingleLineUnicodeString(requestInfo.toProtoErrorDetailsAny)
           )
 
         throw new StatusRuntimeException(status)
