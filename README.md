@@ -61,7 +61,7 @@ This simplifies overall setup: simpler CI, fewer network components, faster exec
 ```yaml
 versions: [ HTTP_VERSION_1 ]
 protocols: [ PROTOCOL_CONNECT ]
-codecs: [ CODEC_JSON ]
+codecs: [ CODEC_JSON, CODEC_PROTO ]
 stream_types: [ STREAM_TYPE_UNARY ]
 supports_tls: false
 supports_trailers: false
