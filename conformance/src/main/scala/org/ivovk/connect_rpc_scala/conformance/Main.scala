@@ -5,7 +5,6 @@ import com.comcast.ip4s.{Port, host, port}
 import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatRequest, ServerCompatResponse}
 import org.http4s.ember.server.EmberServerBuilder
 import org.ivovk.connect_rpc_scala.ConnectRouteBuilder
-import org.ivovk.connect_rpc_scala.http.codec.JsonMessageCodecBuilder
 
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -36,19 +35,14 @@ object Main extends IOApp.Simple {
         ConformanceServiceImpl[IO]()
       )
 
-      jsonCodec = JsonMessageCodecBuilder[IO]()
-        // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
-        // JSON-serialization conformance tests
-        .withTypeRegistryConfigurator { tp =>
-          tp
-            .addMessage[connectrpc.conformance.v1.UnaryRequest]
-            .addMessage[connectrpc.conformance.v1.IdempotentUnaryRequest]
-            .addMessage[connectrpc.conformance.v1.ConformancePayload.RequestInfo]
-        }
-        .build
-
       app <- ConnectRouteBuilder.forService[IO](service)
-        .withJsonCodec(jsonCodec)
+        .withJsonCodecConfigurator { 
+          // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
+          // JSON-serialization conformance tests
+          _
+            .registerType[connectrpc.conformance.v1.UnaryRequest]
+            .registerType[connectrpc.conformance.v1.IdempotentUnaryRequest]
+        }
         .build
 
       server <- EmberServerBuilder.default[IO]

@@ -18,37 +18,65 @@ import scala.concurrent.duration.*
 object ConnectRouteBuilder {
 
   def forService[F[_] : Async](service: ServerServiceDefinition): ConnectRouteBuilder[F] =
-    ConnectRouteBuilder(Seq(service))
+    forServices(Seq(service))
 
   def forServices[F[_] : Async](service: ServerServiceDefinition, other: ServerServiceDefinition*): ConnectRouteBuilder[F] =
-    ConnectRouteBuilder(service +: other)
+    forServices(service +: other)
 
   def forServices[F[_] : Async](services: Seq[ServerServiceDefinition]): ConnectRouteBuilder[F] =
-    ConnectRouteBuilder(services)
+    new ConnectRouteBuilder(
+      services = services,
+      serverConfigurator = identity,
+      channelConfigurator = identity,
+      customJsonCodec = None,
+      pathPrefix = Uri.Path.Root,
+      executor = ExecutionContext.global,
+      waitForShutdown = 5.seconds,
+      treatTrailersAsHeaders = true,
+    )
 
 }
 
-case class ConnectRouteBuilder[F[_] : Async] private(
+final class ConnectRouteBuilder[F[_] : Async] private(
   services: Seq[ServerServiceDefinition],
-  serverConfigurator: Endo[ServerBuilder[_]] = identity,
-  channelConfigurator: Endo[ManagedChannelBuilder[_]] = identity,
-  customJsonCodec: Option[JsonMessageCodec[F]] = None,
-  pathPrefix: Uri.Path = Uri.Path.Root,
-  executor: Executor = ExecutionContext.global,
-  waitForShutdown: Duration = 5.seconds,
-  treatTrailersAsHeaders: Boolean = true,
+  serverConfigurator: Endo[ServerBuilder[_]],
+  channelConfigurator: Endo[ManagedChannelBuilder[_]],
+  customJsonCodec: Option[JsonMessageCodec[F]],
+  pathPrefix: Uri.Path,
+  executor: Executor,
+  waitForShutdown: Duration,
+  treatTrailersAsHeaders: Boolean,
 ) {
 
-  import Mappings.*
-
-  def withJsonCodec(codec: JsonMessageCodec[F]): ConnectRouteBuilder[F] =
-    copy(customJsonCodec = Some(codec))
+  private def copy(
+    services: Seq[ServerServiceDefinition] = services,
+    serverConfigurator: Endo[ServerBuilder[_]] = serverConfigurator,
+    channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
+    customJsonCodec: Option[JsonMessageCodec[F]] = customJsonCodec,
+    pathPrefix: Uri.Path = pathPrefix,
+    executor: Executor = executor,
+    waitForShutdown: Duration = waitForShutdown,
+    treatTrailersAsHeaders: Boolean = treatTrailersAsHeaders,
+  ): ConnectRouteBuilder[F] =
+    new ConnectRouteBuilder(
+      services,
+      serverConfigurator,
+      channelConfigurator,
+      customJsonCodec,
+      pathPrefix,
+      executor,
+      waitForShutdown,
+      treatTrailersAsHeaders,
+    )
 
   def withServerConfigurator(method: Endo[ServerBuilder[_]]): ConnectRouteBuilder[F] =
     copy(serverConfigurator = method)
 
   def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectRouteBuilder[F] =
     copy(channelConfigurator = method)
+
+  def withJsonCodecConfigurator(method: Endo[JsonMessageCodecBuilder[F]]): ConnectRouteBuilder[F] =
+    copy(customJsonCodec = Some(method(JsonMessageCodecBuilder[F]()).build))
 
   def withPathPrefix(path: Uri.Path): ConnectRouteBuilder[F] =
     copy(pathPrefix = path)
@@ -60,10 +88,10 @@ case class ConnectRouteBuilder[F[_] : Async] private(
     copy(waitForShutdown = duration)
 
   /**
-   * If enabled, trailers will be treated as headers (no "trailer-" prefix).
+   * When enabled, response trailers are treated as headers (no "trailer-" prefix added).
    *
    * Both `fs2-grpc` and `zio-grpc` support trailing headers only, so enabling this option is a single way to
-   * send headers from the server to the client.
+   * send headers from the server to a client.
    *
    * Enabled by default.
    */
@@ -71,8 +99,9 @@ case class ConnectRouteBuilder[F[_] : Async] private(
     copy(treatTrailersAsHeaders = enabled)
 
   /**
-   * Method can be used if you want to add additional routes to the server.
-   * Otherwise, it is preferred to use the [[build]] method.
+   * Use this method only if you want to add additional routes to the server.
+   *
+   * Otherwise, [[build]] method should be preferred.
    */
   def buildRoutes: Resource[F, HttpRoutes[F]] = {
     val httpDsl = Http4sDsl[F]

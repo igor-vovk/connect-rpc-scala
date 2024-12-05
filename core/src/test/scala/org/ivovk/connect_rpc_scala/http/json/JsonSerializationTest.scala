@@ -6,7 +6,7 @@ import scalapb.json4s
 
 class JsonSerializationTest extends AnyFunSuite {
 
-  test("ErrorDetailsAny serialization/deserialization") {
+  test("ErrorDetailsAny serialization") {
     val formatRegistry = json4s.JsonFormat.DefaultRegistry
       .registerMessageFormatter[connectrpc.ErrorDetailsAny](
         ErrorDetailsAnyFormat.writer,
