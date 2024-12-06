@@ -60,6 +60,11 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
       requests = requests
     )
 
+    val trailers = mkMetadata(Seq.concat(
+      responseDefinition.responseHeaders,
+      responseDefinition.responseTrailers.map(h => h.copy(name = s"trailer-${h.name}")),
+    ))
+
     val responseData = responseDefinition.response match {
       case UnaryResponseDefinition.Response.ResponseData(bs) =>
         bs.some
@@ -72,22 +77,22 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
             TextFormat.printToSingleLineUnicodeString(requestInfo.toProtoErrorDetailsAny)
           )
 
-        throw new StatusRuntimeException(status)
+        throw new StatusRuntimeException(status, trailers)
     }
 
-    val trailers = mkMetadata(Seq.concat(
-      responseDefinition.responseHeaders,
-      responseDefinition.responseTrailers.map(h => h.copy(name = s"trailer-${h.name}")),
-    ))
+    val sleep = Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)
 
-    Async[F].sleep(Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)) *>
-      Async[F].pure(UnaryHandlerResponse(
-        payload = ConformancePayload(
+    Async[F].delayBy(
+      UnaryHandlerResponse(
+        ConformancePayload(
           responseData.getOrElse(ByteString.EMPTY),
           requestInfo.some
         ),
-        trailers = trailers
-      ))
+        trailers
+      ).pure[F],
+      sleep
+    )
+
   }
 
   private def keyof(key: String): Metadata.Key[String] =

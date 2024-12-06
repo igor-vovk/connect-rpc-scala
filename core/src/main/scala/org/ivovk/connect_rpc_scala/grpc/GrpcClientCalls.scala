@@ -59,8 +59,8 @@ object GrpcClientCalls {
   }
 
   /**
-   * [[CallbackObserver]] either executes [[onNext]] -> [[onCompleted]] during the happy path or just [[onError]] in case of
-   * an error.
+   * [[StreamObserverToCallListenerAdapter]] either executes [[onNext]] -> [[onCompleted]] during the happy path
+   * or just [[onError]] in case of an error.
    */
   private class CallbackObserver[F[_] : Async, Resp](cb: Either[Throwable, Resp] => Unit) extends StreamObserver[Resp] {
     private var value: Option[Either[Throwable, Resp]] = None

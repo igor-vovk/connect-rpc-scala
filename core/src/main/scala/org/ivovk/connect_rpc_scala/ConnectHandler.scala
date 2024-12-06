@@ -7,7 +7,7 @@ import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.stub.MetadataUtils
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{Header, MediaType, MessageFailure, Method, Response}
+import org.http4s.{Header, Headers, MediaType, MessageFailure, Method, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{GrpcClientCalls, MethodName, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
@@ -150,6 +150,12 @@ class ConnectHandler[F[_] : Async](
           case e => e.getMessage
         })
 
+        val headers = e match {
+          case e: StatusRuntimeException => e.getTrailers.toHeaders(trailing = !treatTrailersAsHeaders)
+          case e: StatusException => e.getTrailers.toHeaders(trailing = !treatTrailersAsHeaders)
+          case _ => Headers.empty
+        }
+
         val messageWithDetails = rawMessage
           .map(
             _.split("\n").partition(m => !m.startsWith("type: "))
@@ -179,7 +185,7 @@ class ConnectHandler[F[_] : Async](
           logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: ${rawMessage.orNull}")
         }
 
-        Response[F](httpStatus).withEntity(connectrpc.Error(
+        Response[F](httpStatus, headers = headers).withEntity(connectrpc.Error(
           code = connectCode,
           message = message,
           details = details
