@@ -9,13 +9,12 @@ import io.grpc.stub.MetadataUtils
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{Header, MediaType, MessageFailure, Method, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
-import org.ivovk.connect_rpc_scala.grpc.{MethodName, MethodRegistry}
+import org.ivovk.connect_rpc_scala.grpc.{GrpcClientCalls, MethodName, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec.given
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 import org.slf4j.{Logger, LoggerFactory}
-import scalapb.grpc.ClientCalls
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
 
 import java.util.concurrent.atomic.AtomicReference
@@ -103,32 +102,35 @@ class ConnectHandler[F[_] : Async](
           logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}, Entity: $message")
         }
 
-        Async[F].fromFuture(Async[F].delay {
-          ClientCalls.asyncUnaryCall[GeneratedMessage, GeneratedMessage](
+        val callOptions = CallOptions.DEFAULT
+          .pipe(
+            req.timeout match {
+              case Some(timeout) => _.withDeadlineAfter(timeout, MILLISECONDS)
+              case None => identity
+            }
+          )
+
+        GrpcClientCalls
+          .asyncUnaryCall2[F, GeneratedMessage, GeneratedMessage](
             ClientInterceptors.intercept(
               channel,
               MetadataUtils.newAttachHeadersInterceptor(req.headers.toMetadata),
               MetadataUtils.newCaptureMetadataInterceptor(responseHeaderMetadata, responseTrailerMetadata),
             ),
             method.descriptor,
-            CallOptions.DEFAULT.pipe(
-              req.timeout match {
-                case Some(timeout) => _.withDeadlineAfter(timeout, MILLISECONDS)
-                case None => identity
-              }
-            ),
+            callOptions,
             message
           )
-        }).map { response =>
-          val headers = responseHeaderMetadata.get.toHeaders() ++
-            responseTrailerMetadata.get.toHeaders(trailing = !treatTrailersAsHeaders)
+          .map { response =>
+            val headers = responseHeaderMetadata.get.toHeaders() ++
+              responseTrailerMetadata.get.toHeaders(trailing = !treatTrailersAsHeaders)
 
-          if (logger.isTraceEnabled) {
-            logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+            if (logger.isTraceEnabled) {
+              logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+            }
+
+            Response(Ok, headers = headers).withEntity(response)
           }
-
-          Response(Ok, headers = headers).withEntity(response)
-        }
       }
       .recover { case e =>
         val grpcStatus = e match {
