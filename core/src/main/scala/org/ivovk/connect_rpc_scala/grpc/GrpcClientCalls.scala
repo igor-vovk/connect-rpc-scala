@@ -62,7 +62,7 @@ object GrpcClientCalls {
    * [[StreamObserverToCallListenerAdapter]] either executes [[onNext]] -> [[onCompleted]] during the happy path
    * or just [[onError]] in case of an error.
    */
-  private class CallbackObserver[F[_] : Async, Resp](cb: Either[Throwable, Resp] => Unit) extends StreamObserver[Resp] {
+  private class CallbackObserver[Resp](cb: Either[Throwable, Resp] => Unit) extends StreamObserver[Resp] {
     private var value: Option[Either[Throwable, Resp]] = None
 
     override def onNext(value: Resp): Unit = {
@@ -81,7 +81,6 @@ object GrpcClientCalls {
         case Some(v) => cb(v)
         case None => cb(Left(new IllegalStateException("No value received or call to onCompleted after onError")))
     }
-
   }
 
 }

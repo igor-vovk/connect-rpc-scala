@@ -5,7 +5,7 @@ import cats.implicits.*
 import com.google.protobuf.ByteString
 import connectrpc.conformance.v1.*
 import io.grpc.{Metadata, Status, StatusRuntimeException}
-import scalapb.TextFormat
+import org.ivovk.connect_rpc_scala.syntax.all.*
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
@@ -14,8 +14,6 @@ import scala.jdk.CollectionConverters.*
 case class UnaryHandlerResponse(payload: ConformancePayload, trailers: Metadata)
 
 class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrailers[F, Metadata] {
-
-  import org.ivovk.connect_rpc_scala.Mappings.*
 
   override def unary(
     request: UnaryRequest,
@@ -71,13 +69,9 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
       case UnaryResponseDefinition.Response.Empty =>
         none
       case UnaryResponseDefinition.Response.Error(Error(code, message, _)) =>
-        val status = Status.fromCodeValue(code.value)
-          .withDescription(message.orNull)
-          .augmentDescription(
-            TextFormat.printToSingleLineUnicodeString(requestInfo.toProtoErrorDetailsAny)
-          )
+        val status = Status.fromCodeValue(code.value).withDescription(message.orNull)
 
-        throw new StatusRuntimeException(status, trailers)
+        throw new StatusRuntimeException(status, trailers).withDetails(requestInfo)
     }
 
     val sleep = Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)

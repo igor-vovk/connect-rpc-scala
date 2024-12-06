@@ -36,7 +36,6 @@ enum Code {
   CODE_UNAUTHENTICATED = 16;
 }
 
-
 // This message is similar to the google.protobuf.Any message.
 //
 // Separate type was needed to introduce a separate JSON serializer for this message, since Any in error details

@@ -2,15 +2,12 @@ package org.ivovk.connect_rpc_scala
 
 import io.grpc.{Metadata, Status}
 import org.http4s.{Header, Headers}
+import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders.asciiKey
 import org.typelevel.ci.CIString
-import scalapb.GeneratedMessage
 
-object Mappings extends HeaderMappings, StatusCodeMappings, ProtoMappings
+object Mappings extends HeaderMappings, StatusCodeMappings
 
 trait HeaderMappings {
-
-  private inline def asciiKey(name: String): Metadata.Key[String] =
-    Metadata.Key.of(name, Metadata.ASCII_STRING_MARSHALLER)
 
   extension (headers: Headers) {
     def toMetadata: Metadata = {
@@ -120,26 +117,6 @@ trait StatusCodeMappings {
   extension (code: io.grpc.Status.Code) {
     def toHttpStatus: org.http4s.Status = httpStatusCodesByGrpcStatusCode(code.value())
     def toConnectCode: connectrpc.Code = connectErrorCodeByGrpcStatusCode(code.value())
-  }
-
-}
-
-trait ProtoMappings {
-
-  extension [T <: GeneratedMessage](t: T) {
-    def toProtoAny: com.google.protobuf.any.Any = {
-      com.google.protobuf.any.Any(
-        typeUrl = "type.googleapis.com/" + t.companion.scalaDescriptor.fullName,
-        value = t.toByteString
-      )
-    }
-
-    def toProtoErrorDetailsAny: connectrpc.ErrorDetailsAny =
-      connectrpc.ErrorDetailsAny(
-        `type` = t.companion.scalaDescriptor.fullName,
-        value = t.toByteString
-      )
-
   }
 
 }

@@ -7,18 +7,19 @@ import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.stub.MetadataUtils
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{Header, Headers, MediaType, MessageFailure, Method, Response}
+import org.http4s.{Header, MediaType, MessageFailure, Method, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
-import org.ivovk.connect_rpc_scala.grpc.{GrpcClientCalls, MethodName, MethodRegistry}
+import org.ivovk.connect_rpc_scala.grpc.{GrpcClientCalls, GrpcHeaders, MethodName, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec.given
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 import org.slf4j.{Logger, LoggerFactory}
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion, TextFormat}
+import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 
 import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 import scala.util.chaining.*
 
 class ConnectHandler[F[_] : Async](
@@ -144,45 +145,23 @@ class ConnectHandler[F[_] : Async](
           case _ => io.grpc.Status.INTERNAL
         }
 
-        val rawMessage = Option(e match {
-          case e: StatusRuntimeException => e.getStatus.getDescription
-          case e: StatusException => e.getStatus.getDescription
-          case e => e.getMessage
-        })
-
-        val headers = e match {
-          case e: StatusRuntimeException => e.getTrailers.toHeaders(trailing = !treatTrailersAsHeaders)
-          case e: StatusException => e.getTrailers.toHeaders(trailing = !treatTrailersAsHeaders)
-          case _ => Headers.empty
+        val (message, metadata) = e match {
+          case e: StatusRuntimeException => (Option(e.getStatus.getDescription), e.getTrailers)
+          case e: StatusException => (Option(e.getStatus.getDescription), e.getTrailers)
+          case e => (Option(e.getMessage), new Metadata())
         }
-
-        val messageWithDetails = rawMessage
-          .map(
-            _.split("\n").partition(m => !m.startsWith("type: "))
-          )
-          .map((messageParts, additionalDetails) =>
-            val details = additionalDetails
-              .map(TextFormat.fromAscii(connectrpc.ErrorDetailsAny, _) match {
-                case Right(details) => details
-                case Left(e) =>
-                  logger.warn(s"Failed to parse additional details", e)
-
-                  com.google.protobuf.wrappers.StringValue(e.msg).toProtoErrorDetailsAny
-              })
-              .toSeq
-
-            (messageParts.mkString("\n"), details)
-          )
-
-        val message = messageWithDetails.map(_._1)
-        val details = messageWithDetails.map(_._2).getOrElse(Seq.empty)
 
         val httpStatus  = grpcStatus.toHttpStatus
         val connectCode = grpcStatus.toConnectCode
 
+        val details = Option(metadata.removeAll(GrpcHeaders.ErrorDetailsKey))
+          .fold(Seq.empty)(_.asScala.toSeq)
+
+        val headers = metadata.toHeaders(trailing = !treatTrailersAsHeaders)
+
         if (logger.isTraceEnabled) {
           logger.warn(s"<<< Error processing request", e)
-          logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: ${rawMessage.orNull}")
+          logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: ${message.orNull}")
         }
 
         Response[F](httpStatus, headers = headers).withEntity(connectrpc.Error(
