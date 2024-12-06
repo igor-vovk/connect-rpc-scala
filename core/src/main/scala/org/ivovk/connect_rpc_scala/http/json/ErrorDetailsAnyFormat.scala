@@ -22,7 +22,7 @@ object ErrorDetailsAnyFormat {
     )
   }
 
-  val printer: (Parser, JValue) => ErrorDetailsAny = {
+  val parser: (Parser, JValue) => ErrorDetailsAny = {
     case (parser, obj@JObject(fields)) =>
       (obj \ "type", obj \ "value") match {
         case (JString(t), JString(v)) =>

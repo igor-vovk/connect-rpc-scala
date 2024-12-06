@@ -10,7 +10,7 @@ class JsonSerializationTest extends AnyFunSuite {
     val formatRegistry = json4s.JsonFormat.DefaultRegistry
       .registerMessageFormatter[connectrpc.ErrorDetailsAny](
         ErrorDetailsAnyFormat.writer,
-        ErrorDetailsAnyFormat.printer
+        ErrorDetailsAnyFormat.parser
       )
 
     val parser = new json4s.Parser().withFormatRegistry(formatRegistry)
@@ -21,5 +21,22 @@ class JsonSerializationTest extends AnyFunSuite {
     val parsed = parser.fromJsonString[connectrpc.ErrorDetailsAny](json)
 
     assert(parsed == any)
+  }
+
+  test("Error serialization") {
+    val formatRegistry = json4s.JsonFormat.DefaultRegistry
+      .registerMessageFormatter[connectrpc.Error](
+        ConnectErrorFormat.writer,
+        ConnectErrorFormat.parser
+      )
+
+    val parser = new json4s.Parser().withFormatRegistry(formatRegistry)
+    val printer = new json4s.Printer().withFormatRegistry(formatRegistry)
+
+    val error = connectrpc.Error(connectrpc.Code.FailedPrecondition, Some("message"), Seq.empty)
+    val json = printer.print(error)
+    val parsed = parser.fromJsonString[connectrpc.Error](json)
+
+    assert(parsed == error)
   }
 }

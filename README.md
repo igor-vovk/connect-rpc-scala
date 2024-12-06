@@ -148,7 +148,7 @@ docker build . --output "out" --progress=plain
 Execution results are output to STDOUT.
 Diagnostic data from the server itself is written to the log file `out/out.log`.
 
-### Conformance tests status
+### Connect protocol conformance tests status
 
 Current status: __77/79__ tests pass.
 
@@ -159,4 +159,5 @@ Known issues:
 ## Future improvements
 
 - [x] Support GET-requests
+- [ ] Support `google.api.http` annotations (GRPC transcoding)
 - [ ] Support non-unary (streaming) methods

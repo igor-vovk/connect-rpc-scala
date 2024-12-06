@@ -4,7 +4,9 @@ import cats.effect.{IO, IOApp, Sync}
 import com.comcast.ip4s.{Port, host, port}
 import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatRequest, ServerCompatResponse}
 import org.http4s.ember.server.EmberServerBuilder
+import org.http4s.server.middleware.Logger
 import org.ivovk.connect_rpc_scala.ConnectRouteBuilder
+import org.slf4j.LoggerFactory
 
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -27,6 +29,8 @@ import java.nio.ByteBuffer
  */
 object Main extends IOApp.Simple {
 
+  private val logger = LoggerFactory.getLogger(getClass)
+
   override def run: IO[Unit] = {
     val res = for
       req <- ServerCompatSerDeser.readRequest[IO](System.in).toResource
@@ -36,7 +40,7 @@ object Main extends IOApp.Simple {
       )
 
       app <- ConnectRouteBuilder.forService[IO](service)
-        .withJsonCodecConfigurator { 
+        .withJsonCodecConfigurator {
           // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
           // JSON-serialization conformance tests
           _
@@ -45,10 +49,16 @@ object Main extends IOApp.Simple {
         }
         .build
 
+      logger = Logger.httpApp[IO](
+        logHeaders = false,
+        logBody = false,
+        logAction = Some(str => IO(this.logger.trace(str)))
+      )(app)
+
       server <- EmberServerBuilder.default[IO]
         .withHost(host"127.0.0.1")
         .withPort(port"0") // random port
-        .withHttpApp(app)
+        .withHttpApp(logger)
         .build
 
       addr = server.address

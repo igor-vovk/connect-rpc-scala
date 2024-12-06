@@ -16,6 +16,27 @@ syntax = "proto3";
 
 package connectrpc;
 
+enum Code {
+  CODE_UNSPECIFIED = 0;
+  CODE_CANCELED = 1;
+  CODE_UNKNOWN = 2;
+  CODE_INVALID_ARGUMENT = 3;
+  CODE_DEADLINE_EXCEEDED = 4;
+  CODE_NOT_FOUND = 5;
+  CODE_ALREADY_EXISTS = 6;
+  CODE_PERMISSION_DENIED = 7;
+  CODE_RESOURCE_EXHAUSTED = 8;
+  CODE_FAILED_PRECONDITION = 9;
+  CODE_ABORTED = 10;
+  CODE_OUT_OF_RANGE = 11;
+  CODE_UNIMPLEMENTED = 12;
+  CODE_INTERNAL = 13;
+  CODE_UNAVAILABLE = 14;
+  CODE_DATA_LOSS = 15;
+  CODE_UNAUTHENTICATED = 16;
+}
+
+
 // This message is similar to the google.protobuf.Any message.
 //
 // Separate type was needed to introduce a separate JSON serializer for this message, since Any in error details
@@ -30,7 +51,7 @@ message ErrorDetailsAny {
 message Error {
   // The error code.
   // For a list of Connect error codes see: https://connectrpc.com/docs/protocol#error-codes
-  string code = 1;
+  Code code = 1;
   // If this value is absent in a test case response definition, the contents of the
   // actual error message will not be checked. This is useful for certain kinds of
   // error conditions where the exact message to be used is not specified, only the
