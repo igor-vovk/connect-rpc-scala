@@ -152,6 +152,8 @@ Diagnostic data from the server itself is written to the log file `out/out.log`.
 
 ✅ JSON codec conformance status: __79/79__ tests pass.
 
+⌛ Protobuf codec conformance status: __13/72__ tests pass.
+
 Known issues:
 
 ~~* Response headers are ignored in case of an error from the server~~
@@ -160,4 +162,5 @@ Known issues:
 
 - [x] Support GET-requests
 - [ ] Support `google.api.http` annotations (GRPC transcoding)
+- [ ] Support configurable timeouts
 - [ ] Support non-unary (streaming) methods

@@ -27,11 +27,26 @@ RUN sbt stage
 FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.10.5_3.3.4 AS runner
 
 COPY --from=conformance /conformance /conformance
-ADD conformance-suite.yaml /conformance/conformance-suite.yaml
+ADD conformance-suite.yaml /conformance/
+ADD conformance-suite-stable.yaml /conformance/
 COPY --from=build /app/conformance/target/universal/stage /app
 WORKDIR /conformance
 
 RUN mkdir "/logs"
+
+# Run stable tests first
+RUN echo ">>>>> Running stable tests <<<<<"
+RUN LOGS_PATH="/logs" \
+    ./connectconformance \
+    --conf conformance-suite-stable.yaml \
+    --mode server \
+    --parallel 1 \
+    -v -vv --trace \
+    -- \
+    /app/bin/conformance
+
+# Run unstable tests; allow them to fail
+RUN echo ">>>>> Running unstable tests <<<<<"
 RUN LOGS_PATH="/logs" \
     ./connectconformance \
     --conf conformance-suite.yaml \
