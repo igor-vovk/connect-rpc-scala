@@ -3,7 +3,7 @@ package org.ivovk.connect_rpc_scala.grpc
 import cats.effect.Async
 import io.grpc.*
 
-object GrpcClientCalls {
+object ClientCalls {
 
   case class Response[T](value: T, headers: Metadata, trailers: Metadata)
 

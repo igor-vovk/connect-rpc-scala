@@ -8,7 +8,7 @@ import io.grpc.MethodDescriptor.MethodType
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{Header, MediaType, MessageFailure, Method, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
-import org.ivovk.connect_rpc_scala.grpc.{GrpcClientCalls, GrpcHeaders, MethodName, MethodRegistry}
+import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodName, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec.given
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
@@ -104,7 +104,7 @@ class ConnectHandler[F[_] : Async](
             }
           )
 
-        GrpcClientCalls.asyncUnaryCall(
+        ClientCalls.asyncUnaryCall(
           channel,
           method.descriptor,
           callOptions,

@@ -17,7 +17,7 @@ import java.net.URLEncoder
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters.*
 
-class HttpTest extends AnyFunSuite, Matchers {
+class ConnectCommunicationTest extends AnyFunSuite, Matchers {
 
   object TestServiceImpl extends TestService {
     override def add(request: AddRequest): Future[AddResponse] =
