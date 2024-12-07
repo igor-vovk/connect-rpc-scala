@@ -1,68 +1,62 @@
 package org.ivovk.connect_rpc_scala.grpc
 
 import cats.effect.Async
-import com.google.common.util.concurrent.{FutureCallback, Futures, MoreExecutors}
-import io.grpc.stub.{ClientCalls, StreamObserver}
-import io.grpc.{CallOptions, Channel, MethodDescriptor}
+import cats.implicits.*
+import io.grpc.*
+import io.grpc.stub.{ClientCalls, MetadataUtils, StreamObserver}
+
+import java.util.concurrent.atomic.AtomicReference
 
 object GrpcClientCalls {
 
+  case class Response[T](value: T, headers: Metadata, trailers: Metadata)
+
   /**
    * Asynchronous unary call.
-   *
-   * Optimized version of the `scalapb.grpc.ClientCalls.asyncUnaryCall` that skips Scala's Future instantiation
-   * and supports cancellation.
    */
   def asyncUnaryCall[F[_] : Async, Req, Resp](
     channel: Channel,
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
+    headers: Metadata,
     request: Req,
-  ): F[Resp] = {
-    Async[F].async[Resp] { cb =>
-      Async[F].delay {
-        val future = ClientCalls.futureUnaryCall(channel.newCall(method, options), request)
+  ): F[Response[Resp]] = {
+    val responseHeaderMetadata  = new AtomicReference[Metadata]()
+    val responseTrailerMetadata = new AtomicReference[Metadata]()
 
-        Futures.addCallback(
-          future,
-          new FutureCallback[Resp] {
-            def onSuccess(result: Resp): Unit = cb(Right(result))
+    Async[F]
+      .async[Resp] { cb =>
+        Async[F].delay {
+          // TODO: Interceptors to inject/capture headers are super ugly
+          //  and need to be rewritten to low-level listener API
+          val call = ClientInterceptors.intercept(
+            channel,
+            MetadataUtils.newAttachHeadersInterceptor(headers),
+            MetadataUtils.newCaptureMetadataInterceptor(responseHeaderMetadata, responseTrailerMetadata),
+          ).newCall(method, options)
 
-            def onFailure(t: Throwable): Unit = cb(Left(t))
-          },
-          MoreExecutors.directExecutor(),
+          ClientCalls.asyncUnaryCall(call, request, CallbackListener(cb))
+
+          Some(Async[F].delay(call.cancel("Cancelled", null)))
+        }
+      }
+      .map { response =>
+        Response(
+          value = response,
+          headers = responseHeaderMetadata.get,
+          trailers = responseTrailerMetadata.get
         )
-
-        Some(Async[F].delay(future.cancel(true)))
       }
-    }
-  }
-
-  /**
-   * Implementation that should be faster than the [[asyncUnaryCall]].
-   */
-  def asyncUnaryCall2[F[_] : Async, Req, Resp](
-    channel: Channel,
-    method: MethodDescriptor[Req, Resp],
-    options: CallOptions,
-    request: Req,
-  ): F[Resp] = {
-    Async[F].async[Resp] { cb =>
-      Async[F].delay {
-        val call = channel.newCall(method, options)
-
-        ClientCalls.asyncUnaryCall(call, request, new CallbackObserver(cb))
-
-        Some(Async[F].delay(call.cancel("Cancelled", null)))
-      }
-    }
   }
 
   /**
    * [[StreamObserverToCallListenerAdapter]] either executes [[onNext]] -> [[onCompleted]] during the happy path
    * or just [[onError]] in case of an error.
+   *
+   * During the happy path callback must be executed only after the call to [[onCompleted]],
+   * otherwise response trailers are not captured.
    */
-  private class CallbackObserver[Resp](cb: Either[Throwable, Resp] => Unit) extends StreamObserver[Resp] {
+  private class CallbackListener[Resp](cb: Either[Throwable, Resp] => Unit) extends StreamObserver[Resp] {
     private var value: Option[Either[Throwable, Resp]] = None
 
     override def onNext(value: Resp): Unit = {

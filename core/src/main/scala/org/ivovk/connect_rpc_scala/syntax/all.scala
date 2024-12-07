@@ -4,9 +4,9 @@ import io.grpc.{StatusException, StatusRuntimeException}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import scalapb.GeneratedMessage
 
-object all extends RuntimeExceptionSyntax, ProtoMappingsSyntax
+object all extends ExceptionSyntax, ProtoMappingsSyntax
 
-trait RuntimeExceptionSyntax {
+trait ExceptionSyntax {
 
   extension (e: StatusRuntimeException) {
     def withDetails[T <: GeneratedMessage](t: T): StatusRuntimeException = {

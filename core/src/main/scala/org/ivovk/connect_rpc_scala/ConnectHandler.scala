@@ -5,7 +5,6 @@ import cats.effect.Async
 import cats.implicits.*
 import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
-import io.grpc.stub.MetadataUtils
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{Header, MediaType, MessageFailure, Method, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
@@ -15,9 +14,8 @@ import org.ivovk.connect_rpc_scala.http.codec.MessageCodec.given
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 import org.slf4j.{Logger, LoggerFactory}
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
+import scalapb.GeneratedMessage
 
-import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 import scala.util.chaining.*
@@ -82,7 +80,7 @@ class ConnectHandler[F[_] : Async](
     method: MethodRegistry.Entry,
     req: RequestEntity[F],
     channel: Channel
-  )(using codec: MessageCodec[F]): F[Response[F]] = {
+  )(using MessageCodec[F]): F[Response[F]] = {
     if (logger.isTraceEnabled) {
       // Used in conformance tests
       req.headers.get[`X-Test-Case-Name`] match {
@@ -92,15 +90,10 @@ class ConnectHandler[F[_] : Async](
       }
     }
 
-    given GeneratedMessageCompanion[GeneratedMessage] = method.requestMessageCompanion
-
-    req.as[GeneratedMessage]
+    req.as[GeneratedMessage](method.requestMessageCompanion)
       .flatMap { message =>
-        val responseHeaderMetadata  = new AtomicReference[Metadata]()
-        val responseTrailerMetadata = new AtomicReference[Metadata]()
-
         if (logger.isTraceEnabled) {
-          logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}, Entity: $message")
+          logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}")
         }
 
         val callOptions = CallOptions.DEFAULT
@@ -111,27 +104,23 @@ class ConnectHandler[F[_] : Async](
             }
           )
 
-        GrpcClientCalls
-          .asyncUnaryCall2[F, GeneratedMessage, GeneratedMessage](
-            ClientInterceptors.intercept(
-              channel,
-              MetadataUtils.newAttachHeadersInterceptor(req.headers.toMetadata),
-              MetadataUtils.newCaptureMetadataInterceptor(responseHeaderMetadata, responseTrailerMetadata),
-            ),
-            method.descriptor,
-            callOptions,
-            message
-          )
-          .map { response =>
-            val headers = responseHeaderMetadata.get.toHeaders() ++
-              responseTrailerMetadata.get.toHeaders(trailing = !treatTrailersAsHeaders)
+        GrpcClientCalls.asyncUnaryCall(
+          channel,
+          method.descriptor,
+          callOptions,
+          req.headers.toMetadata,
+          message
+        )
+      }
+      .map { response =>
+        val headers = response.headers.toHeaders() ++
+          response.trailers.toHeaders(trailing = !treatTrailersAsHeaders)
 
-            if (logger.isTraceEnabled) {
-              logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
-            }
+        if (logger.isTraceEnabled) {
+          logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+        }
 
-            Response(Ok, headers = headers).withEntity(response)
-          }
+        Response(Ok, headers = headers).withEntity(response.value)
       }
       .recover { case e =>
         val grpcStatus = e match {
@@ -160,8 +149,9 @@ class ConnectHandler[F[_] : Async](
         val headers = metadata.toHeaders(trailing = !treatTrailersAsHeaders)
 
         if (logger.isTraceEnabled) {
-          logger.warn(s"<<< Error processing request", e)
-          logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode, Message: ${message.orNull}")
+          logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode")
+          logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+          logger.trace(s"<<< Error processing request", e)
         }
 
         Response[F](httpStatus, headers = headers).withEntity(connectrpc.Error(
