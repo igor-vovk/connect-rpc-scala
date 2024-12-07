@@ -124,13 +124,13 @@ class ConnectHandler[F[_] : Async](
       }
       .recover { case e =>
         val grpcStatus = e match {
-          case e: StatusRuntimeException =>
+          case e: StatusException =>
             e.getStatus.getDescription match {
               case "an implementation is missing" => io.grpc.Status.UNIMPLEMENTED
               case _ => e.getStatus
             }
-          case e: StatusException => e.getStatus
-          case e: MessageFailure => io.grpc.Status.INVALID_ARGUMENT
+          case e: StatusRuntimeException => e.getStatus
+          case _: MessageFailure => io.grpc.Status.INVALID_ARGUMENT
           case _ => io.grpc.Status.INTERNAL
         }
 
@@ -143,6 +143,7 @@ class ConnectHandler[F[_] : Async](
         val httpStatus  = grpcStatus.toHttpStatus
         val connectCode = grpcStatus.toConnectCode
 
+        // Should be called before converting metadata to headers
         val details = Option(metadata.removeAll(GrpcHeaders.ErrorDetailsKey))
           .fold(Seq.empty)(_.asScala.toSeq)
 
