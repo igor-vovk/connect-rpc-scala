@@ -5,8 +5,9 @@ import cats.implicits.*
 import com.google.protobuf.CodedOutputStream
 import fs2.Stream
 import fs2.io.{readOutputStream, toInputStreamResource}
-import org.http4s.{DecodeResult, Entity, InvalidMessageBodyFailure, MediaType}
-import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
+import org.http4s.headers.`Content-Type`
+import org.http4s.{DecodeResult, Headers, InvalidMessageBodyFailure, MediaType}
+import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
@@ -44,7 +45,7 @@ class ProtoMessageCodec[F[_] : Async] extends MessageCodec[F] {
       .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  override def encode[A <: Message](message: A, options: EncodeOptions): Entity[F] = {
+  override def encode[A <: Message](message: A, options: EncodeOptions): ResponseEntity[F] = {
     if (logger.isTraceEnabled) {
       logger.trace(s"<<< Proto: ${message.toProtoString}")
     }
@@ -52,7 +53,8 @@ class ProtoMessageCodec[F[_] : Async] extends MessageCodec[F] {
     val dataLength = message.serializedSize
     val chunkSize  = CodedOutputStream.DEFAULT_BUFFER_SIZE min dataLength
 
-    val entity = Entity(
+    val entity = ResponseEntity(
+      headers = Headers(`Content-Type`(mediaType)),
       body = readOutputStream(chunkSize)(os => Async[F].delay(message.writeTo(os))),
       length = Some(dataLength.toLong),
     )

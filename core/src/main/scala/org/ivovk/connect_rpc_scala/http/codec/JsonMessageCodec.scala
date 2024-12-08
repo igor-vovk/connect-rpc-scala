@@ -4,8 +4,9 @@ import cats.effect.Sync
 import cats.implicits.*
 import fs2.text.decodeWithCharset
 import fs2.{Chunk, Stream}
-import org.http4s.{DecodeResult, Entity, InvalidMessageBodyFailure, MediaType}
-import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
+import org.http4s.headers.`Content-Type`
+import org.http4s.{DecodeResult, Headers, InvalidMessageBodyFailure, MediaType}
+import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
 import org.slf4j.LoggerFactory
 import scalapb.json4s.{Parser, Printer}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
@@ -46,7 +47,7 @@ class JsonMessageCodec[F[_] : Sync](
       .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  override def encode[A <: Message](message: A, options: EncodeOptions): Entity[F] = {
+  override def encode[A <: Message](message: A, options: EncodeOptions): ResponseEntity[F] = {
     val string = printer.print(message)
 
     if (logger.isTraceEnabled) {
@@ -55,7 +56,8 @@ class JsonMessageCodec[F[_] : Sync](
 
     val bytes = string.getBytes()
 
-    val entity = Entity(
+    val entity = ResponseEntity[F](
+      headers = Headers(`Content-Type`(mediaType)),
       body = Stream.chunk(Chunk.array(bytes)),
       length = Some(bytes.length.toLong),
     )

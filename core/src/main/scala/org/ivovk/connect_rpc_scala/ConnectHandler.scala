@@ -10,7 +10,6 @@ import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
 import org.ivovk.connect_rpc_scala.http.RequestEntity
-import org.ivovk.connect_rpc_scala.http.codec.MessageCodec.given
 import org.ivovk.connect_rpc_scala.http.codec.{Compressor, EncodeOptions, MessageCodec}
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
@@ -19,12 +18,22 @@ import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 import scala.util.chaining.*
 
+object ConnectHandler {
+
+  extension [F[_]](response: Response[F]) {
+    def withMessage(entity: GeneratedMessage)(using codec: MessageCodec[F], options: EncodeOptions): Response[F] =
+      codec.encode(entity, options).applyTo(response)
+  }
+
+}
+
 class ConnectHandler[F[_] : Async](
   channel: Channel,
   httpDsl: Http4sDsl[F],
   treatTrailersAsHeaders: Boolean,
 ) {
 
+  import ConnectHandler.*
   import httpDsl.*
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -37,14 +46,53 @@ class ConnectHandler[F[_] : Async](
       encoding = req.encoding.filter(Compressor.supportedEncodings.contains)
     )
 
-    method.descriptor.getType match
+    val f = method.descriptor.getType match
       case MethodType.UNARY =>
         handleUnary(req, method)
       case unsupported =>
-        NotImplemented(connectrpc.Error(
-          code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
-          message = s"Unsupported method type: $unsupported".some
+        Async[F].raiseError(new StatusException(
+          io.grpc.Status.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported")
         ))
+
+    f.handleError { e =>
+      val grpcStatus = e match {
+        case e: StatusException =>
+          e.getStatus.getDescription match {
+            case "an implementation is missing" => io.grpc.Status.UNIMPLEMENTED
+            case _ => e.getStatus
+          }
+        case e: StatusRuntimeException => e.getStatus
+        case _: MessageFailure => io.grpc.Status.INVALID_ARGUMENT
+        case _ => io.grpc.Status.INTERNAL
+      }
+
+      val (message, metadata) = e match {
+        case e: StatusRuntimeException => (Option(e.getStatus.getDescription), e.getTrailers)
+        case e: StatusException => (Option(e.getStatus.getDescription), e.getTrailers)
+        case e => (Option(e.getMessage), new Metadata())
+      }
+
+      val httpStatus  = grpcStatus.toHttpStatus
+      val connectCode = grpcStatus.toConnectCode
+
+      // Should be called before converting metadata to headers
+      val details = Option(metadata.removeAll(GrpcHeaders.ErrorDetailsKey))
+        .fold(Seq.empty)(_.asScala.toSeq)
+
+      val headers = metadata.toHeaders(trailing = !treatTrailersAsHeaders)
+
+      if (logger.isTraceEnabled) {
+        logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode")
+        logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+        logger.trace(s"<<< Error processing request", e)
+      }
+
+      Response[F](httpStatus, headers = headers).withMessage(connectrpc.Error(
+        code = connectCode,
+        message = message,
+        details = details
+      ))
+    }
   }
 
   private def handleUnary(
@@ -90,46 +138,7 @@ class ConnectHandler[F[_] : Async](
           logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
         }
 
-        Response(Ok, headers = headers).withEntity(response.value)
-      }
-      .recover { case e =>
-        val grpcStatus = e match {
-          case e: StatusException =>
-            e.getStatus.getDescription match {
-              case "an implementation is missing" => io.grpc.Status.UNIMPLEMENTED
-              case _ => e.getStatus
-            }
-          case e: StatusRuntimeException => e.getStatus
-          case _: MessageFailure => io.grpc.Status.INVALID_ARGUMENT
-          case _ => io.grpc.Status.INTERNAL
-        }
-
-        val (message, metadata) = e match {
-          case e: StatusRuntimeException => (Option(e.getStatus.getDescription), e.getTrailers)
-          case e: StatusException => (Option(e.getStatus.getDescription), e.getTrailers)
-          case e => (Option(e.getMessage), new Metadata())
-        }
-
-        val httpStatus  = grpcStatus.toHttpStatus
-        val connectCode = grpcStatus.toConnectCode
-
-        // Should be called before converting metadata to headers
-        val details = Option(metadata.removeAll(GrpcHeaders.ErrorDetailsKey))
-          .fold(Seq.empty)(_.asScala.toSeq)
-
-        val headers = metadata.toHeaders(trailing = !treatTrailersAsHeaders)
-
-        if (logger.isTraceEnabled) {
-          logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode")
-          logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
-          logger.trace(s"<<< Error processing request", e)
-        }
-
-        Response[F](httpStatus, headers = headers).withEntity(connectrpc.Error(
-          code = connectCode,
-          message = message,
-          details = details
-        ))
+        Response(Ok, headers = headers).withMessage(response.value)
       }
   }
 
