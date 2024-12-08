@@ -1,15 +1,16 @@
 package org.ivovk.connect_rpc_scala
 
 import cats.Endo
+import cats.data.OptionT
 import cats.effect.{Async, Resource}
 import cats.implicits.*
 import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{HttpApp, HttpRoutes, Method, Uri}
+import org.http4s.{HttpApp, HttpRoutes, MediaType, Method, Response, Uri}
 import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
-import org.ivovk.connect_rpc_scala.http.codec.{JsonMessageCodec, JsonMessageCodecBuilder, MessageCodecRegistry, ProtoMessageCodec}
+import org.ivovk.connect_rpc_scala.http.codec.*
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
@@ -124,29 +125,56 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       )
     yield
       val handler = new ConnectHandler(
-        codecRegistry,
-        methodRegistry,
         channel,
         httpDsl,
         treatTrailersAsHeaders,
       )
 
-      HttpRoutes.of[F] {
-        case req@Method.GET -> `pathPrefix` / serviceName / methodName :? EncodingQP(contentType) +& MessageQP(message) =>
-          val grpcMethod = MethodName(serviceName, methodName)
-          val entity     = RequestEntity[F](message, req.headers)
+      HttpRoutes[F] {
+        case req@Method.GET -> `pathPrefix` / service / method :? EncodingQP(mediaType) +& MessageQP(message) =>
+          OptionT.fromOption[F](methodRegistry.get(service, method))
+            // Temporary support GET-requests for all methods,
+            // until https://github.com/scalapb/ScalaPB/pull/1774 is merged
+            .filter(_.descriptor.isSafe || true)
+            .semiflatMap { methodEntry =>
+              withCodec(httpDsl, codecRegistry, mediaType.some) { codec =>
+                val entity = RequestEntity[F](message, req.headers)
 
-          handler.handle(Method.GET, contentType.some, entity, grpcMethod)
-        case req@Method.POST -> `pathPrefix` / serviceName / methodName =>
-          val grpcMethod  = MethodName(serviceName, methodName)
-          val contentType = req.contentType.map(_.mediaType)
-          val entity      = RequestEntity[F](req)
+                handler.handle(entity, methodEntry)(using codec)
+              }
+            }
+        case req@Method.POST -> `pathPrefix` / service / method =>
+          OptionT.fromOption[F](methodRegistry.get(service, method))
+            .semiflatMap { methodEntry =>
+              withCodec(httpDsl, codecRegistry, req.contentType.map(_.mediaType)) { codec =>
+                val entity = RequestEntity[F](req.body, req.headers)
 
-          handler.handle(Method.POST, contentType, entity, grpcMethod)
+                handler.handle(entity, methodEntry)(using codec)
+              }
+            }
+        case _ =>
+          OptionT.none
       }
   }
 
   def build: Resource[F, HttpApp[F]] =
     buildRoutes.map(_.orNotFound)
+
+  private def withCodec(
+    dsl: Http4sDsl[F],
+    registry: MessageCodecRegistry[F],
+    mediaType: Option[MediaType]
+  )(r: MessageCodec[F] => F[Response[F]]): F[Response[F]] = {
+    import dsl.*
+
+    mediaType.flatMap(registry.byMediaType) match {
+      case Some(codec) => r(codec)
+      case None =>
+        val message = s"Unsupported media-type ${mediaType.show}. " +
+          s"Supported media types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}"
+
+        UnsupportedMediaType(message)
+    }
+  }
 
 }

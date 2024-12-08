@@ -11,4 +11,5 @@ option (scalapb.options) = {
   enum_value_naming: CAMEL_CASE
   enum_strip_prefix: true
   preserve_unknown_fields: false
+  scala3_sources: true
 };

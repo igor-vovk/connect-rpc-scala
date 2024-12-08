@@ -1,12 +1,12 @@
 syntax = "proto3";
 
-package connectrpc;
+package test;
 
 import "scalapb/scalapb.proto";
 
 option (scalapb.options) = {
   scope: PACKAGE
-  flat_package: true
+  flat_package: false
   lenses: false
   enum_value_naming: CAMEL_CASE
   enum_strip_prefix: true

@@ -1,18 +1,17 @@
 package org.ivovk.connect_rpc_scala
 
-import cats.data.EitherT
 import cats.effect.Async
 import cats.implicits.*
 import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{Header, MediaType, MessageFailure, Method, Response}
+import org.http4s.{Header, MessageFailure, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
-import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodName, MethodRegistry}
+import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
+import org.ivovk.connect_rpc_scala.http.RequestEntity
+import org.ivovk.connect_rpc_scala.http.codec.MessageCodec
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec.given
-import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
-import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
 
@@ -21,8 +20,6 @@ import scala.jdk.CollectionConverters.*
 import scala.util.chaining.*
 
 class ConnectHandler[F[_] : Async](
-  codecRegistry: MessageCodecRegistry[F],
-  methodRegistry: MethodRegistry,
   channel: Channel,
   httpDsl: Http4sDsl[F],
   treatTrailersAsHeaders: Boolean,
@@ -33,53 +30,22 @@ class ConnectHandler[F[_] : Async](
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def handle(
-    httpMethod: Method,
-    contentType: Option[MediaType],
-    entity: RequestEntity[F],
-    grpcMethodName: MethodName,
-  ): F[Response[F]] = {
-    val eitherT = for
-      given MessageCodec[F] <- EitherT.fromOptionM(
-        contentType.flatMap(codecRegistry.byContentType).pure[F],
-        UnsupportedMediaType(s"Unsupported content-type ${contentType.show}. " +
-          s"Supported content types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}")
-      )
-
-      method <- EitherT.fromOptionM(
-        methodRegistry.get(grpcMethodName).pure[F],
-        NotFound(connectrpc.Error(
-          code = io.grpc.Status.NOT_FOUND.toConnectCode,
-          message = s"Method not found: ${grpcMethodName.fullyQualifiedName}".some
+    req: RequestEntity[F],
+    method: MethodRegistry.Entry,
+  )(using MessageCodec[F]): F[Response[F]] = {
+    method.descriptor.getType match
+      case MethodType.UNARY =>
+        handleUnary(req, method)
+      case unsupported =>
+        NotImplemented(connectrpc.Error(
+          code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
+          message = s"Unsupported method type: $unsupported".some
         ))
-      )
-
-      _ <- EitherT.cond[F](
-        // Support GET-requests for all methods until https://github.com/scalapb/ScalaPB/pull/1774 is merged
-        httpMethod == Method.POST || (httpMethod == Method.GET && method.descriptor.isSafe) || true,
-        (),
-        Forbidden(connectrpc.Error(
-          code = io.grpc.Status.PERMISSION_DENIED.toConnectCode,
-          message = s"Only POST-requests are allowed for method: ${grpcMethodName.fullyQualifiedName}".some
-        ))
-      ).leftSemiflatMap(identity)
-
-      response <- method.descriptor.getType match
-        case MethodType.UNARY =>
-          EitherT.right(handleUnary(method, entity, channel))
-        case unsupported =>
-          EitherT.left(NotImplemented(connectrpc.Error(
-            code = io.grpc.Status.UNIMPLEMENTED.toConnectCode,
-            message = s"Unsupported method type: $unsupported".some
-          )))
-    yield response
-
-    eitherT.merge
   }
 
   private def handleUnary(
-    method: MethodRegistry.Entry,
     req: RequestEntity[F],
-    channel: Channel
+    method: MethodRegistry.Entry,
   )(using MessageCodec[F]): F[Response[F]] = {
     if (logger.isTraceEnabled) {
       // Used in conformance tests

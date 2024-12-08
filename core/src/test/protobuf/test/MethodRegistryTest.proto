@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package test;
+
+import "google/api/annotations.proto";
+
+service MethodRegistryTestService {
+  rpc SimpleMethod(SimpleMethodRequest) returns (SimpleMethodResponse) {}
+
+  rpc HttpAnnotationMethod(HttpAnnotationMethodRequest) returns (HttpAnnotationMethodResponse) {
+    option (google.api.http) = {
+      post: "/v1/test/http_annotation_method"
+      body: "*"
+    };
+  }
+}
+
+message SimpleMethodRequest {}
+
+message SimpleMethodResponse {}
+
+message HttpAnnotationMethodRequest {}
+
+message HttpAnnotationMethodResponse {}

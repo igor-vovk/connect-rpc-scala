@@ -1,5 +1,6 @@
 package org.ivovk.connect_rpc_scala
 
+import cats.data.Kleisli
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import org.http4s.client.Client
@@ -8,10 +9,10 @@ import org.http4s.headers.`Content-Type`
 import org.http4s.implicits.*
 import org.http4s.{Method, *}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
-import org.ivovk.connect_rpc_scala.test.TestService.TestServiceGrpc.TestService
-import org.ivovk.connect_rpc_scala.test.TestService.{AddRequest, AddResponse, GetRequest, GetResponse}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
+import test.ConnectCommunicationTest.*
+import test.ConnectCommunicationTest.TestServiceGrpc.TestService
 
 import java.net.URLEncoder
 import scala.concurrent.{ExecutionContext, Future}
@@ -32,16 +33,13 @@ class ConnectCommunicationTest extends AnyFunSuite, Matchers {
   given [F[_]]: EntityEncoder[F, String] = EntityEncoder.stringEncoder[F]
     .withContentType(`Content-Type`(MediaTypes.`application/json`))
 
-  test("basic") {
+  test("POST request") {
     val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
 
     ConnectRouteBuilder.forService[IO](service).build
       .flatMap { routes =>
-        val client = Client.fromHttpApp(routes)
-
-        client.run(
-          Request[IO](Method.POST, uri"/org.ivovk.connect_rpc_scala.test.TestService/Add")
-            .withEntity(""" { "a": 1, "b": 2} """)
+        Client.fromHttpApp(routes).run(
+          Request[IO](Method.POST, uri"/test.TestService/Add").withEntity(""" { "a": 1, "b": 2} """)
         )
       }
       .use { response =>
@@ -61,15 +59,13 @@ class ConnectCommunicationTest extends AnyFunSuite, Matchers {
 
     ConnectRouteBuilder.forService[IO](service).build
       .flatMap { app =>
-        val client = Client.fromHttpApp(app)
-
         val requestJson = URLEncoder.encode("""{"key":"123"}""", Charset.`UTF-8`.nioCharset)
 
-        client.run(
+        Client.fromHttpApp(app).run(
           Request[IO](
             Method.GET,
             Uri(
-              path = Root / "org.ivovk.connect_rpc_scala.test.TestService" / "Get",
+              path = Root / "test.TestService" / "Get",
               query = Query.fromPairs("encoding" -> "json", "message" -> requestJson)
             )
           )
@@ -94,11 +90,8 @@ class ConnectCommunicationTest extends AnyFunSuite, Matchers {
       .withPathPrefix(Root / "connect")
       .build
       .flatMap { app =>
-        val client = Client.fromHttpApp(app)
-
-        client.run(
-          Request[IO](Method.POST, uri"/connect/org.ivovk.connect_rpc_scala.test.TestService/Add")
-            .withEntity(""" { "a": 1, "b": 2} """)
+        Client.fromHttpApp(app).run(
+          Request[IO](Method.POST, uri"/connect/test.TestService/Add").withEntity(""" { "a": 1, "b": 2} """)
         )
       }
       .use { response =>
@@ -119,11 +112,8 @@ class ConnectCommunicationTest extends AnyFunSuite, Matchers {
       .withPathPrefix(Root / "connect")
       .build
       .flatMap { app =>
-        val client = Client.fromHttpApp(app)
-
-        client.run(
-          Request[IO](Method.POST, uri"/api/org.ivovk.connect_rpc_scala.test.TestService/Add")
-            .withEntity(""" { "a": 1, "b": 2} """)
+        Client.fromHttpApp(app).run(
+          Request[IO](Method.POST, uri"/api/test.TestService/Add").withEntity(""" { "a": 1, "b": 2} """)
         )
       }
       .use { response =>
@@ -131,6 +121,30 @@ class ConnectCommunicationTest extends AnyFunSuite, Matchers {
           body <- response.as[String]
         } yield {
           assert(response.status == Status.NotFound)
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("fallback to the default handler when service/method is missing") {
+    val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
+
+    val fallbackResponse = Response[IO](Status.MovedPermanently).withEntity("fallback")
+
+    ConnectRouteBuilder.forService[IO](service)
+      .buildRoutes
+      .map(r => Kleisli((a: Request[IO]) => r.run(a).getOrElse(fallbackResponse)))
+      .flatMap { app =>
+        Client.fromHttpApp(app).run(
+          Request[IO](Method.POST, uri"/test.TestService/MethodNotFound")
+        )
+      }
+      .use { response =>
+        for {
+          body <- response.as[String]
+        } yield {
+          assert(response.status == Status.MovedPermanently)
+          assert(body == "fallback")
         }
       }
       .unsafeRunSync()

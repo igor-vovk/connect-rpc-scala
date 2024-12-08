@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package org.ivovk.connect_rpc_scala.test;
+package test;
 
 service TestService {
   rpc Add(AddRequest) returns (AddResponse) {}

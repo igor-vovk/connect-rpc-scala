@@ -54,6 +54,9 @@ lazy val core = project
       "io.grpc" % "grpc-protobuf" % Versions.grpc,
       "io.grpc" % "grpc-inprocess" % Versions.grpc,
 
+      "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0" % "protobuf",
+      "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0",
+
       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
 
       "org.http4s" %% "http4s-dsl" % Versions.http4s,

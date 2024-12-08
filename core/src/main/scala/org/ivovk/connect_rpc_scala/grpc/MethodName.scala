@@ -6,7 +6,7 @@ type Service = String
 type Method = String
 
 object MethodName {
-  def apply(descriptor: MethodDescriptor[_, _]): MethodName =
+  def from(descriptor: MethodDescriptor[_, _]): MethodName =
     MethodName(descriptor.getServiceName, descriptor.getBareMethodName)
 }
 
