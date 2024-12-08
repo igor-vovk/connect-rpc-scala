@@ -46,7 +46,7 @@ class JsonMessageCodec[F[_] : Sync](
       .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  override def encode[A <: Message](message: A): Entity[F] = {
+  override def encode[A <: Message](message: A, options: EncodeOptions): Entity[F] = {
     val string = printer.print(message)
 
     if (logger.isTraceEnabled) {
@@ -55,10 +55,12 @@ class JsonMessageCodec[F[_] : Sync](
 
     val bytes = string.getBytes()
 
-    Entity(
+    val entity = Entity(
       body = Stream.chunk(Chunk.array(bytes)),
       length = Some(bytes.length.toLong),
     )
+
+    compressor.compressed(options.encoding, entity)
   }
 
 }

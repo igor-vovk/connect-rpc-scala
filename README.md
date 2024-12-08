@@ -160,7 +160,7 @@ Known issues:
 
 ## Future improvements
 
-- [x] Support GET-requests
-- [ ] Support `google.api.http` annotations (GRPC transcoding)
+- [x] Support GET-requests ([#10](https://github.com/igor-vovk/connect-rpc-scala/issues/10))
+- [ ] Support `google.api.http` annotations (GRPC transcoding) ([#51](https://github.com/igor-vovk/connect-rpc-scala/issues/51))
 - [ ] Support configurable timeouts
 - [ ] Support non-unary (streaming) methods

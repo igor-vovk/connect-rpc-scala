@@ -44,7 +44,7 @@ class ProtoMessageCodec[F[_] : Async] extends MessageCodec[F] {
       .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  override def encode[A <: Message](message: A): Entity[F] = {
+  override def encode[A <: Message](message: A, options: EncodeOptions): Entity[F] = {
     if (logger.isTraceEnabled) {
       logger.trace(s"<<< Proto: ${message.toProtoString}")
     }
@@ -52,10 +52,12 @@ class ProtoMessageCodec[F[_] : Async] extends MessageCodec[F] {
     val dataLength = message.serializedSize
     val chunkSize  = CodedOutputStream.DEFAULT_BUFFER_SIZE min dataLength
 
-    Entity(
+    val entity = Entity(
       body = readOutputStream(chunkSize)(os => Async[F].delay(message.writeTo(os))),
       length = Some(dataLength.toLong),
     )
+
+    compressor.compressed(options.encoding, entity)
   }
 
 }

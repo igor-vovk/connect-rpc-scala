@@ -10,8 +10,8 @@ import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
 import org.ivovk.connect_rpc_scala.http.RequestEntity
-import org.ivovk.connect_rpc_scala.http.codec.MessageCodec
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec.given
+import org.ivovk.connect_rpc_scala.http.codec.{Compressor, EncodeOptions, MessageCodec}
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
 
@@ -33,6 +33,10 @@ class ConnectHandler[F[_] : Async](
     req: RequestEntity[F],
     method: MethodRegistry.Entry,
   )(using MessageCodec[F]): F[Response[F]] = {
+    given EncodeOptions = EncodeOptions(
+      encoding = req.encoding.filter(Compressor.supportedEncodings.contains)
+    )
+
     method.descriptor.getType match
       case MethodType.UNARY =>
         handleUnary(req, method)
@@ -46,7 +50,7 @@ class ConnectHandler[F[_] : Async](
   private def handleUnary(
     req: RequestEntity[F],
     method: MethodRegistry.Entry,
-  )(using MessageCodec[F]): F[Response[F]] = {
+  )(using MessageCodec[F], EncodeOptions): F[Response[F]] = {
     if (logger.isTraceEnabled) {
       // Used in conformance tests
       req.headers.get[`X-Test-Case-Name`] match {
