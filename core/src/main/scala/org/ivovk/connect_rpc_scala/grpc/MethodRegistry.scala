@@ -1,7 +1,7 @@
 package org.ivovk.connect_rpc_scala.grpc
 
 import com.google.api.AnnotationsProto
-import com.google.api.http.HttpRule
+import com.google.api.HttpRule
 import io.grpc.{MethodDescriptor, ServerMethodDefinition, ServerServiceDefinition}
 import scalapb.grpc.ConcreteProtoMethodDescriptorSupplier
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
@@ -44,7 +44,6 @@ object MethodRegistry {
           descriptor = methodDescriptor,
         )
       }
-      .groupMapReduce(_.name.service)(e => Map(e.name.method -> e))(_ ++ _)
 
     new MethodRegistry(entries)
   }
@@ -63,9 +62,14 @@ object MethodRegistry {
 
 }
 
-class MethodRegistry private(entries: Map[Service, Map[Method, MethodRegistry.Entry]]) {
+class MethodRegistry private(entries: Seq[MethodRegistry.Entry]) {
+
+  private val serviceMethodEntries: Map[Service, Map[Method, MethodRegistry.Entry]] = entries
+    .groupMapReduce(_.name.service)(e => Map(e.name.method -> e))(_ ++ _)
+
+  def allWithHttpRule: Seq[MethodRegistry.Entry] = entries.filter(_.httpRule.isDefined)
 
   def get(service: Service, method: Method): Option[MethodRegistry.Entry] =
-    entries.getOrElse(service, Map.empty).get(method)
+    serviceMethodEntries.getOrElse(service, Map.empty).get(method)
 
 }
