@@ -36,7 +36,7 @@ class MethodRegistryTest extends AnyFunSuite {
     val httpRule = entry.get.httpRule.get
 
     assert(httpRule.getPost == "/v1/test/http_annotation_method")
-    assert(httpRule.body == "*")
+    assert(httpRule.getBody == "*")
   }
 
 }

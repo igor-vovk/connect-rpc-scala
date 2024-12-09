@@ -17,14 +17,14 @@ class Compressor[F[_] : Sync] {
   given Compression[F] = Compression.forSync[F]
 
   def decompressed(encoding: Option[ContentCoding], body: Stream[F, Byte]): Stream[F, Byte] =
-    body.through(encoding match {
+    encoding match {
       case Some(ContentCoding.gzip) =>
-        Compression[F].gunzip().andThen(_.flatMap(_.content))
+        body.through(Compression[F].gunzip().andThen(_.flatMap(_.content)))
       case Some(other) =>
         throw new StatusException(Status.INVALID_ARGUMENT.withDescription(s"Unsupported encoding: $other"))
       case None =>
-        identity
-    })
+        body
+    }
 
   def compressed(encoding: Option[ContentCoding], entity: ResponseEntity[F]): ResponseEntity[F] =
     encoding match {
