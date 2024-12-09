@@ -4,8 +4,8 @@ import com.google.api.HttpRule
 import org.http4s.Uri.Path
 import org.http4s.{Method, Query, Request}
 import org.ivovk.connect_rpc_scala.grpc.{MethodName, MethodRegistry}
-import org.json4s.{JString, JValue}
 import org.json4s.JsonAST.JObject
+import org.json4s.{JString, JValue}
 
 import scala.util.boundary
 import scala.util.boundary.break
@@ -16,10 +16,12 @@ class GrpcTranscodingUrlMatcher[F[_]](entries: Seq[MethodRegistry.Entry]) {
   def matchesRequest(req: Request[F]): Option[MatchedRequest] =
     boundary {
       entries.foreach { entry =>
-        entry.httpRule.foreach { httpRule =>
-          if (matchesHttpMethod(httpRule, req.method) && matchesPath(httpRule, req.uri.path)) {
-            break(Some(MatchedRequest(entry.name, extractQueryParams(httpRule, req.uri.path, req.uri.query))))
-          }
+        entry.httpRule match {
+          case Some(httpRule) =>
+            if (matchesHttpMethod(httpRule, req.method) && matchesPath(httpRule, req.uri.path)) {
+              break(Some(MatchedRequest(entry.name, extractQueryParams(httpRule, req.uri.path, req.uri.query))))
+            }
+          case None => // do nothing
         }
       }
 

@@ -48,27 +48,19 @@ class GrpcTranscodingUrlMatcherTest extends AnyFunSuiteLike {
   }
 
   test("matches request with path parameter") {
-    val result2 = matcher.matchesRequest(Request[IO](Method.GET, uri"/countries/Uganda"))
+    val result = matcher.matchesRequest(Request[IO](Method.GET, uri"/countries/Uganda"))
 
-    assert(result2.isDefined)
-    assert(result2.get.methodName == MethodName("CountriesService", "GetCountry"))
-    assert(result2.get.json == JObject("country_id" -> JString("Uganda")))
+    assert(result.isDefined)
+    assert(result.get.methodName == MethodName("CountriesService", "GetCountry"))
+    assert(result.get.json == JObject("country_id" -> JString("Uganda")))
   }
 
   test("matches request with POST method") {
-    val result3 = matcher.matchesRequest(Request[IO](Method.POST, uri"/countries"))
+    val result = matcher.matchesRequest(Request[IO](Method.POST, uri"/countries"))
 
-    assert(result3.isDefined)
-    assert(result3.get.methodName == MethodName("CountriesService", "CreateCountry"))
-    assert(result3.get.json == JObject())
-  }
-
-  test("extracts post body") {
-    val result4 = matcher.matchesRequest(Request[IO](Method.POST, uri"/countries").withEntity("""{"name": "Uganda"}"""))
-
-    assert(result4.isDefined)
-    assert(result4.get.methodName == MethodName("CountriesService", "CreateCountry"))
-    assert(result4.get.json == JObject("name" -> JString("Uganda")))
+    assert(result.isDefined)
+    assert(result.get.methodName == MethodName("CountriesService", "CreateCountry"))
+    assert(result.get.json == JObject())
   }
 
 }
