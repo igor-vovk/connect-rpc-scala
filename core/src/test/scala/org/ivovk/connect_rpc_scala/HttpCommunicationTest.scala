@@ -11,14 +11,14 @@ import org.http4s.{Method, *}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
-import test.ConnectCommunicationTest.*
-import test.ConnectCommunicationTest.TestServiceGrpc.TestService
+import test.HttpCommunicationTest.TestServiceGrpc.TestService
+import test.HttpCommunicationTest.{AddRequest, AddResponse, GetRequest, GetResponse}
 
 import java.net.URLEncoder
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters.*
 
-class ConnectCommunicationTest extends AnyFunSuite, Matchers {
+class HttpCommunicationTest extends AnyFunSuite, Matchers {
 
   object TestServiceImpl extends TestService {
     override def add(request: AddRequest): Future[AddResponse] =
@@ -69,6 +69,27 @@ class ConnectCommunicationTest extends AnyFunSuite, Matchers {
               query = Query.fromPairs("encoding" -> "json", "message" -> requestJson)
             )
           )
+        )
+      }
+      .use { response =>
+        for
+          body <- response.as[String]
+        yield {
+          assert(body == """{"value":"Key is: 123"}""")
+          assert(response.status == Status.Ok)
+          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("Http-annotated GET request") {
+    val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
+
+    ConnectRouteBuilder.forService[IO](service).build
+      .flatMap { app =>
+        Client.fromHttpApp(app).run(
+          Request[IO](Method.GET, uri"/get/123")
         )
       }
       .use { response =>
