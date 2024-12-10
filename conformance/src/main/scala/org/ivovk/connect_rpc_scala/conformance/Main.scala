@@ -58,6 +58,7 @@ object Main extends IOApp.Simple {
       server <- EmberServerBuilder.default[IO]
         .withHost(host"127.0.0.1")
         .withPort(port"0") // random port
+        .withHttp2
         .withHttpApp(logger)
         .build
 

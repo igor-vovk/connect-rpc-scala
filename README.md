@@ -59,7 +59,7 @@ This simplifies overall setup: simpler CI, fewer network components, faster exec
 ## Features of the protocol supported by the library
 
 ```yaml
-versions: [ HTTP_VERSION_1 ]
+versions: [ HTTP_VERSION_1, HTTP_VERSION_2 ]
 protocols: [ PROTOCOL_CONNECT ]
 codecs: [ CODEC_JSON, CODEC_PROTO ]
 stream_types: [ STREAM_TYPE_UNARY ]
@@ -100,6 +100,7 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
     httpServer <- EmberServerBuilder.default[IO]
       .withHost(host"0.0.0.0")
       .withPort(port"8080")
+      .withHttp2 // If you want to enable HTTP2 support
       .withHttpApp(httpApp)
       .build
   } yield httpServer
@@ -150,13 +151,13 @@ Diagnostic data from the server itself is written to the log file `out/out.log`.
 
 ### Connect protocol conformance tests status
 
-✅ JSON codec conformance status: __79/79__ tests pass.
+✅ JSON codec conformance status: __full conformance__.
 
 ⌛ Protobuf codec conformance status: __13/72__ tests pass.
 
 Known issues:
 
-~~* Response headers are ignored in case of an error from the server~~
+* Errors serialized incorrectly for protobuf codec.
 
 ## Future improvements
 
