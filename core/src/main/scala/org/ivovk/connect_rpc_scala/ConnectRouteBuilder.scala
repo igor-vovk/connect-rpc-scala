@@ -11,6 +11,7 @@ import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.ivovk.connect_rpc_scala.http.codec.*
+import scalapb.GeneratedMessage
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
@@ -108,8 +109,9 @@ final class ConnectRouteBuilder[F[_] : Async] private(
     val httpDsl = Http4sDsl[F]
     import httpDsl.*
 
+    val jsonCodec     = customJsonCodec.getOrElse(JsonMessageCodecBuilder[F]().build)
     val codecRegistry = MessageCodecRegistry[F](
-      customJsonCodec.getOrElse(JsonMessageCodecBuilder[F]().build),
+      jsonCodec,
       ProtoMessageCodec[F](),
     )
 
@@ -130,7 +132,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         treatTrailersAsHeaders,
       )
 
-      HttpRoutes[F] {
+      val connectRoutes = HttpRoutes[F] {
         case req@Method.GET -> `pathPrefix` / service / method :? EncodingQP(mediaType) +& MessageQP(message) =>
           OptionT.fromOption[F](methodRegistry.get(service, method))
             // Temporary support GET-requests for all methods,
@@ -155,6 +157,32 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         case _ =>
           OptionT.none
       }
+
+      val transcodingUrlMatcher = new GrpcTranscodingUrlMatcher[F](
+        methodRegistry.allWithHttpRule,
+        pathPrefix,
+      )
+
+      val transcodingRoutes = HttpRoutes[F] { req =>
+        OptionT.fromOption[F](transcodingUrlMatcher.matchesRequest(req))
+          .mapFilter(mr => methodRegistry.get(mr.methodName).map(_ -> mr.json))
+          .semiflatMap { (method, json) =>
+            given MessageCodec[F] = jsonCodec
+
+            RequestEntity[F](req.body, req.headers)
+              .as[GeneratedMessage](method.requestMessageCompanion)
+              .flatMap { entity =>
+                val entity2     = jsonCodec.parser.fromJson[GeneratedMessage](json)(method.requestMessageCompanion)
+                val finalEntity = method.requestMessageCompanion.parseFrom(entity.toByteArray ++ entity2.toByteArray)
+
+                val stringEntity = RequestEntity[F](jsonCodec.printer.print(finalEntity), req.headers)
+
+                handler.handle(stringEntity, method)
+              }
+          }
+      }
+
+      connectRoutes <+> transcodingRoutes
   }
 
   def build: Resource[F, HttpApp[F]] =

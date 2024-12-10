@@ -2,12 +2,16 @@ syntax = "proto3";
 
 package test;
 
+import "google/api/annotations.proto";
+
 service TestService {
   rpc Add(AddRequest) returns (AddResponse) {}
 
   // This method can be called using GET request
   rpc Get(GetRequest) returns (GetResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
+
+    option (google.api.http) = {get: "/get/{key}"};
   }
 }
 
