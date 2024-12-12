@@ -126,7 +126,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         waitForShutdown,
       )
     yield
-      val handler = new ConnectHandler(
+      val connectHandler = new ConnectHandler(
         channel,
         httpDsl,
         treatTrailersAsHeaders,
@@ -142,7 +142,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
               withCodec(httpDsl, codecRegistry, mediaType.some) { codec =>
                 val entity = RequestEntity[F](message, req.headers)
 
-                handler.handle(entity, methodEntry)(using codec)
+                connectHandler.handle(entity, methodEntry)(using codec)
               }
             }
         case req@Method.POST -> `pathPrefix` / service / method =>
@@ -151,7 +151,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
               withCodec(httpDsl, codecRegistry, req.contentType.map(_.mediaType)) { codec =>
                 val entity = RequestEntity[F](req.body, req.headers)
 
-                handler.handle(entity, methodEntry)(using codec)
+                connectHandler.handle(entity, methodEntry)(using codec)
               }
             }
         case _ =>
@@ -162,12 +162,18 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         methodRegistry.allWithHttpRule,
         pathPrefix,
       )
+      val transcodingHandler    = new TranscodingHandler(
+        channel,
+        httpDsl,
+        treatTrailersAsHeaders,
+      )
 
       val transcodingRoutes = HttpRoutes[F] { req =>
         OptionT.fromOption[F](transcodingUrlMatcher.matchesRequest(req))
           .mapFilter(mr => methodRegistry.get(mr.methodName).map(_ -> mr.json))
           .semiflatMap { (method, json) =>
             given MessageCodec[F] = jsonCodec
+            given EncodeOptions   = EncodeOptions(None)
 
             RequestEntity[F](req.body, req.headers)
               .as[GeneratedMessage](method.requestMessageCompanion)
@@ -175,9 +181,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
                 val entity2     = jsonCodec.parser.fromJson[GeneratedMessage](json)(method.requestMessageCompanion)
                 val finalEntity = method.requestMessageCompanion.parseFrom(entity.toByteArray ++ entity2.toByteArray)
 
-                val stringEntity = RequestEntity[F](jsonCodec.printer.print(finalEntity), req.headers)
-
-                handler.handle(stringEntity, method)
+                transcodingHandler.handleUnary(finalEntity, req.headers, method)
               }
           }
       }

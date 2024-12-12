@@ -48,11 +48,12 @@ object GrpcTranscodingUrlMatcher {
         case (Nil, _) => ???
       }(_ ++ _)
       .view.mapValues { fields =>
-        if fields.forall {
+        if (fields.forall {
           case (list: List[String], v: JValue) => true
           case _ => false
-        } then JObject(groupFields2(fields.asInstanceOf[List[(List[String], JValue)]]))
-        else {
+        }) {
+          JObject(groupFields2(fields.asInstanceOf[List[(List[String], JValue)]]))
+        } else {
           val jvalues = fields.asInstanceOf[List[JValue]]
 
           if jvalues.length == 1 then jvalues.head
