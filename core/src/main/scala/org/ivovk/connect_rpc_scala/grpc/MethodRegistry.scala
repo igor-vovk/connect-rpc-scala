@@ -66,7 +66,7 @@ class MethodRegistry private(entries: Seq[MethodRegistry.Entry]) {
   private val serviceMethodEntries: Map[Service, Map[Method, MethodRegistry.Entry]] = entries
     .groupMapReduce(_.name.service)(e => Map(e.name.method -> e))(_ ++ _)
 
-  def allWithHttpRule: Seq[MethodRegistry.Entry] = entries.filter(_.httpRule.isDefined)
+  def all: Seq[MethodRegistry.Entry] = entries
 
   def get(name: MethodName): Option[MethodRegistry.Entry] = get(name.service, name.method)
 

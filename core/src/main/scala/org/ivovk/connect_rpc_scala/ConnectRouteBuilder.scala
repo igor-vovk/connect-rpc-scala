@@ -158,8 +158,8 @@ final class ConnectRouteBuilder[F[_] : Async] private(
           OptionT.none
       }
 
-      val transcodingUrlMatcher = new GrpcTranscodingUrlMatcher[F](
-        methodRegistry.allWithHttpRule,
+      val transcodingUrlMatcher = TranscodingUrlMatcher.create[F](
+        methodRegistry.all,
         pathPrefix,
       )
       val transcodingHandler    = new TranscodingHandler(
@@ -170,8 +170,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
 
       val transcodingRoutes = HttpRoutes[F] { req =>
         OptionT.fromOption[F](transcodingUrlMatcher.matchesRequest(req))
-          .mapFilter(mr => methodRegistry.get(mr.methodName).map(_ -> mr.json))
-          .semiflatMap { (method, json) =>
+          .semiflatMap { case MatchedRequest(method, json) =>
             given MessageCodec[F] = jsonCodec
             given EncodeOptions   = EncodeOptions(None)
 

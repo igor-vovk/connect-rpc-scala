@@ -41,7 +41,10 @@ class JsonMessageCodec[F[_] : Sync](
           logger.trace(s">>> JSON: $str")
         }
 
-        Sync[F].delay(parser.fromJsonString(if str.nonEmpty then str else "{}"))
+        if str.nonEmpty then
+          Sync[F].delay(parser.fromJsonString(str))
+        else
+          cmp.defaultInstance.pure[F]
       }
       .attemptT
       .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
