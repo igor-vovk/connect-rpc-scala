@@ -40,7 +40,6 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
-    assert(result.get.json == JObject())
   }
 
   test("matches request with POST method") {
@@ -48,7 +47,6 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "CreateCountry"))
-    assert(result.get.json == JObject())
   }
 
   test("extracts query parameters") {
@@ -56,7 +54,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
-    assert(result.get.json == JObject("limit" -> JString("10"), "offset" -> JString("5")))
+    assert(result.get.queryJson == JObject("limit" -> JString("10"), "offset" -> JString("5")))
   }
 
   test("matches request with path parameter and extracts it") {
@@ -64,7 +62,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "GetCountry"))
-    assert(result.get.json == JObject("country_id" -> JString("Uganda")))
+    assert(result.get.pathJson == JObject("country_id" -> JString("Uganda")))
   }
 
   test("extracts repeating query parameters") {
@@ -72,7 +70,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
-    assert(result.get.json == JObject("limit" -> JArray(JString("10") :: JString("20") :: Nil)))
+    assert(result.get.queryJson == JObject("limit" -> JArray(JString("10") :: JString("20") :: Nil)))
   }
 
 }

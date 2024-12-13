@@ -38,7 +38,6 @@ case class RequestEntity[F[_]](
 
   def timeout: Option[Long] = headers.timeout
 
-  def as[A <: Message](cmp: Companion[A])(using M: MonadThrow[F], codec: MessageCodec[F]): F[A] =
-    M.rethrow(codec.decode(this)(using cmp).value)
-
+  def as[A <: Message: Companion](using M: MonadThrow[F], codec: MessageCodec[F]): F[A] =
+    M.rethrow(codec.decode(this)(using summon[Companion[A]]).value)
 }

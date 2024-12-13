@@ -5,43 +5,123 @@ import com.google.api.HttpRule
 import org.http4s.{Method, Request, Uri}
 import org.ivovk.connect_rpc_scala
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
+import org.ivovk.connect_rpc_scala.http.json.JsonProcessing.*
 import org.json4s.JsonAST.{JField, JObject}
 import org.json4s.{JString, JValue}
 
-import scala.util.boundary
-import scala.util.boundary.break
+import scala.jdk.CollectionConverters.*
 
-case class MatchedRequest(method: MethodRegistry.Entry, json: JValue)
+case class MatchedRequest(
+  method: MethodRegistry.Entry,
+  pathJson: JValue,
+  queryJson: JValue,
+)
 
 object TranscodingUrlMatcher {
   case class Entry(
     method: MethodRegistry.Entry,
-    httpMethodMatcher: Method => Boolean,
+    httpMethod: Option[Method],
     pattern: Uri.Path,
   )
+
+  sealed trait RouteTree
+
+  case class RootNode(
+    children: Vector[RouteTree],
+  ) extends RouteTree
+
+  case class Node(
+    isVariable: Boolean,
+    segment: String,
+    children: Vector[RouteTree],
+  ) extends RouteTree
+
+  case class Leaf(
+    httpMethod: Option[Method],
+    method: MethodRegistry.Entry,
+  ) extends RouteTree
+
+  private def mkTree(entries: Seq[Entry]): Vector[RouteTree] = {
+    entries.groupByOrd(_.pattern.segments.headOption)
+      .flatMap { (maybeSegment, entries) =>
+        maybeSegment match {
+          case None =>
+            entries.map { entry =>
+              Leaf(entry.httpMethod, entry.method)
+            }
+          case Some(head) =>
+            val variableDef = this.isVariable(head)
+            val segment     =
+              if variableDef then
+                head.encoded.substring(1, head.encoded.length - 1)
+              else head.encoded
+
+            List(
+              Node(
+                variableDef,
+                segment,
+                mkTree(entries.map(e => e.copy(pattern = e.pattern.splitAt(1)._2)).toVector),
+              )
+            )
+        }
+      }
+      .toVector
+  }
+
+  extension [A](it: Iterable[A]) {
+    // Preserves ordering of elements
+    def groupByOrd[B](f: A => B): Map[B, Vector[A]] = {
+      val result = collection.mutable.LinkedHashMap.empty[B, Vector[A]]
+
+      it.foreach { elem =>
+        val key  = f(elem)
+        val vec = result.getOrElse(key, Vector.empty)
+        result.update(key, vec :+ elem)
+      }
+
+      result.toMap
+    }
+
+    // Returns the first element that is Some
+    def colFirst[B](f: A => Option[B]): Option[B] = {
+      val iter = it.iterator
+      while (iter.hasNext) {
+        val x = f(iter.next())
+        if x.isDefined then return x
+      }
+      None
+    }
+  }
+
+  private def isVariable(segment: Uri.Path.Segment): Boolean = {
+    val enc    = segment.encoded
+    val length = enc.length
+
+    length > 2 && enc(0) == '{' && enc(length - 1) == '}'
+  }
 
   def create[F[_]](
     methods: Seq[MethodRegistry.Entry],
     pathPrefix: Uri.Path,
   ): TranscodingUrlMatcher[F] = {
     val entries = methods.flatMap { method =>
-      method.httpRule match {
-        case Some(httpRule) =>
-          val (httpMethod, pattern) = extractMethodAndPattern(httpRule)
+      method.httpRule.fold(List.empty[Entry]) { httpRule =>
+        val additionalBindings = httpRule.getAdditionalBindingsList.asScala.toList
 
-          val httpMethodMatcher: Method => Boolean = m => httpMethod.forall(_ == m)
+        (httpRule :: additionalBindings).map { rule =>
+          val (httpMethod, pattern) = extractMethodAndPattern(rule)
 
           Entry(
             method,
-            httpMethodMatcher,
-            pathPrefix.dropEndsWithSlash.concat(pattern.toRelative)
-          ).some
-        case None => none
+            httpMethod,
+            pathPrefix.concat(pattern),
+          )
+        }
       }
     }
 
     new TranscodingUrlMatcher(
-      entries,
+      RootNode(mkTree(entries)),
     )
   }
 
@@ -62,56 +142,40 @@ object TranscodingUrlMatcher {
 }
 
 class TranscodingUrlMatcher[F[_]](
-  entries: Seq[TranscodingUrlMatcher.Entry],
+  tree: TranscodingUrlMatcher.RootNode,
 ) {
 
-  import org.ivovk.connect_rpc_scala.http.json.JsonProcessing.*
+  import TranscodingUrlMatcher.*
 
-  def matchesRequest(req: Request[F]): Option[MatchedRequest] = boundary {
-    entries.foreach { entry =>
-      if (entry.httpMethodMatcher(req.method)) {
-        matchExtract(entry.pattern, req.uri.path) match {
-          case Some(pathParams) =>
-            val queryParams = req.uri.query.toList.map((k, v) => k -> JString(v.getOrElse("")))
+  def matchesRequest(req: Request[F]): Option[MatchedRequest] = {
+    def doMatch(node: RouteTree, path: List[Uri.Path.Segment], pathVars: List[JField]): Option[MatchedRequest] = {
+      node match {
+        case Node(isVariable, patternSegment, children) if path.nonEmpty =>
+          val pathSegment = path.head
+          val pathTail    = path.tail
 
-            val merged = mergeFields(groupFields(pathParams), groupFields(queryParams))
+          if isVariable then
+            val newPatchVars = (patternSegment -> JString(pathSegment.encoded)) :: pathVars
 
-            break(Some(MatchedRequest(entry.method, JObject(merged))))
-          case None => // continue
-        }
+            children.colFirst(doMatch(_, pathTail, newPatchVars))
+          else if pathSegment.encoded == patternSegment then
+            children.colFirst(doMatch(_, pathTail, pathVars))
+          else none
+        case Leaf(httpMethod, method) if path.isEmpty && httpMethod.forall(_ == req.method) =>
+          val queryParams = req.uri.query.toList.map((k, v) => k -> JString(v.getOrElse("")))
+
+          MatchedRequest(
+            method,
+            JObject(groupFields(pathVars)),
+            JObject(groupFields(queryParams))
+          ).some
+        case RootNode(children) =>
+          children.colFirst(doMatch(_, path, pathVars))
+        case _ => none
       }
     }
 
-    none
+    doMatch(tree, req.uri.path.segments.toList, List.empty)
   }
 
-  /**
-   * Matches path segments with pattern segments and extracts variables from the path.
-   * Returns None if the path does not match the pattern.
-   */
-  private def matchExtract(pattern: Uri.Path, path: Uri.Path): Option[List[JField]] = boundary {
-    if path.segments.length != pattern.segments.length then boundary.break(none)
-
-    path.segments.indices
-      .foldLeft(List.empty[JField]) { (state, idx) =>
-        val pathSegment    = path.segments(idx)
-        val patternSegment = pattern.segments(idx)
-
-        if isVariable(patternSegment) then
-          val varName = patternSegment.encoded.substring(1, patternSegment.encoded.length - 1)
-
-          (varName -> JString(pathSegment.encoded)) :: state
-        else if pathSegment != patternSegment then
-          boundary.break(none)
-        else state
-      }
-      .some
-  }
-
-  private def isVariable(segment: Uri.Path.Segment): Boolean = {
-    val enc    = segment.encoded
-    val length = enc.length
-
-    length > 2 && enc(0) == '{' && enc(length - 1) == '}'
-  }
 }

@@ -11,7 +11,8 @@ import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.ivovk.connect_rpc_scala.http.codec.*
-import scalapb.GeneratedMessage
+import org.ivovk.connect_rpc_scala.syntax.all.*
+import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
@@ -170,17 +171,21 @@ final class ConnectRouteBuilder[F[_] : Async] private(
 
       val transcodingRoutes = HttpRoutes[F] { req =>
         OptionT.fromOption[F](transcodingUrlMatcher.matchesRequest(req))
-          .semiflatMap { case MatchedRequest(method, json) =>
+          .semiflatMap { case MatchedRequest(method, pathJson, queryJson) =>
             given MessageCodec[F] = jsonCodec
-            given EncodeOptions   = EncodeOptions(None)
 
-            RequestEntity[F](req.body, req.headers)
-              .as[GeneratedMessage](method.requestMessageCompanion)
-              .flatMap { entity =>
-                val entity2     = jsonCodec.parser.fromJson[GeneratedMessage](json)(method.requestMessageCompanion)
-                val finalEntity = method.requestMessageCompanion.parseFrom(entity.toByteArray ++ entity2.toByteArray)
+            given Companion[Message] = method.requestMessageCompanion
 
-                transcodingHandler.handleUnary(finalEntity, req.headers, method)
+            RequestEntity[F](req.body, req.headers).as[Message]
+              .flatMap { bodyMessage =>
+                val pathMessage  = jsonCodec.parser.fromJson[Message](pathJson)
+                val queryMessage = jsonCodec.parser.fromJson[Message](queryJson)
+
+                transcodingHandler.handleUnary(
+                  bodyMessage.concat(pathMessage, queryMessage),
+                  req.headers,
+                  method
+                )
               }
           }
       }

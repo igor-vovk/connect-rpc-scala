@@ -108,7 +108,7 @@ class ConnectHandler[F[_] : Async](
       }
     }
 
-    req.as[GeneratedMessage](method.requestMessageCompanion)
+    req.as[GeneratedMessage](using method.requestMessageCompanion)
       .flatMap { message =>
         if (logger.isTraceEnabled) {
           logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}")

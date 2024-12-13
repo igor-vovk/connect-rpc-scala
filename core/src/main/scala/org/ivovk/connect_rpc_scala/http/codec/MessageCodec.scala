@@ -10,6 +10,10 @@ case class EncodeOptions(
   encoding: Option[ContentCoding]
 )
 
+object EncodeOptions {
+  given EncodeOptions = EncodeOptions(None)
+}
+
 trait MessageCodec[F[_]] {
 
   val mediaType: MediaType
