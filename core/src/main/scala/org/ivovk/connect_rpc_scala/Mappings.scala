@@ -1,11 +1,13 @@
 package org.ivovk.connect_rpc_scala
 
 import io.grpc.{Metadata, Status}
-import org.http4s.{Header, Headers}
+import org.http4s.{Header, Headers, Response}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders.asciiKey
+import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import org.typelevel.ci.CIString
+import scalapb.GeneratedMessage
 
-object Mappings extends HeaderMappings, StatusCodeMappings
+object Mappings extends HeaderMappings, StatusCodeMappings, ResponseCodeExtensions
 
 trait HeaderMappings {
 
@@ -45,6 +47,13 @@ trait HeaderMappings {
 
   }
 
+}
+
+trait ResponseCodeExtensions {
+  extension [F[_]](response: Response[F]) {
+    def withMessage(entity: GeneratedMessage)(using codec: MessageCodec[F], options: EncodeOptions): Response[F] =
+      codec.encode(entity, options).applyTo(response)
+  }
 }
 
 trait StatusCodeMappings {

@@ -5,6 +5,7 @@ import cats.data.OptionT
 import cats.effect.{Async, Resource}
 import cats.implicits.*
 import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
+import org.http4s.Status.*
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpApp, HttpRoutes, MediaType, Method, Response, Uri}
 import org.ivovk.connect_rpc_scala.grpc.*
@@ -127,9 +128,13 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         waitForShutdown,
       )
     yield
+      val errorHandler = new ConnectErrorHandler[F](
+        treatTrailersAsHeaders,
+      )
+
       val connectHandler = new ConnectHandler(
         channel,
-        httpDsl,
+        errorHandler,
         treatTrailersAsHeaders,
       )
 
@@ -140,7 +145,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
             // until https://github.com/scalapb/ScalaPB/pull/1774 is merged
             .filter(_.descriptor.isSafe || true)
             .semiflatMap { methodEntry =>
-              withCodec(httpDsl, codecRegistry, mediaType.some) { codec =>
+              withCodec(codecRegistry, mediaType.some) { codec =>
                 val entity = RequestEntity[F](message, req.headers)
 
                 connectHandler.handle(entity, methodEntry)(using codec)
@@ -149,7 +154,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         case req@Method.POST -> `pathPrefix` / service / method =>
           OptionT.fromOption[F](methodRegistry.get(service, method))
             .semiflatMap { methodEntry =>
-              withCodec(httpDsl, codecRegistry, req.contentType.map(_.mediaType)) { codec =>
+              withCodec(codecRegistry, req.contentType.map(_.mediaType)) { codec =>
                 val entity = RequestEntity[F](req.body, req.headers)
 
                 connectHandler.handle(entity, methodEntry)(using codec)
@@ -163,10 +168,10 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         methodRegistry.all,
         pathPrefix,
       )
-      val transcodingHandler    = new TranscodingHandler(
+
+      val transcodingHandler = new TranscodingHandler(
         channel,
-        httpDsl,
-        treatTrailersAsHeaders,
+        errorHandler,
       )
 
       val transcodingRoutes = HttpRoutes[F] { req =>
@@ -197,19 +202,16 @@ final class ConnectRouteBuilder[F[_] : Async] private(
     buildRoutes.map(_.orNotFound)
 
   private def withCodec(
-    dsl: Http4sDsl[F],
     registry: MessageCodecRegistry[F],
     mediaType: Option[MediaType]
   )(r: MessageCodec[F] => F[Response[F]]): F[Response[F]] = {
-    import dsl.*
-
     mediaType.flatMap(registry.byMediaType) match {
       case Some(codec) => r(codec)
       case None =>
         val message = s"Unsupported media-type ${mediaType.show}. " +
           s"Supported media types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}"
 
-        UnsupportedMediaType(message)
+        Response(UnsupportedMediaType).withEntity(message).pure[F]
     }
   }
 

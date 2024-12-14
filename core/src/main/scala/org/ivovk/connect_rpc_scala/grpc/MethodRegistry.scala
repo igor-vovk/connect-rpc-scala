@@ -52,13 +52,13 @@ object MethodRegistry {
   private def extractHttpRule(methodDescriptor: MethodDescriptor[_, _]): Option[HttpRule] = {
     methodDescriptor.getSchemaDescriptor match
       case sd: ConcreteProtoMethodDescriptorSupplier =>
-        val fields      = sd.getMethodDescriptor.getOptions.getUnknownFields
+        val fields = sd.getMethodDescriptor.getOptions.getUnknownFields
 
         if fields.hasField(HttpFieldNumber) then
           Some(HttpRule.parseFrom(fields.getField(HttpFieldNumber).getLengthDelimitedList.get(0).toByteArray))
         else
           None
-      case _ => 
+      case _ =>
         None
   }
 
