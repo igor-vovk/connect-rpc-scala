@@ -8,10 +8,10 @@ import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpApp, HttpRoutes, MediaType, Method, Response, Uri}
 import org.ivovk.connect_rpc_scala.grpc.*
+import org.ivovk.connect_rpc_scala.grpc.MergingBuilder.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.ivovk.connect_rpc_scala.http.codec.*
-import org.ivovk.connect_rpc_scala.syntax.all.*
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 import java.util.concurrent.Executor
@@ -182,7 +182,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
                 val queryMessage = jsonCodec.parser.fromJson[Message](queryJson)
 
                 transcodingHandler.handleUnary(
-                  bodyMessage.concat(pathMessage, queryMessage),
+                  bodyMessage.merge(pathMessage).merge(queryMessage).build,
                   req.headers,
                   method
                 )
