@@ -1,7 +1,7 @@
 package org.ivovk.connect_rpc_scala
 
 import cats.implicits.*
-import com.google.api.HttpRule
+import com.google.api.http.{CustomHttpPattern, HttpRule}
 import org.http4s.{Method, Request, Uri}
 import org.ivovk.connect_rpc_scala
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
@@ -60,7 +60,7 @@ object TranscodingUrlMatcher {
               Node(
                 variableDef,
                 segment,
-                mkTree(entries.map(e => e.copy(pattern = e.pattern.splitAt(1)._2)).toVector),
+                mkTree(entries.map(e => e.copy(pattern = e.pattern.splitAt(1)._2))),
               )
             )
         }
@@ -74,7 +74,7 @@ object TranscodingUrlMatcher {
       val result = collection.mutable.LinkedHashMap.empty[B, Vector[A]]
 
       it.foreach { elem =>
-        val key  = f(elem)
+        val key = f(elem)
         val vec = result.getOrElse(key, Vector.empty)
         result.update(key, vec :+ elem)
       }
@@ -106,7 +106,7 @@ object TranscodingUrlMatcher {
   ): TranscodingUrlMatcher[F] = {
     val entries = methods.flatMap { method =>
       method.httpRule.fold(List.empty[Entry]) { httpRule =>
-        val additionalBindings = httpRule.getAdditionalBindingsList.asScala.toList
+        val additionalBindings = httpRule.additionalBindings.toList
 
         (httpRule :: additionalBindings).map { rule =>
           val (httpMethod, pattern) = extractMethodAndPattern(rule)
@@ -126,13 +126,13 @@ object TranscodingUrlMatcher {
   }
 
   private def extractMethodAndPattern(rule: HttpRule): (Option[Method], Uri.Path) = {
-    val (method, str) = rule.getPatternCase match
-      case HttpRule.PatternCase.GET => (Method.GET.some, rule.getGet)
-      case HttpRule.PatternCase.PUT => (Method.PUT.some, rule.getPut)
-      case HttpRule.PatternCase.POST => (Method.POST.some, rule.getPost)
-      case HttpRule.PatternCase.DELETE => (Method.DELETE.some, rule.getDelete)
-      case HttpRule.PatternCase.PATCH => (Method.PATCH.some, rule.getPatch)
-      case HttpRule.PatternCase.CUSTOM => (none, rule.getCustom.getPath)
+    val (method, str) = rule.pattern match
+      case HttpRule.Pattern.Get(value) => (Method.GET.some, value)
+      case HttpRule.Pattern.Put(value) => (Method.PUT.some, value)
+      case HttpRule.Pattern.Post(value) => (Method.POST.some, value)
+      case HttpRule.Pattern.Delete(value) => (Method.DELETE.some, value)
+      case HttpRule.Pattern.Patch(value) => (Method.PATCH.some, value)
+      case HttpRule.Pattern.Custom(CustomHttpPattern(kind, value, _)) if kind == "*" => (none, value)
       case other => throw new RuntimeException(s"Unsupported pattern case $other (Rule: $rule)")
 
     val path = Uri.Path.unsafeFromString(str).dropEndsWithSlash
@@ -169,13 +169,13 @@ class TranscodingUrlMatcher[F[_]](
             JObject(groupFields(pathVars)),
             JObject(groupFields(queryParams))
           ).some
-        case RootNode(children) =>
-          children.colFirst(doMatch(_, path, pathVars))
         case _ => none
       }
     }
 
-    doMatch(tree, req.uri.path.segments.toList, List.empty)
+    val path = req.uri.path.segments.toList
+
+    tree.children.colFirst(doMatch(_, path, Nil))
   }
 
 }

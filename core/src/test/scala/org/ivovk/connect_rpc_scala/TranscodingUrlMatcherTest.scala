@@ -1,7 +1,7 @@
 package org.ivovk.connect_rpc_scala
 
 import cats.effect.IO
-import com.google.api.HttpRule
+import com.google.api.http.HttpRule
 import org.http4s.Uri.Path.Root
 import org.http4s.implicits.uri
 import org.http4s.{Method, Request}
@@ -11,24 +11,24 @@ import org.scalatest.funsuite.AnyFunSuiteLike
 
 class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
-  val matcher = TranscodingUrlMatcher.create[IO](
+  private val matcher = TranscodingUrlMatcher.create[IO](
     Seq(
       MethodRegistry.Entry(
         MethodName("CountriesService", "CreateCountry"),
         null,
-        Some(HttpRule.newBuilder().setPost("/countries").build()),
+        Some(HttpRule().withPost("/countries")),
         null
       ),
       MethodRegistry.Entry(
         MethodName("CountriesService", "ListCountries"),
         null,
-        Some(HttpRule.newBuilder().setGet("/countries/list").build()),
+        Some(HttpRule().withGet("/countries/list")),
         null
       ),
       MethodRegistry.Entry(
         MethodName("CountriesService", "GetCountry"),
         null,
-        Some(HttpRule.newBuilder().setGet("/countries/{country_id}").build()),
+        Some(HttpRule().withGet("/countries/{country_id}")),
         null
       ),
     ),

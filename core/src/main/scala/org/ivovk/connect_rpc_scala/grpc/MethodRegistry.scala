@@ -1,6 +1,6 @@
 package org.ivovk.connect_rpc_scala.grpc
 
-import com.google.api.{AnnotationsProto, HttpRule}
+import com.google.api.http.HttpRule
 import io.grpc.{MethodDescriptor, ServerMethodDefinition, ServerServiceDefinition}
 import scalapb.grpc.ConcreteProtoMethodDescriptorSupplier
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
@@ -47,16 +47,19 @@ object MethodRegistry {
     new MethodRegistry(entries)
   }
 
+  private val HttpFieldNumber = 72295728
+
   private def extractHttpRule(methodDescriptor: MethodDescriptor[_, _]): Option[HttpRule] = {
     methodDescriptor.getSchemaDescriptor match
       case sd: ConcreteProtoMethodDescriptorSupplier =>
         val fields      = sd.getMethodDescriptor.getOptions.getUnknownFields
-        val fieldNumber = AnnotationsProto.http.getNumber
 
-        if fields.hasField(fieldNumber) then
-          Some(HttpRule.parseFrom(fields.getField(fieldNumber).getLengthDelimitedList.get(0).toByteArray))
-        else None
-      case _ => None
+        if fields.hasField(HttpFieldNumber) then
+          Some(HttpRule.parseFrom(fields.getField(HttpFieldNumber).getLengthDelimitedList.get(0).toByteArray))
+        else
+          None
+      case _ => 
+        None
   }
 
 }
