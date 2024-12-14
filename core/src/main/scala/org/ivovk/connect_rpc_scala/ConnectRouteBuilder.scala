@@ -21,6 +21,9 @@ import scala.concurrent.duration.*
 
 object ConnectRouteBuilder {
 
+  private val DefaultIncomingHeadersFilter: String => Boolean = name =>
+    !name.toLowerCase.startsWith("connection")
+
   def forService[F[_] : Async](service: ServerServiceDefinition): ConnectRouteBuilder[F] =
     forServices(Seq(service))
 
@@ -33,6 +36,7 @@ object ConnectRouteBuilder {
       serverConfigurator = identity,
       channelConfigurator = identity,
       customJsonCodec = None,
+      incomingHeadersFilter = DefaultIncomingHeadersFilter,
       pathPrefix = Uri.Path.Root,
       executor = ExecutionContext.global,
       waitForShutdown = 5.seconds,
@@ -46,6 +50,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
   serverConfigurator: Endo[ServerBuilder[_]],
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
   customJsonCodec: Option[JsonMessageCodec[F]],
+  incomingHeadersFilter: String => Boolean,
   pathPrefix: Uri.Path,
   executor: Executor,
   waitForShutdown: Duration,
@@ -57,6 +62,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
     serverConfigurator: Endo[ServerBuilder[_]] = serverConfigurator,
     channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
     customJsonCodec: Option[JsonMessageCodec[F]] = customJsonCodec,
+    incomingHeadersFilter: String => Boolean = incomingHeadersFilter,
     pathPrefix: Uri.Path = pathPrefix,
     executor: Executor = executor,
     waitForShutdown: Duration = waitForShutdown,
@@ -67,6 +73,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       serverConfigurator,
       channelConfigurator,
       customJsonCodec,
+      incomingHeadersFilter,
       pathPrefix,
       executor,
       waitForShutdown,
@@ -81,6 +88,9 @@ final class ConnectRouteBuilder[F[_] : Async] private(
 
   def withJsonCodecConfigurator(method: Endo[JsonMessageCodecBuilder[F]]): ConnectRouteBuilder[F] =
     copy(customJsonCodec = Some(method(JsonMessageCodecBuilder[F]()).build))
+
+  def withIncomingHeadersFilter(filter: String => Boolean): ConnectRouteBuilder[F] =
+    copy(incomingHeadersFilter = filter)
 
   def withPathPrefix(path: Uri.Path): ConnectRouteBuilder[F] =
     copy(pathPrefix = path)
@@ -136,6 +146,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         channel,
         errorHandler,
         treatTrailersAsHeaders,
+        incomingHeadersFilter,
       )
 
       val connectRoutes = HttpRoutes[F] {
@@ -172,6 +183,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       val transcodingHandler = new TranscodingHandler(
         channel,
         errorHandler,
+        incomingHeadersFilter,
       )
 
       val transcodingRoutes = HttpRoutes[F] { req =>

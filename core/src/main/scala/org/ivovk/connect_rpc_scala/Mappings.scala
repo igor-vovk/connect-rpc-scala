@@ -12,10 +12,12 @@ object Mappings extends HeaderMappings, StatusCodeMappings, ResponseCodeExtensio
 trait HeaderMappings {
 
   extension (headers: Headers) {
-    def toMetadata: Metadata = {
+    def toMetadata(filter: String => Boolean): Metadata = {
       val metadata = new Metadata()
       headers.foreach { header =>
-        metadata.put(asciiKey(header.name.toString), header.value)
+        if (filter(header.name.toString)) {
+          metadata.put(asciiKey(header.name.toString), header.value)
+        }
       }
       metadata
     }

@@ -20,6 +20,7 @@ import scala.util.chaining.*
 class TranscodingHandler[F[_] : Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
+  incomingHeadersFilter: String => Boolean,
 ) {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -55,7 +56,7 @@ class TranscodingHandler[F[_] : Async](
         channel,
         method.descriptor,
         callOptions,
-        headers.toMetadata,
+        headers.toMetadata(incomingHeadersFilter),
         message
       )
       .map { response =>
