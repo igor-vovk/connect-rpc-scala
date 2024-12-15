@@ -45,7 +45,7 @@ HTTP/1.1 200 OK
 }
 ```
 
-It is compatible with Connect protocol clients (e.g., you can generate clients with https://connectrpc.com `protoc` and
+It is compatible with Connect protocol clients (e.g., you can generate clients with [Connect RPC](https://connectrpc.com) `protoc` and
 `buf` plugins instead of writing requests manually).
 
 In addition, the library supports creating free-form REST APIs,
