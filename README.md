@@ -30,7 +30,7 @@ message GetExampleResponse {
 
 Will be exposed to the clients as a REST API:
 
-```http request
+```http
 POST /example.ExampleService/GetExample HTTP/1.1
 Content-Type: application/json
 
@@ -38,16 +38,15 @@ Content-Type: application/json
   "id": "123"
 }
 
-###
-HTTP/2 200 OK
+HTTP/1.1 200 OK
 
 {
   "name": "example"
 }
 ```
 
-that will be compatible with Connect protocol clients (e.g.,
-you can generate clients with https://connectrpc.com `protoc` and `buf` plugins instead of writing requests manually).
+It is compatible with Connect protocol clients (e.g., you can generate clients with https://connectrpc.com `protoc` and
+`buf` plugins instead of writing requests manually).
 
 In addition, the library supports creating free-form REST APIs,
 using [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) approach
@@ -79,10 +78,9 @@ message GetExampleResponse {
 
 In addition to the previous way of calling it, this endpoint will be exposed as a REST API:
 
-```http request
+```http
 GET /example/123 HTTP/1.1
 
-###
 HTTP/1.1 200 OK
 
 {
