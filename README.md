@@ -212,7 +212,7 @@ supports_message_receive_limit: false
 - [ ] Body field mapping, e.g. `body: "request"` (not supported yet), `body: "*"` (supported)
 - [ ] Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets` (not supported yet)
 
-### Future improvements of the library
+### Future improvements
 
 - [x] Support GET-requests ([#10](https://github.com/igor-vovk/connect-rpc-scala/issues/10))
 - [x] Support `google.api.http` annotations (GRPC
@@ -222,6 +222,6 @@ supports_message_receive_limit: false
 
 ### Thanks
 
-The library was inspired and took some ideas from the [grpc-json-bridge](https://github.com/avast/grpc-json-bridge).
+The library is inspired and takes some ideas from the [grpc-json-bridge](https://github.com/avast/grpc-json-bridge).
 Which doesn't seem to be supported anymore, + also the library doesn't follow a Connect-RPC standard (while being very
 close to it).
