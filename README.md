@@ -1,73 +1,102 @@
 ![](docs/connect-rpc-scala-logo.png)
 
-# Connect-RPC ↔ ScalaPB GRPC Bridge
+# REST API for GRPC services with Connect protocol / GRPC Transcoding for Scala
 
-This library provides a bridge between [Connect](https://connectrpc.com/docs/protocol) protocol and
-[ScalaPB](https://scalapb.github.io) GRPC compiler for Scala.
-It is inspired and takes ideas from [grpc-json-bridge](https://github.com/avast/grpc-json-bridge) library, which doesn't
-seem to be supported anymore + the library doesn't follow a Connect-RPC standard (while being very close to it),
-which makes using clients generated with ConnectRPC not possible.
+![Maven Central](https://img.shields.io/maven-central/v/io.github.igor-vovk/connect-rpc-scala-core_3?style=flat-square&color=green)
 
-Since integration happens on the foundational ScalaPB level, it works with all common GRPC code-generation projects for
-Scala:
+This library makes it easy to expose your GRPC services to the clients using Connect protocol (with JSON messages),
+without Envoy or any other proxy.
+
+In essence, a service implementing the following protobuf definition:
+
+```protobuf
+syntax = "proto3";
+
+package example;
+
+service ExampleService {
+  rpc GetExample(GetExampleRequest) returns (GetExampleResponse) {
+  }
+}
+
+message GetExampleRequest {
+  string id = 1;
+}
+
+message GetExampleResponse {
+  string name = 1;
+}
+```
+
+Will be exposed to the clients as a REST API:
+
+```http request
+POST /example.ExampleService/GetExample HTTP/1.1
+Content-Type: application/json
+
+{
+  "id": "123"
+}
+
+###
+HTTP/2 200 OK
+
+{
+  "name": "example"
+}
+```
+
+that will be compatible with Connect protocol clients (e.g.,
+you can generate clients with https://connectrpc.com `protoc` and `buf` plugins instead of writing requests manually).
+
+In addition, the library supports creating free-form REST APIs,
+using [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) approach
+(still working on the full support of `google.api.http` annotations):
+
+```protobuf
+syntax = "proto3";
+
+package example;
+
+import "google/api/annotations.proto";
+
+service ExampleService {
+  rpc GetExample(GetExampleRequest) returns (GetExampleResponse) {
+    option (google.api.http) = {
+      get: "/example/{id}"
+    };
+  }
+}
+
+message GetExampleRequest {
+  string id = 1;
+}
+
+message GetExampleResponse {
+  string name = 1;
+}
+```
+
+In addition to the previous way of calling it, this endpoint will be exposed as a REST API:
+
+```http request
+GET /example/123 HTTP/1.1
+
+###
+HTTP/1.1 200 OK
+
+{
+  "name": "example"
+}
+```
+
+Since integration happens on the foundational ScalaPB level, it works with all common GRPC code-generators:
 
 * [ScalaPB](https://scalapb.github.io) services with `Future` monad
 * [fs2-grpc](https://github.com/typelevel/fs2-grpc), built on top of `cats-effect` and `fs2`
 * [ZIO gRPC](https://scalapb.github.io/zio-grpc/), built on top of `ZIO`
 
 *Note*: at the moment, only unary (non-streaming) methods are supported.
-
-## Motivation
-
-As a part of a GRPC adoption, there is usually a need to expose REST APIs.
-Since GRPC is based on HTTP2, it's not the best option to expose it directly to the clients, which aren’t
-natively supporting HTTP2.
-So the most common approach is to expose REST APIs, which will be translated to GRPC on the server side.
-There are two main protocols for this:
-
-* [GRPC-WEB](https://github.com/grpc/grpc-web)
-* [Connect](https://connectrpc.com/docs/introduction)
-
-They are similar, but GRPC-WEB target is to be as close to GRPC as possible, while Connect is more
-web-friendly: it has better client libraries, better web semantics:
-content-type is `application/json` instead of `application/grpc-web+json`, error codes are just normal http codes
-instead of being sent in headers, errors are output in the body of the response JSON-encoded, it supports GET-requests,
-etc (you can also read
-this [blog post describing why Connect is better](https://buf.build/blog/connect-a-better-grpc)).
-
-Both protocols support encoding data in Protobuf and JSON.
-JSON is more web-friendly, but it requires having some component in the middle, providing JSON → Protobuf
-conversion during the request phase and Protobuf → JSON conversion during the response phase.
-
-*And this can be tricky to set up*:
-
-The suggested approach in this case is to use a web-server ([Envoy](https://scalapb.github.io)) as a proxy,
-supporting translation of both protocols to GRPC.
-The general setup of the Envoy in this case allows proxying HTTP/1.1 requests to GRPC, while still having protobuf
-messages in the body of the request.
-
-To support JSON, Envoy needs to be configured with Protobuf descriptors, which is not very convenient.
-
-*That's where this library comes in*:
-
-It allows exposing GRPC services, built with [ScalaPB](https://scalapb.github.io), to the clients
-using Connect protocol (with JSON messages), without Envoy or any other proxy, so a web service can expose
-both GRPC and REST APIs at the same time on two ports.
-
-This simplifies overall setup: simpler CI, fewer network components, faster execution speed.
-
-## Features of the protocol supported by the library
-
-```yaml
-versions: [ HTTP_VERSION_1, HTTP_VERSION_2 ]
-protocols: [ PROTOCOL_CONNECT ]
-codecs: [ CODEC_JSON, CODEC_PROTO ]
-stream_types: [ STREAM_TYPE_UNARY ]
-supports_tls: false
-supports_trailers: false
-supports_connect_get: true
-supports_message_receive_limit: false
-```
 
 ## Usage
 
@@ -138,7 +167,9 @@ You can read [this](https://zio.dev/guides/interop/with-cats-effect/).
 
 ## Development
 
-### Running Connect-RPC conformance tests
+### Connect RPC
+
+#### Running Connect-RPC conformance tests
 
 Run the following command to run Connect-RPC conformance tests:
 
@@ -149,7 +180,7 @@ docker build . --output "out" --progress=plain
 Execution results are output to STDOUT.
 Diagnostic data from the server itself is written to the log file `out/out.log`.
 
-### Connect protocol conformance tests status
+#### Connect protocol conformance tests status
 
 ✅ JSON codec conformance status: __full conformance__.
 
@@ -159,9 +190,40 @@ Known issues:
 
 * Errors serialized incorrectly for protobuf codec.
 
-## Future improvements
+#### Supported features of the protocol
+
+```yaml
+versions: [ HTTP_VERSION_1, HTTP_VERSION_2 ]
+protocols: [ PROTOCOL_CONNECT ]
+codecs: [ CODEC_JSON, CODEC_PROTO ]
+stream_types: [ STREAM_TYPE_UNARY ]
+supports_tls: false
+supports_trailers: false
+supports_connect_get: true
+supports_message_receive_limit: false
+```
+
+### GRPC Transcoding
+
+#### Support
+
+- [x] GET, POST, PUT, DELETE, PATCH methods
+- [x] Path parameters, e.g., `/v1/countries/{name}`
+- [x] Query parameters, repeating query parameters (e.g., `?a=1&a=2`) as arrays
+- [x] Request body (JSON)
+- [ ] Body field mapping, e.g. `body: "request"` (not supported yet), `body: "*"` (supported)
+- [ ] Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets` (not supported yet)
+
+### Future improvements of the library
 
 - [x] Support GET-requests ([#10](https://github.com/igor-vovk/connect-rpc-scala/issues/10))
-- [ ] Support `google.api.http` annotations (GRPC transcoding) ([#51](https://github.com/igor-vovk/connect-rpc-scala/issues/51))
+- [x] Support `google.api.http` annotations (GRPC
+  transcoding) ([#51](https://github.com/igor-vovk/connect-rpc-scala/issues/51))
 - [ ] Support configurable timeouts
 - [ ] Support non-unary (streaming) methods
+
+### Thanks
+
+The library was inspired and took some ideas from the [grpc-json-bridge](https://github.com/avast/grpc-json-bridge).
+Which doesn't seem to be supported anymore, + also the library doesn't follow a Connect-RPC standard (while being very
+close to it).
