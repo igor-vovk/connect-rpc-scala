@@ -98,7 +98,7 @@ Since integration happens on the foundational ScalaPB level, it works with all c
 
 ## Usage
 
-Installing with SBT (you also need to install particular `http4s` server implementation):
+For SBT (you also need to install particular `http4s` server implementation):
 
 ```scala
 libraryDependencies ++= Seq(
