@@ -50,7 +50,7 @@ It is compatible with Connect protocol clients (e.g., you can generate clients w
 
 In addition, the library supports creating free-form REST APIs,
 using [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) approach
-(still working on the full support of `google.api.http` annotations):
+(full support of `google.api.http` annotations is in progress).:
 
 ```protobuf
 syntax = "proto3";
