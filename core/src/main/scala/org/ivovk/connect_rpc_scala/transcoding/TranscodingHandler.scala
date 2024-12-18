@@ -1,10 +1,11 @@
-package org.ivovk.connect_rpc_scala
+package org.ivovk.connect_rpc_scala.transcoding
 
 import cats.effect.Async
 import cats.implicits.*
 import io.grpc.*
 import org.http4s.Status.Ok
 import org.http4s.{Header, Headers, Response}
+import org.ivovk.connect_rpc_scala.ErrorHandler
 import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`

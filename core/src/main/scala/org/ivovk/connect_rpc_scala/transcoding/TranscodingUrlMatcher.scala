@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala
+package org.ivovk.connect_rpc_scala.transcoding
 
 import cats.implicits.*
 import com.google.api.http.{CustomHttpPattern, HttpRule}

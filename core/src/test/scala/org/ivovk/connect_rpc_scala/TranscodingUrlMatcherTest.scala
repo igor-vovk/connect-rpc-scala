@@ -6,6 +6,7 @@ import org.http4s.Uri.Path.Root
 import org.http4s.implicits.uri
 import org.http4s.{Method, Request}
 import org.ivovk.connect_rpc_scala.grpc.{MethodName, MethodRegistry}
+import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
 import org.json4s.{JArray, JObject, JString}
 import org.scalatest.funsuite.AnyFunSuiteLike
 

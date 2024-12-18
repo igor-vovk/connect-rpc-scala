@@ -5,15 +5,12 @@ import cats.data.OptionT
 import cats.effect.{Async, Resource}
 import cats.implicits.*
 import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
-import org.http4s.Status.*
-import org.http4s.dsl.Http4sDsl
-import org.http4s.{HttpApp, HttpRoutes, MediaType, Method, Response, Uri}
+import org.http4s.{HttpApp, HttpRoutes, Response, Uri}
+import org.ivovk.connect_rpc_scala.connect.{ConnectHandler, ConnectRoutesProvider}
 import org.ivovk.connect_rpc_scala.grpc.*
-import org.ivovk.connect_rpc_scala.grpc.MergingBuilder.*
 import org.ivovk.connect_rpc_scala.http.*
-import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.ivovk.connect_rpc_scala.http.codec.*
-import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
+import org.ivovk.connect_rpc_scala.transcoding.{TranscodingHandler, TranscodingRoutesProvider, TranscodingUrlMatcher}
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
@@ -118,17 +115,6 @@ final class ConnectRouteBuilder[F[_] : Async] private(
    * Otherwise, [[build]] method should be preferred.
    */
   def buildRoutes: Resource[F, HttpRoutes[F]] = {
-    val httpDsl = Http4sDsl[F]
-    import httpDsl.*
-
-    val jsonCodec     = customJsonCodec.getOrElse(JsonMessageCodecBuilder[F]().build)
-    val codecRegistry = MessageCodecRegistry[F](
-      jsonCodec,
-      ProtoMessageCodec[F](),
-    )
-
-    val methodRegistry = MethodRegistry(services)
-
     for
       channel <- InProcessChannelBridge.create(
         services,
@@ -137,7 +123,15 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         executor,
         waitForShutdown,
       )
-    yield
+    yield {
+      val jsonCodec     = customJsonCodec.getOrElse(JsonMessageCodecBuilder[F]().build)
+      val codecRegistry = MessageCodecRegistry[F](
+        jsonCodec,
+        ProtoMessageCodec[F](),
+      )
+
+      val methodRegistry = MethodRegistry(services)
+
       val errorHandler = new ConnectErrorHandler[F](
         treatTrailersAsHeaders,
       )
@@ -149,31 +143,12 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         incomingHeadersFilter,
       )
 
-      val connectRoutes = HttpRoutes[F] {
-        case req@Method.GET -> `pathPrefix` / service / method :? EncodingQP(mediaType) +& MessageQP(message) =>
-          OptionT.fromOption[F](methodRegistry.get(service, method))
-            // Temporary support GET-requests for all methods,
-            // until https://github.com/scalapb/ScalaPB/pull/1774 is merged
-            .filter(_.descriptor.isSafe || true)
-            .semiflatMap { methodEntry =>
-              withCodec(codecRegistry, mediaType.some) { codec =>
-                val entity = RequestEntity[F](message, req.headers)
-
-                connectHandler.handle(entity, methodEntry)(using codec)
-              }
-            }
-        case req@Method.POST -> `pathPrefix` / service / method =>
-          OptionT.fromOption[F](methodRegistry.get(service, method))
-            .semiflatMap { methodEntry =>
-              withCodec(codecRegistry, req.contentType.map(_.mediaType)) { codec =>
-                val entity = RequestEntity[F](req.body, req.headers)
-
-                connectHandler.handle(entity, methodEntry)(using codec)
-              }
-            }
-        case _ =>
-          OptionT.none
-      }
+      val connectRoutes = new ConnectRoutesProvider[F](
+        pathPrefix,
+        methodRegistry,
+        codecRegistry,
+        connectHandler,
+      ).routes
 
       val transcodingUrlMatcher = TranscodingUrlMatcher.create[F](
         methodRegistry.all,
@@ -186,45 +161,17 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         incomingHeadersFilter,
       )
 
-      val transcodingRoutes = HttpRoutes[F] { req =>
-        OptionT.fromOption[F](transcodingUrlMatcher.matchesRequest(req))
-          .semiflatMap { case MatchedRequest(method, pathJson, queryJson) =>
-            given MessageCodec[F] = jsonCodec
-
-            given Companion[Message] = method.requestMessageCompanion
-
-            RequestEntity[F](req.body, req.headers).as[Message]
-              .flatMap { bodyMessage =>
-                val pathMessage  = jsonCodec.parser.fromJson[Message](pathJson)
-                val queryMessage = jsonCodec.parser.fromJson[Message](queryJson)
-
-                transcodingHandler.handleUnary(
-                  bodyMessage.merge(pathMessage).merge(queryMessage).build,
-                  req.headers,
-                  method
-                )
-              }
-          }
-      }
+      val transcodingRoutes = new TranscodingRoutesProvider(
+        transcodingUrlMatcher,
+        transcodingHandler,
+        jsonCodec
+      ).routes
 
       connectRoutes <+> transcodingRoutes
+    }
   }
 
   def build: Resource[F, HttpApp[F]] =
     buildRoutes.map(_.orNotFound)
-
-  private def withCodec(
-    registry: MessageCodecRegistry[F],
-    mediaType: Option[MediaType]
-  )(r: MessageCodec[F] => F[Response[F]]): F[Response[F]] = {
-    mediaType.flatMap(registry.byMediaType) match {
-      case Some(codec) => r(codec)
-      case None =>
-        val message = s"Unsupported media-type ${mediaType.show}. " +
-          s"Supported media types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}"
-
-        Response(UnsupportedMediaType).withEntity(message).pure[F]
-    }
-  }
 
 }
