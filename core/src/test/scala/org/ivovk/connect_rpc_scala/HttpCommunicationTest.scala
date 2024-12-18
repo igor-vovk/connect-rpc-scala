@@ -12,7 +12,7 @@ import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import test.HttpCommunicationTest.TestServiceGrpc.TestService
-import test.HttpCommunicationTest.{AddRequest, AddResponse, GetRequest, GetResponse}
+import test.HttpCommunicationTest.{AddRequest, AddResponse, GetRequest, GetResponse, RequestBodyMappingRequest, RequestBodyMappingResponse}
 
 import java.net.URLEncoder
 import scala.concurrent.{ExecutionContext, Future}
@@ -26,6 +26,10 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
 
     override def get(request: GetRequest): Future[GetResponse] = {
       Future.successful(GetResponse("Key is: " + request.key))
+    }
+
+    override def requestBodyMapping(request: RequestBodyMappingRequest): Future[RequestBodyMappingResponse] = {
+      Future.successful(RequestBodyMappingResponse(request.subRequest))
     }
   }
 
@@ -97,6 +101,27 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
           body <- response.as[String]
         yield {
           assert(body == """{"value":"Key is: 123"}""")
+          assert(response.status == Status.Ok)
+          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("Http field mapping") {
+    val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
+
+    ConnectRouteBuilder.forService[IO](service).build
+      .flatMap { app =>
+        Client.fromHttpApp(app).run(
+          Request[IO](Method.POST, uri"/body_mapping").withEntity(""" { "a": 1, "b": 2} """)
+        )
+      }
+      .use { response =>
+        for
+          body <- response.as[String]
+        yield {
+          assert(body == """{"requested":{"a":1,"b":2}}""")
           assert(response.status == Status.Ok)
           assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
         }

@@ -7,25 +7,31 @@ import scalapb.{GeneratedMessage, GeneratedMessageCompanion, json4s}
 
 import scala.util.chaining.*
 
-object JsonMessageCodecBuilder {
-  def apply[F[_] : Sync](): JsonMessageCodecBuilder[F] =
-    new JsonMessageCodecBuilder(
+case class JsonSerDeser[F[_]](
+  parser: json4s.Parser,
+  //printer: json4s.Printer,
+  codec: JsonMessageCodec[F],
+)
+
+object JsonSerDeserBuilder {
+  def apply[F[_] : Sync](): JsonSerDeserBuilder[F] =
+    new JsonSerDeserBuilder(
       typeRegistry = TypeRegistry.default,
       formatRegistry = JsonFormat.DefaultRegistry,
     )
 }
 
-case class JsonMessageCodecBuilder[F[_] : Sync] private(
+case class JsonSerDeserBuilder[F[_] : Sync] private(
   typeRegistry: TypeRegistry,
   formatRegistry: FormatRegistry,
 ) {
 
-  def registerType[T <: GeneratedMessage](using cmp: GeneratedMessageCompanion[T]): JsonMessageCodecBuilder[F] =
+  def registerType[T <: GeneratedMessage](using cmp: GeneratedMessageCompanion[T]): JsonSerDeserBuilder[F] =
     copy(
       typeRegistry = typeRegistry.addMessageByCompanion(cmp),
     )
 
-  def build: JsonMessageCodec[F] = {
+  def build: JsonSerDeser[F] = {
     val formatRegistry = this.formatRegistry
       .registerMessageFormatter[connectrpc.ErrorDetailsAny](
         ErrorDetailsAnyFormat.writer,
@@ -44,7 +50,11 @@ case class JsonMessageCodecBuilder[F[_] : Sync] private(
       .withTypeRegistry(typeRegistry)
       .withFormatRegistry(formatRegistry)
 
-    JsonMessageCodec[F](parser, printer)
+    JsonSerDeser[F](
+      parser = parser,
+      //printer = printer,
+      codec = new JsonMessageCodec[F](parser, printer)
+    )
   }
 
 }

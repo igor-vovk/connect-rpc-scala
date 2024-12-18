@@ -5,6 +5,7 @@ import com.google.api.http.{CustomHttpPattern, HttpRule}
 import org.http4s.{Method, Request, Uri}
 import org.ivovk.connect_rpc_scala
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
+import org.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, JsonTransform, SubKeyJsonTransform}
 import org.ivovk.connect_rpc_scala.http.json.JsonProcessing.*
 import org.json4s.JsonAST.{JField, JObject}
 import org.json4s.{JString, JValue}
@@ -15,6 +16,7 @@ case class MatchedRequest(
   method: MethodRegistry.Entry,
   pathJson: JValue,
   queryJson: JValue,
+  reqBodyTransform: JsonTransform,
 )
 
 object TranscodingUrlMatcher {
@@ -22,6 +24,7 @@ object TranscodingUrlMatcher {
     method: MethodRegistry.Entry,
     httpMethod: Option[Method],
     pattern: Uri.Path,
+    reqBodyTransform: JsonTransform,
   )
 
   sealed trait RouteTree
@@ -39,6 +42,7 @@ object TranscodingUrlMatcher {
   case class Leaf(
     httpMethod: Option[Method],
     method: MethodRegistry.Entry,
+    bodyMapper: JsonTransform,
   ) extends RouteTree
 
   private def mkTree(entries: Seq[Entry]): Vector[RouteTree] = {
@@ -47,7 +51,7 @@ object TranscodingUrlMatcher {
         maybeSegment match {
           case None =>
             entries.map { entry =>
-              Leaf(entry.httpMethod, entry.method)
+              Leaf(entry.httpMethod, entry.method, entry.reqBodyTransform)
             }
           case Some(head) =>
             val variableDef = this.isVariable(head)
@@ -69,7 +73,7 @@ object TranscodingUrlMatcher {
   }
 
   extension [A](it: Iterable[A]) {
-    // Preserves ordering of elements
+    // groupBy with preserving original ordering
     def groupByOrd[B](f: A => B): Map[B, Vector[A]] = {
       val result = collection.mutable.LinkedHashMap.empty[B, Vector[A]]
 
@@ -110,11 +114,13 @@ object TranscodingUrlMatcher {
 
         (httpRule :: additionalBindings).map { rule =>
           val (httpMethod, pattern) = extractMethodAndPattern(rule)
+          val bodyTransform         = extractRequestBodyTransform(rule)
 
           Entry(
             method,
             httpMethod,
             pathPrefix.concat(pattern),
+            bodyTransform,
           )
         }
       }
@@ -139,6 +145,12 @@ object TranscodingUrlMatcher {
 
     (method, path)
   }
+
+  private def extractRequestBodyTransform(rule: HttpRule): JsonTransform = {
+    rule.body match
+      case "*" | "" => AsIsJsonTransform
+      case fieldName => SubKeyJsonTransform(fieldName)
+  }
 }
 
 class TranscodingUrlMatcher[F[_]](
@@ -161,13 +173,14 @@ class TranscodingUrlMatcher[F[_]](
           else if pathSegment.encoded == patternSegment then
             children.colFirst(doMatch(_, pathTail, pathVars))
           else none
-        case Leaf(httpMethod, method) if path.isEmpty && httpMethod.forall(_ == req.method) =>
+        case Leaf(httpMethod, method, reqBodyTransform) if path.isEmpty && httpMethod.forall(_ == req.method) =>
           val queryParams = req.uri.query.toList.map((k, v) => k -> JString(v.getOrElse("")))
 
           MatchedRequest(
             method,
             JObject(groupFields(pathVars)),
-            JObject(groupFields(queryParams))
+            JObject(groupFields(queryParams)),
+            reqBodyTransform,
           ).some
         case _ => none
       }

@@ -203,13 +203,13 @@ supports_message_receive_limit: false
 
 ### GRPC Transcoding
 
-#### Support
+#### Supported features
 
 - [x] GET, POST, PUT, DELETE, PATCH methods
 - [x] Path parameters, e.g., `/v1/countries/{name}`
 - [x] Query parameters, repeating query parameters (e.g., `?a=1&a=2`) as arrays
 - [x] Request body (JSON)
-- [ ] Body field mapping, e.g. `body: "request"` (not supported yet), `body: "*"` (supported)
+- [x] Request body field mapping, e.g. `body: "request"` (supported), `body: "*"` (supported)
 - [ ] Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets` (not supported yet)
 
 ### Future improvements

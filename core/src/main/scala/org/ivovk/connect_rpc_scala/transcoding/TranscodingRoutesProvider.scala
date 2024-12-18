@@ -6,25 +6,25 @@ import cats.implicits.*
 import org.http4s.HttpRoutes
 import org.ivovk.connect_rpc_scala.grpc.MergingBuilder.*
 import org.ivovk.connect_rpc_scala.http.RequestEntity
-import org.ivovk.connect_rpc_scala.http.codec.{JsonMessageCodec, MessageCodec}
+import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, MessageCodec}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 class TranscodingRoutesProvider[F[_] : MonadThrow](
   urlMatcher: TranscodingUrlMatcher[F],
   handler: TranscodingHandler[F],
-  jsonCodec: JsonMessageCodec[F]
+  serDeser: JsonSerDeser[F]
 ) {
-  private given MessageCodec[F] = jsonCodec
-
   def routes: HttpRoutes[F] = HttpRoutes[F] { req =>
     OptionT.fromOption[F](urlMatcher.matchesRequest(req))
-      .semiflatMap { case MatchedRequest(method, pathJson, queryJson) =>
+      .semiflatMap { case MatchedRequest(method, pathJson, queryJson, reqBodyTransform) =>
         given Companion[Message] = method.requestMessageCompanion
+
+        given MessageCodec[F] = serDeser.codec.withDecodingJsonTransform(reqBodyTransform)
 
         RequestEntity[F](req.body, req.headers).as[Message]
           .flatMap { bodyMessage =>
-            val pathMessage  = jsonCodec.parser.fromJson[Message](pathJson)
-            val queryMessage = jsonCodec.parser.fromJson[Message](queryJson)
+            val pathMessage  = serDeser.parser.fromJson[Message](pathJson)
+            val queryMessage = serDeser.parser.fromJson[Message](queryJson)
 
             handler.handleUnary(
               bodyMessage.merge(pathMessage).merge(queryMessage).build,
@@ -34,6 +34,4 @@ class TranscodingRoutesProvider[F[_] : MonadThrow](
           }
       }
   }
-
-
 }

@@ -7,6 +7,7 @@ import fs2.{Chunk, Stream}
 import org.http4s.headers.`Content-Type`
 import org.http4s.{DecodeResult, Headers, InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
+import org.json4s.jackson.JsonMethods
 import org.slf4j.LoggerFactory
 import scalapb.json4s.{Parser, Printer}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
@@ -14,8 +15,9 @@ import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Compan
 import java.net.URLDecoder
 
 class JsonMessageCodec[F[_] : Sync](
-  val parser: Parser,
-  val printer: Printer,
+  parser: Parser,
+  printer: Printer,
+  decodingTransform: JsonTransform = AsIsJsonTransform,
 ) extends MessageCodec[F] {
 
   private val logger     = LoggerFactory.getLogger(getClass)
@@ -42,7 +44,11 @@ class JsonMessageCodec[F[_] : Sync](
         }
 
         if str.nonEmpty then
-          Sync[F].delay(parser.fromJsonString(str))
+          Sync[F].delay {
+            val json = JsonMethods.parse(str)
+
+            parser.fromJson(decodingTransform(json))
+          }
         else
           cmp.defaultInstance.pure[F]
       }
@@ -66,6 +72,11 @@ class JsonMessageCodec[F[_] : Sync](
     )
 
     compressor.compressed(options.encoding, entity)
+  }
+
+  def withDecodingJsonTransform(transform: JsonTransform): JsonMessageCodec[F] = {
+    if transform == this.decodingTransform then this
+    else new JsonMessageCodec[F](parser, printer, transform)
   }
 
 }

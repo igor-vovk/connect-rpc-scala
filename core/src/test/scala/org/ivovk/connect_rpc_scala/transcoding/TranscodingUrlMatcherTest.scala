@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala
+package org.ivovk.connect_rpc_scala.transcoding
 
 import cats.effect.IO
 import com.google.api.http.HttpRule
@@ -6,7 +6,7 @@ import org.http4s.Uri.Path.Root
 import org.http4s.implicits.uri
 import org.http4s.{Method, Request}
 import org.ivovk.connect_rpc_scala.grpc.{MethodName, MethodRegistry}
-import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
+import org.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, SubKeyJsonTransform}
 import org.json4s.{JArray, JObject, JString}
 import org.scalatest.funsuite.AnyFunSuiteLike
 
@@ -17,7 +17,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
       MethodRegistry.Entry(
         MethodName("CountriesService", "CreateCountry"),
         null,
-        Some(HttpRule().withPost("/countries")),
+        Some(HttpRule().withPost("/countries").withBody("country")),
         null
       ),
       MethodRegistry.Entry(
@@ -32,6 +32,12 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
         Some(HttpRule().withGet("/countries/{country_id}")),
         null
       ),
+      MethodRegistry.Entry(
+        MethodName("CountriesService", "UpdateCountry"),
+        null,
+        Some(HttpRule().withPut("/countries/{country_id}").withBody("*")),
+        null
+      )
     ),
     Root / "api"
   )
@@ -43,11 +49,21 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
     assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
   }
 
-  test("matches request with POST method") {
+  test("matches request with POST method and body transform") {
     val result = matcher.matchesRequest(Request[IO](Method.POST, uri"/api/countries"))
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "CreateCountry"))
+    assert(result.get.reqBodyTransform == SubKeyJsonTransform("country"))
+  }
+
+  test("matches request with PUT method") {
+    val result = matcher.matchesRequest(Request[IO](Method.PUT, uri"/api/countries/Uganda"))
+
+    assert(result.isDefined)
+    assert(result.get.method.name == MethodName("CountriesService", "UpdateCountry"))
+    assert(result.get.pathJson == JObject("country_id" -> JString("Uganda")))
+    assert(result.get.reqBodyTransform == AsIsJsonTransform)
   }
 
   test("extracts query parameters") {

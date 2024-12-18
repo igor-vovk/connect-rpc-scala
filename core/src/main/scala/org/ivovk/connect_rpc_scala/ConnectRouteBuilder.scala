@@ -32,7 +32,7 @@ object ConnectRouteBuilder {
       services = services,
       serverConfigurator = identity,
       channelConfigurator = identity,
-      customJsonCodec = None,
+      customJsonSerDeser = None,
       incomingHeadersFilter = DefaultIncomingHeadersFilter,
       pathPrefix = Uri.Path.Root,
       executor = ExecutionContext.global,
@@ -46,7 +46,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
   services: Seq[ServerServiceDefinition],
   serverConfigurator: Endo[ServerBuilder[_]],
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
-  customJsonCodec: Option[JsonMessageCodec[F]],
+  customJsonSerDeser: Option[JsonSerDeser[F]],
   incomingHeadersFilter: String => Boolean,
   pathPrefix: Uri.Path,
   executor: Executor,
@@ -58,7 +58,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
     services: Seq[ServerServiceDefinition] = services,
     serverConfigurator: Endo[ServerBuilder[_]] = serverConfigurator,
     channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
-    customJsonCodec: Option[JsonMessageCodec[F]] = customJsonCodec,
+    customJsonSerDeser: Option[JsonSerDeser[F]] = customJsonSerDeser,
     incomingHeadersFilter: String => Boolean = incomingHeadersFilter,
     pathPrefix: Uri.Path = pathPrefix,
     executor: Executor = executor,
@@ -69,7 +69,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       services,
       serverConfigurator,
       channelConfigurator,
-      customJsonCodec,
+      customJsonSerDeser,
       incomingHeadersFilter,
       pathPrefix,
       executor,
@@ -83,8 +83,8 @@ final class ConnectRouteBuilder[F[_] : Async] private(
   def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectRouteBuilder[F] =
     copy(channelConfigurator = method)
 
-  def withJsonCodecConfigurator(method: Endo[JsonMessageCodecBuilder[F]]): ConnectRouteBuilder[F] =
-    copy(customJsonCodec = Some(method(JsonMessageCodecBuilder[F]()).build))
+  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): ConnectRouteBuilder[F] =
+    copy(customJsonSerDeser = Some(method(JsonSerDeserBuilder[F]()).build))
 
   def withIncomingHeadersFilter(filter: String => Boolean): ConnectRouteBuilder[F] =
     copy(incomingHeadersFilter = filter)
@@ -124,9 +124,9 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         waitForShutdown,
       )
     yield {
-      val jsonCodec     = customJsonCodec.getOrElse(JsonMessageCodecBuilder[F]().build)
+      val jsonSerDeser  = customJsonSerDeser.getOrElse(JsonSerDeserBuilder[F]().build)
       val codecRegistry = MessageCodecRegistry[F](
-        jsonCodec,
+        jsonSerDeser.codec,
         ProtoMessageCodec[F](),
       )
 
@@ -164,7 +164,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       val transcodingRoutes = new TranscodingRoutesProvider(
         transcodingUrlMatcher,
         transcodingHandler,
-        jsonCodec
+        jsonSerDeser
       ).routes
 
       connectRoutes <+> transcodingRoutes
