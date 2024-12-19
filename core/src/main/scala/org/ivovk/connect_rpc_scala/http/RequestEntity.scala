@@ -3,7 +3,7 @@ package org.ivovk.connect_rpc_scala.http
 import cats.MonadThrow
 import fs2.Stream
 import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
-import org.http4s.{Charset, ContentCoding, Headers}
+import org.http4s.{Charset, ContentCoding, Headers, Request}
 import org.ivovk.connect_rpc_scala.http.Headers.`Connect-Timeout-Ms`
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
@@ -14,6 +14,9 @@ object RequestEntity {
     def timeout: Option[Long] =
       h.get[`Connect-Timeout-Ms`].map(_.value)
   }
+
+  def fromBody[F[_]](req: Request[F]): RequestEntity[F] =
+    RequestEntity(req.body, req.headers)
 }
 
 /**

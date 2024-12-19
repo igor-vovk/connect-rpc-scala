@@ -40,9 +40,7 @@ object TranscodingUrlMatcher {
   ) extends RouteTree
 
   case class Leaf(
-    httpMethod: Option[Method],
-    method: MethodRegistry.Entry,
-    bodyMapper: JsonTransform,
+    entry: Entry,
   ) extends RouteTree
 
   private def mkTree(entries: Seq[Entry]): Vector[RouteTree] = {
@@ -50,9 +48,7 @@ object TranscodingUrlMatcher {
       .flatMap { (maybeSegment, entries) =>
         maybeSegment match {
           case None =>
-            entries.map { entry =>
-              Leaf(entry.httpMethod, entry.method, entry.reqBodyTransform)
-            }
+            entries.map(Leaf(_))
           case Some(head) =>
             val variableDef = this.isVariable(head)
             val segment     =
@@ -104,7 +100,7 @@ object TranscodingUrlMatcher {
     length > 2 && enc(0) == '{' && enc(length - 1) == '}'
   }
 
-  def create[F[_]](
+  def apply[F[_]](
     methods: Seq[MethodRegistry.Entry],
     pathPrefix: Uri.Path,
   ): TranscodingUrlMatcher[F] = {
@@ -159,28 +155,28 @@ class TranscodingUrlMatcher[F[_]](
 
   import TranscodingUrlMatcher.*
 
-  def matchesRequest(req: Request[F]): Option[MatchedRequest] = {
+  def matchRequest(req: Request[F]): Option[MatchedRequest] = {
     def doMatch(node: RouteTree, path: List[Uri.Path.Segment], pathVars: List[JField]): Option[MatchedRequest] = {
       node match {
         case Node(isVariable, patternSegment, children) if path.nonEmpty =>
-          val pathSegment = path.head
+          val pathSegment = path.head.encoded
           val pathTail    = path.tail
 
           if isVariable then
-            val newPatchVars = (patternSegment -> JString(pathSegment.encoded)) :: pathVars
+            val newPatchVars = (patternSegment -> JString(pathSegment)) :: pathVars
 
             children.colFirst(doMatch(_, pathTail, newPatchVars))
-          else if pathSegment.encoded == patternSegment then
+          else if pathSegment == patternSegment then
             children.colFirst(doMatch(_, pathTail, pathVars))
           else none
-        case Leaf(httpMethod, method, reqBodyTransform) if path.isEmpty && httpMethod.forall(_ == req.method) =>
+        case Leaf(entry) if path.isEmpty && entry.httpMethod.forall(_ == req.method) =>
           val queryParams = req.uri.query.toList.map((k, v) => k -> JString(v.getOrElse("")))
 
           MatchedRequest(
-            method,
+            entry.method,
             JObject(groupFields(pathVars)),
             JObject(groupFields(queryParams)),
-            reqBodyTransform,
+            entry.reqBodyTransform,
           ).some
         case _ => none
       }

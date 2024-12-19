@@ -12,7 +12,7 @@ import org.scalatest.funsuite.AnyFunSuiteLike
 
 class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
-  private val matcher = TranscodingUrlMatcher.create[IO](
+  private val matcher = TranscodingUrlMatcher[IO](
     Seq(
       MethodRegistry.Entry(
         MethodName("CountriesService", "CreateCountry"),
@@ -43,14 +43,14 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
   )
 
   test("matches request with GET method") {
-    val result = matcher.matchesRequest(Request[IO](Method.GET, uri"/api/countries/list"))
+    val result = matcher.matchRequest(Request[IO](Method.GET, uri"/api/countries/list"))
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
   }
 
   test("matches request with POST method and body transform") {
-    val result = matcher.matchesRequest(Request[IO](Method.POST, uri"/api/countries"))
+    val result = matcher.matchRequest(Request[IO](Method.POST, uri"/api/countries"))
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "CreateCountry"))
@@ -58,7 +58,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
   }
 
   test("matches request with PUT method") {
-    val result = matcher.matchesRequest(Request[IO](Method.PUT, uri"/api/countries/Uganda"))
+    val result = matcher.matchRequest(Request[IO](Method.PUT, uri"/api/countries/Uganda"))
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "UpdateCountry"))
@@ -67,7 +67,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
   }
 
   test("extracts query parameters") {
-    val result = matcher.matchesRequest(Request[IO](Method.GET, uri"/api/countries/list?limit=10&offset=5"))
+    val result = matcher.matchRequest(Request[IO](Method.GET, uri"/api/countries/list?limit=10&offset=5"))
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
@@ -75,7 +75,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
   }
 
   test("matches request with path parameter and extracts it") {
-    val result = matcher.matchesRequest(Request[IO](Method.GET, uri"/api/countries/Uganda"))
+    val result = matcher.matchRequest(Request[IO](Method.GET, uri"/api/countries/Uganda"))
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "GetCountry"))
@@ -83,7 +83,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
   }
 
   test("extracts repeating query parameters") {
-    val result = matcher.matchesRequest(Request[IO](Method.GET, uri"/api/countries/list?limit=10&limit=20"))
+    val result = matcher.matchRequest(Request[IO](Method.GET, uri"/api/countries/list?limit=10&limit=20"))
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))

@@ -1,10 +1,10 @@
 ![](docs/connect-rpc-scala-logo.png)
 
-# REST API for GRPC services with Connect protocol / GRPC Transcoding for Scala
+# REST API for GRPC services / GRPC Transcoding for Scala
 
 ![Maven Central](https://img.shields.io/maven-central/v/io.github.igor-vovk/connect-rpc-scala-core_3?style=flat-square&color=green)
 
-This library makes it easy to expose your GRPC services to the clients using Connect protocol (with JSON messages),
+The library allows exposing GRPC services as REST-APIs using Connect protocol (with JSON messages) + GRPC Transcoding,
 without Envoy or any other proxy.
 
 In essence, a service implementing the following protobuf definition:
@@ -28,7 +28,7 @@ message GetExampleResponse {
 }
 ```
 
-Will be exposed to the clients as a REST API:
+Is exposed to the clients as a REST API:
 
 ```http
 POST /example.ExampleService/GetExample HTTP/1.1
@@ -45,12 +45,12 @@ HTTP/1.1 200 OK
 }
 ```
 
-It is compatible with Connect protocol clients (e.g., you can generate clients with [Connect RPC](https://connectrpc.com) `protoc` and
-`buf` plugins instead of writing requests manually).
+It is compatible with Connect protocol clients (e.g., generated with [Connect RPC](https://connectrpc.com) `protoc` and
+`buf` plugins).
 
-In addition, the library supports creating free-form REST APIs,
-using [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) approach
-(full support of `google.api.http` annotations is in progress).:
+In addition, the library allows creating free-form REST APIs
+using [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) approach (based on `google.api.http`
+annotations that can be added to methods):
 
 ```protobuf
 syntax = "proto3";
@@ -76,7 +76,7 @@ message GetExampleResponse {
 }
 ```
 
-In addition to the previous way of calling it, this endpoint will be exposed as a REST API:
+In addition to the previous way of execution, such endpoints are exposed in a more RESTful way:
 
 ```http
 GET /example/123 HTTP/1.1
@@ -88,17 +88,19 @@ HTTP/1.1 200 OK
 }
 ```
 
-Since integration happens on the foundational ScalaPB level, it works with all common GRPC code-generators:
+---
+
+The library works with all commonly used GRPC code-generators for Scala:
 
 * [ScalaPB](https://scalapb.github.io) services with `Future` monad
 * [fs2-grpc](https://github.com/typelevel/fs2-grpc), built on top of `cats-effect` and `fs2`
 * [ZIO gRPC](https://scalapb.github.io/zio-grpc/), built on top of `ZIO`
 
-*Note*: at the moment, only unary (non-streaming) methods are supported.
+At the moment, only unary (non-streaming) methods are supported.
 
 ## Usage
 
-For SBT (you also need to install particular `http4s` server implementation):
+Installing with SBT (you also need to install one of `http4s` server implementations):
 
 ```scala
 libraryDependencies ++= Seq(
@@ -107,8 +109,15 @@ libraryDependencies ++= Seq(
 )
 ```
 
-After installing the library, you can expose your GRPC service to the clients using Connect protocol (suppose you
-already have a GRPC services generated with ScalaPB):
+The interface provided by the library can be expressed as:
+
+```scala
+(_: List[io.grpc.ServiceDefinition]) => org.http4s.HttpApp[F]
+```
+
+E.g., it takes a list of GRPC services and returns a list of `http4s` routes based on those services.
+
+This interface is implemented by `ConnectRouteBuilder`class:
 
 ```scala
 import org.ivovk.connect_rpc_scala.ConnectRpcHttpRoutes

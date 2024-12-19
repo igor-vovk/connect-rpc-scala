@@ -15,13 +15,13 @@ class TranscodingRoutesProvider[F[_] : MonadThrow](
   serDeser: JsonSerDeser[F]
 ) {
   def routes: HttpRoutes[F] = HttpRoutes[F] { req =>
-    OptionT.fromOption[F](urlMatcher.matchesRequest(req))
+    OptionT.fromOption[F](urlMatcher.matchRequest(req))
       .semiflatMap { case MatchedRequest(method, pathJson, queryJson, reqBodyTransform) =>
         given Companion[Message] = method.requestMessageCompanion
 
         given MessageCodec[F] = serDeser.codec.withDecodingJsonTransform(reqBodyTransform)
 
-        RequestEntity[F](req.body, req.headers).as[Message]
+        RequestEntity.fromBody(req).as[Message]
           .flatMap { bodyMessage =>
             val pathMessage  = serDeser.parser.fromJson[Message](pathJson)
             val queryMessage = serDeser.parser.fromJson[Message](queryJson)

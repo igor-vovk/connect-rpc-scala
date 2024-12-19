@@ -132,36 +132,36 @@ final class ConnectRouteBuilder[F[_] : Async] private(
 
       val methodRegistry = MethodRegistry(services)
 
-      val errorHandler = new ConnectErrorHandler[F](
+      val errorHandler = ConnectErrorHandler[F](
         treatTrailersAsHeaders,
       )
 
-      val connectHandler = new ConnectHandler(
+      val connectHandler = ConnectHandler(
         channel,
         errorHandler,
         treatTrailersAsHeaders,
         incomingHeadersFilter,
       )
 
-      val connectRoutes = new ConnectRoutesProvider[F](
+      val connectRoutes = ConnectRoutesProvider[F](
         pathPrefix,
         methodRegistry,
         codecRegistry,
         connectHandler,
       ).routes
 
-      val transcodingUrlMatcher = TranscodingUrlMatcher.create[F](
+      val transcodingUrlMatcher = TranscodingUrlMatcher[F](
         methodRegistry.all,
         pathPrefix,
       )
 
-      val transcodingHandler = new TranscodingHandler(
+      val transcodingHandler = TranscodingHandler(
         channel,
         errorHandler,
         incomingHeadersFilter,
       )
 
-      val transcodingRoutes = new TranscodingRoutesProvider(
+      val transcodingRoutes = TranscodingRoutesProvider(
         transcodingUrlMatcher,
         transcodingHandler,
         jsonSerDeser
