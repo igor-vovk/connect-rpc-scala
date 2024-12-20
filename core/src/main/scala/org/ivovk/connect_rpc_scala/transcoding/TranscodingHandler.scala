@@ -69,7 +69,7 @@ class TranscodingHandler[F[_] : Async](
 
         Response(Ok, headers = headers).withMessage(response.value)
       }
-      .handleError(errorHandler.handle)
+      .handleErrorWith(errorHandler.handle)
   }
 
 }

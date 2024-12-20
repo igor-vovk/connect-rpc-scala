@@ -6,7 +6,7 @@ import cats.effect.{Async, Resource}
 import cats.implicits.*
 import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import org.http4s.{HttpApp, HttpRoutes, Response, Uri}
-import org.ivovk.connect_rpc_scala.connect.{ConnectHandler, ConnectRoutesProvider}
+import org.ivovk.connect_rpc_scala.connect.{ConnectErrorHandler, ConnectHandler, ConnectRoutesProvider}
 import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.codec.*

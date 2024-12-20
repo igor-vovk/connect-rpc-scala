@@ -43,7 +43,7 @@ class ConnectHandler[F[_] : Async](
           io.grpc.Status.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported")
         ))
 
-    f.handleError(errorHandler.handle)
+    f.handleErrorWith(errorHandler.handle)
   }
 
   private def handleUnary(
