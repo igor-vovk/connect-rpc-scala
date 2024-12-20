@@ -229,6 +229,45 @@ supports_message_receive_limit: false
 - [ ] Support configurable timeouts
 - [ ] Support non-unary (streaming) methods
 
+### Is it production-ready?
+
+Public APIs on the [dosh.at](https://dosh.at) website are implemented with it, you can open Web Inspector and see the
+requests being made to the server (private APIs are just straight GRPC communication).
+
+Connect RPC conformance tests are run on every commit.
+The library is not a web-server or proxy, it uses `http4s` as a server implementation, and it uses official
+`GRPC-inprocess` bridge to communicate with the GRPC services.
+JSON ↔ Protobuf conversions are done using the `scalapb-json4s` library.
+
+What the library does is just puts it all together, exposing HTTP routes, where it parses JSON to case classes, resolves
+particular GRPC endpoint and calls it.
+
+### Performance
+
+Performance is not a primary goal of the library, but it is designed to be efficient.
+
+There is no additional serialization/deserialization overhead, after JSON messages are parsed to case classes they
+aren’t serialized to protobuf anymore:
+GRPC bridge has some built-in optimizations to avoid unnecessary serialization-deserialization of the data.
+Headers are converted between `http4s` and `grpc-java` types, but it is a very lightweight operation.
+
+If performance is a concern, it is recommended to switch to Protobuf messages,
+as it is more efficient: JSON messages are larger and slower to parse.
+Protobuf messages are supported by the protocol and the library itself (it's a 1-line switch, `useBinaryMessages` option
+in TypeScript client).
+ScalaPB will do decoding/encoding in this case.
+
+GRPC Transcoding is a little bit less optimal, since some additional JSON manipulations are done:
+
+* `a.b.c` fields are converted to `a: { b: { c: ... } }` json-objects when they’re used in path and query parameters
+* fields from POST-body, query and path parameters are merged into a single JSON object (I have doubts most APIs use all
+  of them at once, so it is not a big deal)
+
+Consider that normally you would use this library only once, where request lands on the server, and then you would
+communicate with the internal services using GRPC.
+And it should be compared with using a separate proxy (Envoy or GRPC Gateway) for the same purpose, which is one more
+hop, and needs protobuf files.
+
 ### Thanks
 
 The library is inspired and takes some ideas from the [grpc-json-bridge](https://github.com/avast/grpc-json-bridge).
