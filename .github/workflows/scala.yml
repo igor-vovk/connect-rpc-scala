@@ -21,6 +21,8 @@ jobs:
           distribution: 'temurin'
           cache: 'sbt'
 
+      - uses: sbt/setup-sbt@v1
+
       - name: Run tests
         run: sbt test
 
@@ -33,3 +35,26 @@ jobs:
 
       - name: Run conformance tests
         run: docker build . --progress=plain
+
+  dependency-graph:
+    name: Update Dependency Graph
+    runs-on: ubuntu-latest
+
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'sbt'
+
+      - uses: sbt/setup-sbt@v1
+
+      - uses: scalacenter/sbt-dependency-submission@v3
