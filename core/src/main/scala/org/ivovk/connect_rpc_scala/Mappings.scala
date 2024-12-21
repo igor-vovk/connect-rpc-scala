@@ -7,49 +7,54 @@ import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
 
-object Mappings extends HeaderMappings, StatusCodeMappings, ResponseCodeExtensions
+class HeaderMapping(
+  headersFilter: String => Boolean,
+  metadataFilter: String => Boolean,
+  treatTrailersAsHeaders: Boolean,
+) {
 
-trait HeaderMappings {
-
-  extension (headers: Headers) {
-    def toMetadata(filter: String => Boolean): Metadata = {
-      val metadata = new Metadata()
-      headers.foreach { header =>
-        if (filter(header.name.toString)) {
-          metadata.put(asciiKey(header.name.toString), header.value)
-        }
+  def toMetadata(headers: Headers): Metadata = {
+    val metadata = new Metadata()
+    headers.headers.foreach { header =>
+      val headerName = header.name.toString
+      if (headersFilter(headerName)) {
+        metadata.put(asciiKey(headerName), header.value)
       }
-      metadata
     }
+    metadata
   }
 
-  extension (metadata: Metadata) {
-    private def headers(prefix: String = ""): Headers = {
-      val keys = metadata.keys()
-      if (keys.isEmpty) return Headers.empty
+  private def headers(
+    metadata: Metadata,
+    trailing: Boolean = false,
+  ): Headers = {
+    val keys = metadata.keys()
+    if (keys.isEmpty) return Headers.empty
 
-      val b = List.newBuilder[Header.Raw]
+    val b = List.newBuilder[Header.Raw]
 
-      keys.forEach { key =>
-        val name = CIString(prefix + key)
+    keys.forEach { key =>
+      if (metadataFilter(key)) {
+        val name = if (trailing) CIString(s"trailer-$key") else CIString(key)
 
         metadata.getAll(asciiKey(key)).forEach { value =>
           b += Header.Raw(name, value)
         }
       }
-
-      new Headers(b.result())
     }
 
-    def toHeaders(trailing: Boolean = false): Headers = {
-      val prefix = if trailing then "trailer-" else ""
-
-      headers(prefix)
-    }
-
+    new Headers(b.result())
   }
 
+  def toHeaders(metadata: Metadata): Headers =
+    headers(metadata)
+
+  def trailersToHeaders(metadata: Metadata): Headers =
+    headers(metadata, trailing = !treatTrailersAsHeaders)
+
 }
+
+object Mappings extends StatusCodeMappings, ResponseCodeExtensions
 
 trait ResponseCodeExtensions {
   extension [F[_]](response: Response[F]) {

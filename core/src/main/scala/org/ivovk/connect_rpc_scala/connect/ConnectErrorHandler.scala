@@ -4,16 +4,16 @@ import cats.Applicative
 import cats.implicits.*
 import io.grpc.{Metadata, StatusException, StatusRuntimeException}
 import org.http4s.{MessageFailure, Response}
-import org.ivovk.connect_rpc_scala.ErrorHandler
 import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec
+import org.ivovk.connect_rpc_scala.{ErrorHandler, HeaderMapping}
 import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters.*
 
-class ConnectErrorHandler[F[_]: Applicative](
-  treatTrailersAsHeaders: Boolean = false,
+class ConnectErrorHandler[F[_] : Applicative](
+  headerMapping: HeaderMapping,
 ) extends ErrorHandler[F] {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -43,7 +43,7 @@ class ConnectErrorHandler[F[_]: Applicative](
     val details = Option(metadata.removeAll(GrpcHeaders.ErrorDetailsKey))
       .fold(Seq.empty)(_.asScala.toSeq)
 
-    val headers = metadata.toHeaders(trailing = !treatTrailersAsHeaders)
+    val headers = headerMapping.trailersToHeaders(metadata)
 
     if (logger.isTraceEnabled) {
       logger.trace(s"<<< Http Status: $httpStatus, Connect Error Code: $connectCode")

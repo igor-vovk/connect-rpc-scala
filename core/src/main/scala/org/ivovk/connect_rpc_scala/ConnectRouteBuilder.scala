@@ -21,6 +21,9 @@ object ConnectRouteBuilder {
   private val DefaultIncomingHeadersFilter: String => Boolean = name =>
     !name.toLowerCase.startsWith("connection")
 
+  private val DefaultOutgoingHeadersFilter: String => Boolean = name =>
+    !name.startsWith("grpc-")
+
   def forService[F[_] : Async](service: ServerServiceDefinition): ConnectRouteBuilder[F] =
     forServices(Seq(service))
 
@@ -34,6 +37,7 @@ object ConnectRouteBuilder {
       channelConfigurator = identity,
       customJsonSerDeser = None,
       incomingHeadersFilter = DefaultIncomingHeadersFilter,
+      outgoingHeadersFilter = DefaultOutgoingHeadersFilter,
       pathPrefix = Uri.Path.Root,
       executor = ExecutionContext.global,
       waitForShutdown = 5.seconds,
@@ -49,6 +53,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
   customJsonSerDeser: Option[JsonSerDeser[F]],
   incomingHeadersFilter: String => Boolean,
+  outgoingHeadersFilter: String => Boolean,
   pathPrefix: Uri.Path,
   executor: Executor,
   waitForShutdown: Duration,
@@ -62,6 +67,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
     channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
     customJsonSerDeser: Option[JsonSerDeser[F]] = customJsonSerDeser,
     incomingHeadersFilter: String => Boolean = incomingHeadersFilter,
+    outgoingHeadersFilter: String => Boolean = outgoingHeadersFilter,
     pathPrefix: Uri.Path = pathPrefix,
     executor: Executor = executor,
     waitForShutdown: Duration = waitForShutdown,
@@ -74,6 +80,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       channelConfigurator,
       customJsonSerDeser,
       incomingHeadersFilter,
+      outgoingHeadersFilter,
       pathPrefix,
       executor,
       waitForShutdown,
@@ -97,6 +104,14 @@ final class ConnectRouteBuilder[F[_] : Async] private(
    */
   def withIncomingHeadersFilter(filter: String => Boolean): ConnectRouteBuilder[F] =
     copy(incomingHeadersFilter = filter)
+
+  /**
+   * Filter for outgoing headers.
+   *
+   * By default, headers with "grpc-" prefix are filtered out.
+   */
+  def withOutgoingHeadersFilter(filter: String => Boolean): ConnectRouteBuilder[F] =
+    copy(outgoingHeadersFilter = filter)
 
   /**
    * Prefix for all routes created by this builder.
@@ -148,6 +163,12 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         waitForShutdown,
       )
     yield {
+      val headerMapping = HeaderMapping(
+        incomingHeadersFilter,
+        outgoingHeadersFilter,
+        treatTrailersAsHeaders,
+      )
+
       val jsonSerDeser  = customJsonSerDeser.getOrElse(JsonSerDeserBuilder[F]().build)
       val codecRegistry = MessageCodecRegistry[F](
         jsonSerDeser.codec,
@@ -157,14 +178,13 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       val methodRegistry = MethodRegistry(services)
 
       val connectErrorHandler = ConnectErrorHandler[F](
-        treatTrailersAsHeaders,
+        headerMapping,
       )
 
       val connectHandler = ConnectHandler(
         channel,
         connectErrorHandler,
-        treatTrailersAsHeaders,
-        incomingHeadersFilter,
+        headerMapping,
       )
 
       val connectRoutes = ConnectRoutesProvider[F](
@@ -182,7 +202,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       val transcodingHandler = TranscodingHandler(
         channel,
         transcodingErrorHandler.getOrElse(connectErrorHandler),
-        incomingHeadersFilter,
+        headerMapping,
       )
 
       val transcodingRoutes = TranscodingRoutesProvider(

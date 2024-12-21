@@ -6,12 +6,12 @@ import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import org.http4s.Status.Ok
 import org.http4s.{Header, Response}
-import org.ivovk.connect_rpc_scala.ErrorHandler
 import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
 import org.ivovk.connect_rpc_scala.http.RequestEntity
 import org.ivovk.connect_rpc_scala.http.codec.{Compressor, EncodeOptions, MessageCodec}
+import org.ivovk.connect_rpc_scala.{ErrorHandler, HeaderMapping}
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
 
@@ -21,8 +21,7 @@ import scala.util.chaining.*
 class ConnectHandler[F[_] : Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
-  treatTrailersAsHeaders: Boolean,
-  incomingHeadersFilter: String => Boolean,
+  headerMapping: HeaderMapping,
 ) {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -77,13 +76,13 @@ class ConnectHandler[F[_] : Async](
           channel,
           method.descriptor,
           callOptions,
-          req.headers.toMetadata(incomingHeadersFilter),
+          headerMapping.toMetadata(req.headers),
           message
         )
       }
       .map { response =>
-        val headers = response.headers.toHeaders() ++
-          response.trailers.toHeaders(trailing = !treatTrailersAsHeaders)
+        val headers = headerMapping.toHeaders(response.headers) ++
+          headerMapping.trailersToHeaders(response.trailers)
 
         if (logger.isTraceEnabled) {
           logger.trace(s"<<< Headers: ${headers.redactSensitive()}")

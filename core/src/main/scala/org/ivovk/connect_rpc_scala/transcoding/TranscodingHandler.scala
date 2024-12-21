@@ -5,7 +5,7 @@ import cats.implicits.*
 import io.grpc.*
 import org.http4s.Status.Ok
 import org.http4s.{Header, Headers, Response}
-import org.ivovk.connect_rpc_scala.ErrorHandler
+import org.ivovk.connect_rpc_scala.{ErrorHandler, HeaderMapping}
 import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
@@ -21,7 +21,7 @@ import scala.util.chaining.*
 class TranscodingHandler[F[_] : Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
-  incomingHeadersFilter: String => Boolean,
+  headerMapping: HeaderMapping,
 ) {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -57,11 +57,12 @@ class TranscodingHandler[F[_] : Async](
         channel,
         method.descriptor,
         callOptions,
-        headers.toMetadata(incomingHeadersFilter),
+        headerMapping.toMetadata(headers),
         message
       )
       .map { response =>
-        val headers = response.headers.toHeaders() ++ response.trailers.toHeaders()
+        val headers = headerMapping.toHeaders(response.headers) ++
+          headerMapping.toHeaders(response.trailers)
 
         if (logger.isTraceEnabled) {
           logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
