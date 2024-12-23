@@ -181,7 +181,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         headerMapping,
       )
 
-      val connectHandler = ConnectHandler(
+      val connectHandler = ConnectHandler[F](
         channel,
         connectErrorHandler,
         headerMapping,
@@ -199,13 +199,13 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         pathPrefix,
       )
 
-      val transcodingHandler = TranscodingHandler(
+      val transcodingHandler = TranscodingHandler[F](
         channel,
         transcodingErrorHandler.getOrElse(connectErrorHandler),
         headerMapping,
       )
 
-      val transcodingRoutes = TranscodingRoutesProvider(
+      val transcodingRoutes = TranscodingRoutesProvider[F](
         transcodingUrlMatcher,
         transcodingHandler,
         jsonSerDeser

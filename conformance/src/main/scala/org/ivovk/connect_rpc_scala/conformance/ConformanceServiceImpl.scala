@@ -4,7 +4,10 @@ import cats.effect.Async
 import cats.implicits.*
 import com.google.protobuf.ByteString
 import connectrpc.conformance.v1.*
+import io.grpc.internal.GrpcUtil
 import io.grpc.{Metadata, Status, StatusRuntimeException}
+import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
+import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders.asciiKey
 import org.ivovk.connect_rpc_scala.syntax.all.*
 
 import java.util.concurrent.TimeUnit
@@ -54,7 +57,7 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
   ): F[UnaryHandlerResponse] = {
     val requestInfo = ConformancePayload.RequestInfo(
       requestHeaders = mkConformanceHeaders(ctx),
-      timeoutMs = extractTimeout(ctx),
+      timeoutMs = extractTimeoutMs(ctx),
       requests = requests
     )
 
@@ -89,28 +92,26 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
 
   }
 
-  private def keyof(key: String): Metadata.Key[String] =
-    Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER)
-
   private def mkConformanceHeaders(metadata: Metadata): Seq[Header] = {
     metadata.keys().asScala.map { key =>
-      Header(key, metadata.getAll(keyof(key)).asScala.toSeq)
+      Header(key, metadata.getAll(asciiKey(key)).asScala.toSeq)
     }.toSeq
   }
 
   private def mkMetadata(headers: Seq[Header]): Metadata = {
     val metadata = new Metadata()
     headers.foreach { h =>
+      val key = asciiKey(h.name)
+
       h.value.foreach { v =>
-        metadata.put(keyof(h.name), v)
+        metadata.put(key, v)
       }
     }
     metadata
   }
 
-  private def extractTimeout(metadata: Metadata): Option[Long] = {
-    Option(metadata.get(keyof("grpc-timeout")))
-      .map(v => v.substring(0, v.length - 1).toLong / 1000)
+  private def extractTimeoutMs(metadata: Metadata): Option[Long] = {
+    Option(metadata.get(GrpcUtil.TIMEOUT_KEY)).map(_ / 1_000_000)
   }
 
   override def serverStream(

@@ -148,8 +148,8 @@ httpServer.use(_ => IO.never).unsafeRunSync()
 
 ### Hint: GRPC OpenTelemetry integration
 
-Since the library creates a separate "fake" GRPC server, traffic going through it won't be captured by the
-instrumentation of your main GRPC server (if any).
+Since the library creates a separate in-process GRPC server, traffic going through it won't be captured by the
+instrumentation of your main GRPC server (if there is any).
 
 Here is how you can integrate OpenTelemetry with the Connect-RPC server:
 
@@ -267,6 +267,14 @@ Consider that normally you would use this library only once, where request lands
 communicate with the internal services using GRPC.
 And it should be compared with using a separate proxy (Envoy or GRPC Gateway) for the same purpose, which is one more
 hop, and needs protobuf files.
+
+#### Header Modifications
+
+* All incoming `Connection-*` headers are removed, as they aren’t allowed by GRPC.
+* All outgoing `grpc-*` headers are removed.
+* Original `User-Agent` request header is renamed to `x-user-agent`,
+  `user-agent` is set to the in-process client's User Agent (`grpc-java-inprocess/1.69.0`),
+  there is no way to disable it.
 
 ### Thanks
 

@@ -12,6 +12,8 @@ object GrpcHeaders {
       override def parseBytes(serialized: Array[Byte]): ErrorDetailsAny = ErrorDetailsAny.parseFrom(serialized)
     })
 
+  val XUserAgentKey: Metadata.Key[String] = asciiKey("x-user-agent")
+
   inline def asciiKey(name: String): Metadata.Key[String] =
     Metadata.Key.of(name, Metadata.ASCII_STRING_MARSHALLER)
 

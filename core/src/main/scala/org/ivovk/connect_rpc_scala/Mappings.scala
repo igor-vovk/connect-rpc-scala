@@ -2,6 +2,7 @@ package org.ivovk.connect_rpc_scala
 
 import io.grpc.{Metadata, Status}
 import org.http4s.{Header, Headers, Response}
+import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders.asciiKey
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import org.typelevel.ci.CIString
@@ -18,11 +19,20 @@ class HeaderMapping(
     headers.headers.foreach { header =>
       val headerName = header.name.toString
       if (headersFilter(headerName)) {
-        metadata.put(asciiKey(headerName), header.value)
+        metadata.put(metadataKeyByHeaderName(headerName), header.value)
       }
     }
     metadata
   }
+
+  private def metadataKeyByHeaderName(headerName: String): Metadata.Key[String] =
+    headerName match {
+      case "User-Agent" | "user-agent" =>
+        // Rename `User-Agent` to `x-user-agent` because `user-agent` is overridden by gRPC
+        GrpcHeaders.XUserAgentKey
+      case _ =>
+        asciiKey(headerName)
+    }
 
   private def headers(
     metadata: Metadata,
