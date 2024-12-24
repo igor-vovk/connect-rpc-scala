@@ -11,9 +11,12 @@ Here is how you can integrate OpenTelemetry with the Connect-RPC server
 ```scala
 // Dependencies.scala
 object Dependencies {
+
   def create(runtime: IORuntime): Resource[IO, Dependencies] =
     Allocator.create(runtime).map(new Dependencies(_))
+
 }
+
 class Dependencies(allocator: Allocator) {
 
   // Create OpenTelemetry instance
