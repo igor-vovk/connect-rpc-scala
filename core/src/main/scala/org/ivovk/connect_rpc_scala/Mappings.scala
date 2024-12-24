@@ -10,9 +10,19 @@ import scalapb.GeneratedMessage
 
 import scala.collection.mutable
 
+type HeadersFilter = String => Boolean
+
+object HeaderMapping {
+  val DefaultIncomingHeadersFilter: HeadersFilter = name =>
+    !(name.startsWith("Connection") || name.startsWith("connection"))
+
+  val DefaultOutgoingHeadersFilter: HeadersFilter = name =>
+    !name.startsWith("grpc-")
+}
+
 class HeaderMapping(
-  headersFilter: String => Boolean,
-  metadataFilter: String => Boolean,
+  headersFilter: HeadersFilter,
+  metadataFilter: HeadersFilter,
   treatTrailersAsHeaders: Boolean,
 ) {
 

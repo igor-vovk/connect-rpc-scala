@@ -18,12 +18,6 @@ import scala.concurrent.duration.*
 
 object ConnectRouteBuilder {
 
-  private val DefaultIncomingHeadersFilter: String => Boolean = name =>
-    !name.toLowerCase.startsWith("connection")
-
-  private val DefaultOutgoingHeadersFilter: String => Boolean = name =>
-    !name.startsWith("grpc-")
-
   def forService[F[_] : Async](service: ServerServiceDefinition): ConnectRouteBuilder[F] =
     forServices(Seq(service))
 
@@ -36,8 +30,8 @@ object ConnectRouteBuilder {
       serverConfigurator = identity,
       channelConfigurator = identity,
       customJsonSerDeser = None,
-      incomingHeadersFilter = DefaultIncomingHeadersFilter,
-      outgoingHeadersFilter = DefaultOutgoingHeadersFilter,
+      incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
+      outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       pathPrefix = Uri.Path.Root,
       executor = ExecutionContext.global,
       waitForShutdown = 5.seconds,
@@ -52,8 +46,8 @@ final class ConnectRouteBuilder[F[_] : Async] private(
   serverConfigurator: Endo[ServerBuilder[_]],
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
   customJsonSerDeser: Option[JsonSerDeser[F]],
-  incomingHeadersFilter: String => Boolean,
-  outgoingHeadersFilter: String => Boolean,
+  incomingHeadersFilter: HeadersFilter,
+  outgoingHeadersFilter: HeadersFilter,
   pathPrefix: Uri.Path,
   executor: Executor,
   waitForShutdown: Duration,
@@ -66,8 +60,8 @@ final class ConnectRouteBuilder[F[_] : Async] private(
     serverConfigurator: Endo[ServerBuilder[_]] = serverConfigurator,
     channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
     customJsonSerDeser: Option[JsonSerDeser[F]] = customJsonSerDeser,
-    incomingHeadersFilter: String => Boolean = incomingHeadersFilter,
-    outgoingHeadersFilter: String => Boolean = outgoingHeadersFilter,
+    incomingHeadersFilter: HeadersFilter = incomingHeadersFilter,
+    outgoingHeadersFilter: HeadersFilter = outgoingHeadersFilter,
     pathPrefix: Uri.Path = pathPrefix,
     executor: Executor = executor,
     waitForShutdown: Duration = waitForShutdown,

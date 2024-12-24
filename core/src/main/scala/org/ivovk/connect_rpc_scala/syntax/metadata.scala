@@ -1,6 +1,5 @@
 package org.ivovk.connect_rpc_scala.syntax
 
-import io.grpc.Metadata
 import io.grpc.Metadata.*
 
 object metadata extends MetadataSyntax
