@@ -8,11 +8,19 @@ import org.ivovk.connect_rpc_scala.syntax.all.{*, given}
 import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
 
+import scala.collection.mutable
+
 class HeaderMapping(
   headersFilter: String => Boolean,
   metadataFilter: String => Boolean,
   treatTrailersAsHeaders: Boolean,
 ) {
+
+  private val keyCache: mutable.Map[String, Metadata.Key[String]] =
+    new mutable.WeakHashMap[String, Metadata.Key[String]]()
+
+  private inline def cachedAsciiKey(name: String): Metadata.Key[String] =
+    keyCache.getOrElseUpdate(name, asciiKey(name))
 
   def toMetadata(headers: Headers): Metadata = {
     val metadata = new Metadata()
@@ -25,13 +33,13 @@ class HeaderMapping(
     metadata
   }
 
-  private def metadataKeyByHeaderName(headerName: String): Metadata.Key[String] =
-    headerName match {
+  private def metadataKeyByHeaderName(name: String): Metadata.Key[String] =
+    name match {
       case "User-Agent" | "user-agent" =>
-        // Rename `User-Agent` to `x-user-agent` because `user-agent` is overridden by gRPC
+        // Rename `User-Agent` to `x-user-agent` because `user-agent` gets overridden by gRPC
         GrpcHeaders.XUserAgentKey
       case _ =>
-        asciiKey[String](headerName)
+        cachedAsciiKey(name)
     }
 
   private def headers(
@@ -47,7 +55,7 @@ class HeaderMapping(
       if (metadataFilter(key)) {
         val name = if (trailing) CIString(s"trailer-$key") else CIString(key)
 
-        metadata.getAll(asciiKey(key)).forEach { value =>
+        metadata.getAll(cachedAsciiKey(key)).forEach { value =>
           b += Header.Raw(name, value)
         }
       }
