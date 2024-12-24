@@ -146,31 +146,12 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
 httpServer.use(_ => IO.never).unsafeRunSync()
 ```
 
-### Hint: GRPC OpenTelemetry integration
+## How-tos
 
-Since the library creates a separate in-process GRPC server, traffic going through it won't be captured by the
-instrumentation of your main GRPC server (if there is any).
+How-tos that go beyond the basic usage:
 
-Here is how you can integrate OpenTelemetry with the Connect-RPC server:
-
-```scala
-val grpcServices: Seq[io.grpc.ServiceDefinition] = ??? // Your GRPC service(s)
-val grpcOtel    : GrpcOpenTelemetry              = ??? // GrpcOpenTelemetry instance
-
-ConnectRouteBuilder.forServices[IO](grpcServices)
-  // Configure the server to use the same opentelemetry instance as the main server
-  .withServerConfigurator { sb =>
-    grpcOtel.configureServerBuilder(sb)
-    sb
-  }
-  .build
-```
-
-### ZIO Interop
-
-Because the library uses the Tagless Final pattern, it is perfectly possible to use it with ZIO. You might check
-`zio_interop` branch, where conformance is implemented with `ZIO` and `ZIO-gRPC`.
-You can read [this](https://zio.dev/guides/interop/with-cats-effect/).
+* [How to integrate with OpenTelemetry](docs/integrating-with-otel.md)
+* [How to work with ZIO](docs/integrating-with-zio.md)
 
 ## Development
 
