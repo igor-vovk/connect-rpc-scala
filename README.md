@@ -152,6 +152,7 @@ How-tos that go beyond the basic usage:
 
 * [How to integrate with OpenTelemetry](docs/integrating-with-otel.md)
 * [How to work with ZIO](docs/integrating-with-zio.md)
+* [Implementing Kubernetes health checks](docs/kubernetes-health-checks.md)
 
 ## Development
 
