@@ -4,7 +4,7 @@ import io.grpc.{StatusException, StatusRuntimeException}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import scalapb.GeneratedMessage
 
-object all extends ExceptionSyntax, ProtoMappingsSyntax
+object all extends ExceptionSyntax, ProtoMappingsSyntax, MetadataSyntax
 
 trait ExceptionSyntax {
 

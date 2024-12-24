@@ -3,8 +3,8 @@ package org.ivovk.connect_rpc_scala
 import io.grpc.{Metadata, Status}
 import org.http4s.{Header, Headers, Response}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
-import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders.asciiKey
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
+import org.ivovk.connect_rpc_scala.syntax.all.{*, given}
 import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
 
@@ -31,7 +31,7 @@ class HeaderMapping(
         // Rename `User-Agent` to `x-user-agent` because `user-agent` is overridden by gRPC
         GrpcHeaders.XUserAgentKey
       case _ =>
-        asciiKey(headerName)
+        asciiKey[String](headerName)
     }
 
   private def headers(

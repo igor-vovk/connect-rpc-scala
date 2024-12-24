@@ -1,20 +1,18 @@
 package org.ivovk.connect_rpc_scala.grpc
 
 import connectrpc.ErrorDetailsAny
-import io.grpc.Metadata
+import io.grpc.Metadata.Key
+import org.ivovk.connect_rpc_scala.syntax.metadata
+import org.ivovk.connect_rpc_scala.syntax.metadata.{*, given}
 
 object GrpcHeaders {
 
-  val ErrorDetailsKey: Metadata.Key[ErrorDetailsAny] =
-    Metadata.Key.of("connect-error-details-bin", new Metadata.BinaryMarshaller[ErrorDetailsAny] {
-      override def toBytes(value: ErrorDetailsAny): Array[Byte] = value.toByteArray
+  @deprecated("Use `asciiKey` from the `org.ivovk.connect_rpc_scala.syntax.metadata` package instead", "0.2.5")
+  def asciiKey(name: String): Key[String] = metadata.asciiKey(name)
 
-      override def parseBytes(serialized: Array[Byte]): ErrorDetailsAny = ErrorDetailsAny.parseFrom(serialized)
-    })
+  val XUserAgentKey: Key[String] = metadata.asciiKey("x-user-agent")
 
-  val XUserAgentKey: Metadata.Key[String] = asciiKey("x-user-agent")
-
-  inline def asciiKey(name: String): Metadata.Key[String] =
-    Metadata.Key.of(name, Metadata.ASCII_STRING_MARSHALLER)
+  private[connect_rpc_scala] val ErrorDetailsKey: Key[ErrorDetailsAny] =
+    binaryKey("connect-error-details-bin")(using binaryMarshaller(ErrorDetailsAny.parseFrom)(_.toByteArray))
 
 }

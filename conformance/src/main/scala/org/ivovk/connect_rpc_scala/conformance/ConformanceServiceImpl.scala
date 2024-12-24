@@ -6,9 +6,7 @@ import com.google.protobuf.ByteString
 import connectrpc.conformance.v1.*
 import io.grpc.internal.GrpcUtil
 import io.grpc.{Metadata, Status, StatusRuntimeException}
-import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
-import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders.asciiKey
-import org.ivovk.connect_rpc_scala.syntax.all.*
+import org.ivovk.connect_rpc_scala.syntax.all.{*, given}
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
@@ -94,14 +92,14 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
 
   private def mkConformanceHeaders(metadata: Metadata): Seq[Header] = {
     metadata.keys().asScala.map { key =>
-      Header(key, metadata.getAll(asciiKey(key)).asScala.toSeq)
+      Header(key, metadata.getAll(asciiKey[String](key)).asScala.toSeq)
     }.toSeq
   }
 
   private def mkMetadata(headers: Seq[Header]): Metadata = {
     val metadata = new Metadata()
     headers.foreach { h =>
-      val key = asciiKey(h.name)
+      val key = asciiKey[String](h.name)
 
       h.value.foreach { v =>
         metadata.put(key, v)
