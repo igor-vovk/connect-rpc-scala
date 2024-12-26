@@ -87,5 +87,6 @@ lazy val root = (project in file("."))
     conformance,
   )
   .settings(
+    name := "connect-rpc-scala",
     noPublish,
   )

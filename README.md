@@ -1,6 +1,6 @@
 ![](docs/connect-rpc-scala-logo.png)
 
-# REST API for GRPC services / GRPC Transcoding for Scala
+# REST API / GRPC Transcoding for GRPC services written in Scala
 
 ![Maven Central](https://img.shields.io/maven-central/v/io.github.igor-vovk/connect-rpc-scala-core_3?style=flat-square&color=green)
 
@@ -15,8 +15,7 @@ syntax = "proto3";
 package example;
 
 service ExampleService {
-  rpc GetExample(GetExampleRequest) returns (GetExampleResponse) {
-  }
+  rpc GetExample(GetExampleRequest) returns (GetExampleResponse) {}
 }
 
 message GetExampleRequest {
@@ -90,7 +89,7 @@ HTTP/1.1 200 OK
 
 ---
 
-The library works with all commonly used GRPC code-generators for Scala:
+The library works with all ScalaPB-based GRPC code-generators:
 
 * [ScalaPB](https://scalapb.github.io) services with `Future` monad
 * [fs2-grpc](https://github.com/typelevel/fs2-grpc), built on top of `cats-effect` and `fs2`
@@ -263,3 +262,22 @@ hop, and needs protobuf files.
 The library is inspired and takes some ideas from the [grpc-json-bridge](https://github.com/avast/grpc-json-bridge).
 Which doesn't seem to be supported anymore, + also the library doesn't follow a Connect-RPC standard (while being very
 close to it).
+
+### A word about Ukraine
+
+I'm trying to put a word about the situation in Ukraine in all projects that I'm working on.
+In many areas, Ukraine right now is in a worse situation than a year ago.
+
+Russia still attacks Ukraine, and the war is ongoing.
+
+The russian economy worsens, but russians, if know they can win, will continue the push.
+
+That's why it is important to show your support, to show that Ukraine is not alone.
+So russians will come up with different civilization targets than rebuilding the fallen empire.
+
+Please support Ukrainian people in any way you can, spread the word, donate to the army, donate to the humanitarian
+organizations.
+
+Official website: [war.ukraine.ua](https://war.ukraine.ua)
+
+---
