@@ -2,7 +2,7 @@ import org.typelevel.scalacoptions.ScalacOptions
 
 ThisBuild / scalaVersion := "3.3.4"
 
-ThisBuild / organization := "io.github.igor-vovk"
+ThisBuild / organization := "me.ivovk"
 
 ThisBuild / homepage := Some(url("https://github.com/igor-vovk/connect-rpc-scala"))
 ThisBuild / licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0"))

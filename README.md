@@ -2,7 +2,7 @@
 
 # REST API / GRPC Transcoding for GRPC services written in Scala
 
-![Maven Central](https://img.shields.io/maven-central/v/io.github.igor-vovk/connect-rpc-scala-core_3?style=flat-square&color=green)
+![Maven Central](https://img.shields.io/maven-central/v/me.ivovk/connect-rpc-scala-core_3?style=flat-square&color=green)
 
 The library allows exposing GRPC services as REST-APIs using Connect protocol (with JSON messages) + GRPC Transcoding,
 without Envoy or any other proxy.
@@ -103,7 +103,7 @@ Installing with SBT (you also need to install one of `http4s` server implementat
 
 ```scala
 libraryDependencies ++= Seq(
-  "io.github.igor-vovk" %% "connect-rpc-scala-core" % "<version>",
+  "me.ivovk" %% "connect-rpc-scala-core" % "<version>",
   "org.http4s" %% "http4s-ember-server" % "0.23.29"
 )
 ```
@@ -263,6 +263,8 @@ The library is inspired and takes some ideas from the [grpc-json-bridge](https:/
 Which doesn't seem to be supported anymore, + also the library doesn't follow a Connect-RPC standard (while being very
 close to it).
 
+---
+
 ### A word about Ukraine
 
 I'm trying to put a word about the situation in Ukraine in all projects that I'm working on.
@@ -279,5 +281,3 @@ Please support Ukrainian people in any way you can, spread the word, donate to t
 organizations.
 
 Official website: [war.ukraine.ua](https://war.ukraine.ua)
-
----
