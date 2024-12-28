@@ -143,7 +143,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
     buildRoutes.map(_.orNotFound)
 
   /**
-   * This method should be used only when additional routes are added to the server.
+   * Use this method if you want to add additional routes and/or http4s middleware.
    *
    * Otherwise, [[build]] method is preferred.
    */

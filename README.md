@@ -149,9 +149,10 @@ httpServer.use(_ => IO.never).unsafeRunSync()
 
 How-tos that go beyond the basic usage:
 
+* [How to support CORS-requests](docs/supporting-cors.md)
 * [How to integrate with OpenTelemetry](docs/integrating-with-otel.md)
 * [How to work with ZIO](docs/integrating-with-zio.md)
-* [Implementing Kubernetes health checks](docs/kubernetes-health-checks.md)
+* [How to implement Kubernetes health checks](docs/kubernetes-health-checks.md)
 
 ## Development
 
@@ -234,7 +235,7 @@ Headers are converted between `http4s` and `grpc-java` types, but it is a very l
 
 If performance is a concern, it is recommended to switch to Protobuf messages,
 as it is more efficient: JSON messages are larger and slower to parse.
-Protobuf messages are supported by the protocol and the library itself (it's a 1-line switch, `useBinaryMessages` option
+Protobuf messages are supported by the protocol and the library itself (it's a 1-line switch, `useBinaryFormat` option
 in TypeScript client).
 ScalaPB will do decoding/encoding in this case.
 
