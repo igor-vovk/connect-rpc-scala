@@ -9,7 +9,7 @@ The usual way to overcome it involves
 installing [grpc-health-probe](https://github.com/grpc-ecosystem/grpc-health-probe) utility to the container,
 which is also not optimal.
 
-This document describes how to implement readiness health checks for GRPC services.
+This document describes how to implement aliveness/readiness health checks for GRPC services.
 
 ## The solution
 

@@ -1,6 +1,7 @@
 package org.ivovk.connect_rpc_scala.http
 
-import org.http4s.{Header, ParseResult}
+import org.http4s.headers.`Content-Encoding`
+import org.http4s.{ContentCoding, Header, ParseResult}
 import org.typelevel.ci.CIStringSyntax
 
 import scala.annotation.targetName
@@ -34,6 +35,17 @@ object Headers {
       _.value,
       v => ParseResult.success(`X-Test-Case-Name`(v))
     )
+  }
+
+  case class `Grpc-Encoding`(contentCoding: ContentCoding)
+
+  object `Grpc-Encoding` {
+    implicit val headerInstance: Header[`Grpc-Encoding`, Header.Single] =
+      Header.createRendered(
+        ci"Grpc-Encoding",
+        _.contentCoding,
+        s => `Content-Encoding`.parse(s).map(r => `Grpc-Encoding`(r.contentCoding)),
+      )
   }
 
 }

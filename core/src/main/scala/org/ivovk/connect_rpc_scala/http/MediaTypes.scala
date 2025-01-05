@@ -12,6 +12,7 @@ object MediaTypes {
   @targetName("applicationProto")
   val `application/proto`: MediaType = MediaType.unsafeParse("application/proto")
 
-  val allSupported: Seq[MediaType] = List(`application/json`, `application/proto`)
+  @targetName("applicationGrpcWebJson")
+  val `application/grpc-web+json`: MediaType = MediaType.unsafeParse("application/grpc-web+json")
 
 }

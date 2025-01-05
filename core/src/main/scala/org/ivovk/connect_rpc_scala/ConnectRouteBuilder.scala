@@ -8,6 +8,7 @@ import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import org.http4s.{HttpApp, HttpRoutes, Uri}
 import org.ivovk.connect_rpc_scala.connect.{ConnectErrorHandler, ConnectHandler, ConnectRoutesProvider}
 import org.ivovk.connect_rpc_scala.grpc.*
+import org.ivovk.connect_rpc_scala.grpc_web.{GrpcWebHandler, GrpcWebRoutesProvider}
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.codec.*
 import org.ivovk.connect_rpc_scala.transcoding.{TranscodingHandler, TranscodingRoutesProvider, TranscodingUrlMatcher}
@@ -175,37 +176,56 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         headerMapping,
       )
 
-      val connectHandler = ConnectHandler[F](
-        channel,
-        connectErrorHandler,
-        headerMapping,
-      )
+      val connectRoutes = {
+        val connectHandler = ConnectHandler[F](
+          channel,
+          connectErrorHandler,
+          headerMapping,
+        )
 
-      val connectRoutes = ConnectRoutesProvider[F](
-        pathPrefix,
-        methodRegistry,
-        codecRegistry,
-        connectHandler,
-      ).routes
+        ConnectRoutesProvider[F](
+          pathPrefix,
+          methodRegistry,
+          codecRegistry,
+          connectHandler,
+        ).routes
+      }
 
-      val transcodingUrlMatcher = TranscodingUrlMatcher[F](
-        methodRegistry.all,
-        pathPrefix,
-      )
+      val grpcWebRoutes = {
+        val grpcWebHandler = GrpcWebHandler[F](
+          channel,
+          connectErrorHandler,
+          headerMapping,
+        )
 
-      val transcodingHandler = TranscodingHandler[F](
-        channel,
-        transcodingErrorHandler.getOrElse(connectErrorHandler),
-        headerMapping,
-      )
+        GrpcWebRoutesProvider[F](
+          pathPrefix,
+          methodRegistry,
+          codecRegistry,
+          grpcWebHandler,
+        ).routes
+      }
 
-      val transcodingRoutes = TranscodingRoutesProvider[F](
-        transcodingUrlMatcher,
-        transcodingHandler,
-        jsonSerDeser
-      ).routes
+      val transcodingRoutes = {
+        val transcodingUrlMatcher = TranscodingUrlMatcher[F](
+          methodRegistry.all,
+          pathPrefix,
+        )
 
-      connectRoutes <+> transcodingRoutes
+        val transcodingHandler = TranscodingHandler[F](
+          channel,
+          transcodingErrorHandler.getOrElse(connectErrorHandler),
+          headerMapping,
+        )
+
+        TranscodingRoutesProvider[F](
+          transcodingUrlMatcher,
+          transcodingHandler,
+          jsonSerDeser
+        ).routes
+      }
+
+      grpcWebRoutes <+> connectRoutes <+> transcodingRoutes
     }
   }
 

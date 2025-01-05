@@ -91,7 +91,7 @@ HTTP/1.1 200 OK
 
 The library works with all ScalaPB-based GRPC code-generators:
 
-* [ScalaPB](https://scalapb.github.io) services with `Future` monad
+* [ScalaPB](https://scalapb.github.io/docs/grpc#creating-a-service) services with `Future` monad
 * [fs2-grpc](https://github.com/typelevel/fs2-grpc), built on top of `cats-effect` and `fs2`
 * [ZIO gRPC](https://scalapb.github.io/zio-grpc/), built on top of `ZIO`
 
@@ -211,7 +211,7 @@ supports_message_receive_limit: false
 - [ ] Support configurable timeouts
 - [ ] Support non-unary (streaming) methods
 
-### Is it production-ready?
+## Is it production-ready?
 
 Public APIs on the [dosh.at](https://dosh.at) website are implemented with it, you can open Web Inspector and see the
 requests being made to the server (private APIs are just straight GRPC communication).
@@ -220,9 +220,6 @@ Connect RPC conformance tests are run on every commit.
 The library is not a web-server or proxy, it uses `http4s` as a server implementation, and it uses official
 `GRPC-inprocess` bridge to communicate with the GRPC services.
 JSON ↔ Protobuf conversions are done using the `scalapb-json4s` library.
-
-What the library does is just puts it all together, exposing HTTP routes, where it parses JSON to case classes, resolves
-particular GRPC endpoint and calls it.
 
 ### Performance
 
@@ -258,11 +255,10 @@ hop, and needs protobuf files.
   `user-agent` is set to the in-process client's User Agent (`grpc-java-inprocess/1.69.0`),
   there is no way to disable it.
 
-### Thanks
+### Related projects
 
-The library is inspired and takes some ideas from the [grpc-json-bridge](https://github.com/avast/grpc-json-bridge).
-Which doesn't seem to be supported anymore, + also the library doesn't follow a Connect-RPC standard (while being very
-close to it).
+* [avast/grpc-json-bridge](https://github.com/avast/grpc-json-bridge) – a predecessor, seems to be not supported
+  anymore, doesn't follow Connect-RPC spec.
 
 ---
 

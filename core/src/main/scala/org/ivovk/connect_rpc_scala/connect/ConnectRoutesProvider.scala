@@ -7,6 +7,7 @@ import org.http4s.Status.UnsupportedMediaType
 import org.http4s.dsl.request.*
 import org.http4s.{HttpRoutes, MediaType, Method, Response, Uri}
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
+import org.ivovk.connect_rpc_scala.http.MediaTypes.{`application/json`, `application/proto`}
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
@@ -17,6 +18,8 @@ class ConnectRoutesProvider[F[_] : MonadThrow](
   codecRegistry: MessageCodecRegistry[F],
   handler: ConnectHandler[F],
 ) {
+
+  private val SupportedMediaTypes: Seq[MediaType] = List(`application/json`, `application/proto`)
 
   def routes: HttpRoutes[F] = HttpRoutes[F] {
     case req@Method.GET -> `pathPrefix` / service / method :? EncodingQP(mediaType) +& MessageQP(message) =>
@@ -52,7 +55,7 @@ class ConnectRoutesProvider[F[_] : MonadThrow](
       case Some(codec) => r(codec)
       case None =>
         val message = s"Unsupported media-type ${mediaType.show}. " +
-          s"Supported media types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}"
+          s"Supported media types: ${SupportedMediaTypes.map(_.show).mkString(", ")}"
 
         Response(UnsupportedMediaType).withEntity(message).pure[F]
     }
