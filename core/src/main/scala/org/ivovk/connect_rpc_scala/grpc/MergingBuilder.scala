@@ -1,6 +1,6 @@
 package org.ivovk.connect_rpc_scala.grpc
 
-import com.google.protobuf.ByteString
+import com.google.protobuf.CodedOutputStream
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 object MergingBuilder {
@@ -36,7 +36,7 @@ private class ListMergingBuilder[T <: Message](ts: List[T])(using cmp: Companion
     else ListMergingBuilder(other :: ts)
   }
 
-  private def writeInReverseOrder(ts: List[T], output: ByteString.Output): Unit = {
+  private def writeInReverseOrder(ts: List[T], output: CodedOutputStream): Unit = {
     if (ts.nonEmpty) {
       writeInReverseOrder(ts.tail, output)
 
@@ -45,9 +45,12 @@ private class ListMergingBuilder[T <: Message](ts: List[T])(using cmp: Companion
   }
 
   override def build: T = {
-    val output = ByteString.newOutput(ts.foldLeft(0)(_ + _.serializedSize))
+    val size   = ts.foldLeft(0)(_ + _.serializedSize)
+    val arr    = new Array[Byte](size)
+    val output = CodedOutputStream.newInstance(arr)
     writeInReverseOrder(ts, output)
-    output.close()
-    cmp.parseFrom(output.toByteString.newCodedInput())
+    output.checkNoSpaceLeft()
+
+    cmp.parseFrom(arr)
   }
 }
