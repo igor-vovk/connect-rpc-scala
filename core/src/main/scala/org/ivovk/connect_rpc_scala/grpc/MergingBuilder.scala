@@ -36,9 +36,17 @@ private class ListMergingBuilder[T <: Message](ts: List[T])(using cmp: Companion
     else ListMergingBuilder(other :: ts)
   }
 
+  private def writeInReverseOrder(ts: List[T], output: ByteString.Output): Unit = {
+    if (ts.nonEmpty) {
+      writeInReverseOrder(ts.tail, output)
+
+      ts.head.writeTo(output)
+    }
+  }
+
   override def build: T = {
     val output = ByteString.newOutput(ts.foldLeft(0)(_ + _.serializedSize))
-    ts.reverse.foreach(_.writeTo(output))
+    writeInReverseOrder(ts, output)
     output.close()
     cmp.parseFrom(output.toByteString.newCodedInput())
   }
