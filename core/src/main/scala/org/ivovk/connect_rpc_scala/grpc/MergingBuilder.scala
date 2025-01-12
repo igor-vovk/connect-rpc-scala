@@ -36,20 +36,35 @@ private class ListMergingBuilder[T <: Message](ts: List[T])(using cmp: Companion
     else ListMergingBuilder(other :: ts)
   }
 
-  private def writeInReverseOrder(ts: List[T], output: CodedOutputStream): Unit = {
-    if (ts.nonEmpty) {
-      writeInReverseOrder(ts.tail, output)
+  private case class WriteState(arr: Array[Byte], output: CodedOutputStream)
 
-      ts.head.writeTo(output)
+  /**
+   * Iterates over the list in reverse order and writes each element to the output stream.
+   * 
+   * Iterates over the array in one pass:
+   * Going down – counting the size of the array.
+   * Last element – creating the array.
+   * Going up – writing elements to the array.
+   */
+  private def writeInReverseOrder(ts: List[T], size: Int = 0): WriteState = {
+    if (ts.isEmpty) {
+      val arr    = new Array[Byte](size)
+      val output = CodedOutputStream.newInstance(arr)
+
+      WriteState(arr, output)
+    } else {
+      val state = writeInReverseOrder(ts.tail, size + ts.head.serializedSize)
+
+      ts.head.writeTo(state.output)
+
+      if (size == 0) state.output.checkNoSpaceLeft()
+
+      state
     }
   }
 
   override def build: T = {
-    val size   = ts.foldLeft(0)(_ + _.serializedSize)
-    val arr    = new Array[Byte](size)
-    val output = CodedOutputStream.newInstance(arr)
-    writeInReverseOrder(ts, output)
-    output.checkNoSpaceLeft()
+    val arr = writeInReverseOrder(ts).arr
 
     cmp.parseFrom(arr)
   }
