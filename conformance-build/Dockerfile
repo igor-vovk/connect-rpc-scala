@@ -1,3 +1,5 @@
+FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.10.5_3.3.4 AS sbt_image
+
 FROM alpine AS conformance
 RUN apk add --no-cache bash curl tar
 
@@ -14,7 +16,7 @@ RUN <<EOF
     chmod +x connectconformance
 EOF
 
-FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.10.5_3.3.4 AS build
+FROM sbt_image AS build
 
 ADD conformance /app/conformance
 ADD core /app/core
@@ -24,7 +26,7 @@ ADD build.sbt /app/build.sbt
 WORKDIR /app
 RUN sbt stage
 
-FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.10.5_3.3.4 AS runner
+FROM sbt_image AS runner
 
 COPY --from=conformance /conformance /conformance
 ADD conformance-suite.yaml /conformance/
