@@ -7,10 +7,11 @@ import org.ivovk.connect_rpc_scala
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
 import org.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, JsonTransform, SubKeyJsonTransform}
 import org.ivovk.connect_rpc_scala.http.json.JsonProcessing.*
+import org.ivovk.connect_rpc_scala.util.SeqOps.*
 import org.json4s.JsonAST.{JField, JObject}
 import org.json4s.{JString, JValue}
 
-import scala.jdk.CollectionConverters.*
+import scala.collection.immutable.ArraySeq
 
 case class MatchedRequest(
   method: MethodRegistry.Entry,
@@ -30,22 +31,22 @@ object TranscodingUrlMatcher {
   sealed trait RouteTree
 
   case class RootNode(
-    children: Vector[RouteTree]
+    children: IndexedSeq[RouteTree]
   ) extends RouteTree
 
   case class Node(
     isVariable: Boolean,
     segment: String,
-    children: Vector[RouteTree],
+    children: IndexedSeq[RouteTree],
   ) extends RouteTree
 
   case class Leaf(
     entry: Entry
   ) extends RouteTree
 
-  private def mkTree(entries: Seq[Entry]): Vector[RouteTree] =
+  private def mkTree(entries: Seq[Entry]): IndexedSeq[RouteTree] =
     entries
-      .groupByOrd(_.pattern.segments.headOption)
+      .groupByPreservingOrdering(_.pattern.segments.headOption)
       .flatMap { (maybeSegment, entries) =>
         maybeSegment match {
           case None =>
@@ -65,32 +66,7 @@ object TranscodingUrlMatcher {
             )
         }
       }
-      .toVector
-
-  extension [A](it: Iterable[A]) {
-    // groupBy with preserving original ordering
-    def groupByOrd[B](f: A => B): Map[B, Vector[A]] = {
-      val result = collection.mutable.LinkedHashMap.empty[B, Vector[A]]
-
-      it.foreach { elem =>
-        val key = f(elem)
-        val vec = result.getOrElse(key, Vector.empty)
-        result.update(key, vec :+ elem)
-      }
-
-      result.toMap
-    }
-
-    // Returns the first element that is Some
-    def colFirst[B](f: A => Option[B]): Option[B] = {
-      val iter = it.iterator
-      while (iter.hasNext) {
-        val x = f(iter.next())
-        if x.isDefined then return x
-      }
-      None
-    }
-  }
+      .to(ArraySeq)
 
   private def isVariable(segment: Uri.Path.Segment): Boolean = {
     val enc    = segment.encoded
