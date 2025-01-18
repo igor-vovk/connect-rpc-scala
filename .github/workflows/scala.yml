@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run conformance tests
-        run: docker build conformance-build --progress=plain
+        run: docker build -f conformance-build/Dockerfile . --progress=plain
 
   dependency-graph:
     name: Update Dependency Graph

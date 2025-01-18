@@ -18,10 +18,10 @@ EOF
 
 FROM sbt_image AS build
 
-ADD conformance /app/conformance
-ADD core /app/core
-ADD project /app/project
-ADD build.sbt /app/build.sbt
+ADD ../conformance /app/conformance
+ADD ../core /app/core
+ADD ../project /app/project
+ADD ../build.sbt /app/build.sbt
 
 WORKDIR /app
 RUN sbt stage
@@ -29,8 +29,8 @@ RUN sbt stage
 FROM sbt_image AS runner
 
 COPY --from=conformance /conformance /conformance
-ADD conformance-suite.yaml /conformance/
-ADD conformance-suite-stable.yaml /conformance/
+ADD conformance-build/suite.yaml /conformance/
+ADD conformance-build/suite-stable.yaml /conformance/
 COPY --from=build /app/conformance/target/universal/stage /app
 WORKDIR /conformance
 
@@ -40,7 +40,7 @@ RUN mkdir "/logs"
 RUN echo ">>>>> Running stable tests <<<<<"
 RUN LOGS_PATH="/logs" \
     ./connectconformance \
-    --conf conformance-suite-stable.yaml \
+    --conf suite-stable.yaml \
     --mode server \
     --parallel 1 \
     -v -vv --trace \
@@ -51,7 +51,7 @@ RUN LOGS_PATH="/logs" \
 RUN echo ">>>>> Running unstable tests <<<<<"
 RUN LOGS_PATH="/logs" \
     ./connectconformance \
-    --conf conformance-suite.yaml \
+    --conf suite.yaml \
     --mode server \
     --parallel 1 \
     -v -vv --trace \
