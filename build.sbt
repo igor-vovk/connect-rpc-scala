@@ -11,7 +11,7 @@ ThisBuild / developers := List(
     "igor-vovk",
     "Ihor Vovk",
     "ideals-03.gushing@icloud.com",
-    url("https://ivovk.me")
+    url("https://ivovk.me"),
   )
 )
 ThisBuild / sonatypeCredentialHost := xerial.sbt.Sonatype.sonatypeCentralHost
@@ -21,50 +21,42 @@ ThisBuild / tpolecatExcludeOptions ++= Set(
   ScalacOptions.warnValueDiscard,
 )
 
-
 lazy val noPublish = List(
-  publish := {},
-  publishLocal := {},
+  publish         := {},
+  publishLocal    := {},
   publishArtifact := false,
-  publish / skip := true
+  publish / skip  := true,
 )
 
 lazy val Versions = new {
-  val grpc   = "1.69.0"
-  val http4s = "0.23.30"
+  val grpc    = "1.69.0"
+  val http4s  = "0.23.30"
   val logback = "1.5.16"
+  val scalapb = _root_.scalapb.compiler.Version.scalapbVersion
 }
 
 lazy val core = project
   .settings(
     name := "connect-rpc-scala-core",
-
     Compile / PB.targets := Seq(
       scalapb.gen() -> (Compile / sourceManaged).value
     ),
-
     Test / PB.targets := Seq(
       scalapb.gen() -> (Test / sourceManaged).value
     ),
-
     libraryDependencies ++= Seq(
-      "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % scalapb.compiler.Version.scalapbVersion,
-      "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.1",
-      "io.grpc" % "grpc-core" % Versions.grpc,
-      "io.grpc" % "grpc-protobuf" % Versions.grpc,
-      "io.grpc" % "grpc-inprocess" % Versions.grpc,
-
       "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0" % "protobuf",
       "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0",
-
-      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-
-      "org.http4s" %% "http4s-dsl" % Versions.http4s,
-      "org.http4s" %% "http4s-client" % Versions.http4s % Test,
-
-      "org.scalatest" %% "scalatest" % "3.2.19" % Test,
-
-      "ch.qos.logback" % "logback-classic" % Versions.logback % Test,
+      "com.thesamet.scalapb" %% "scalapb-runtime"      % Versions.scalapb % "protobuf",
+      "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % Versions.scalapb,
+      "com.thesamet.scalapb" %% "scalapb-json4s"       % "0.12.1",
+      "io.grpc"               % "grpc-core"            % Versions.grpc,
+      "io.grpc"               % "grpc-protobuf"        % Versions.grpc,
+      "io.grpc"               % "grpc-inprocess"       % Versions.grpc,
+      "org.http4s"           %% "http4s-dsl"           % Versions.http4s,
+      "org.http4s"           %% "http4s-client"        % Versions.http4s  % Test,
+      "org.scalatest"        %% "scalatest"            % "3.2.19"         % Test,
+      "ch.qos.logback"        % "logback-classic"      % Versions.logback % Test,
     ),
   )
 
@@ -73,11 +65,9 @@ lazy val conformance = project
   .enablePlugins(Fs2Grpc, JavaAppPackaging)
   .settings(
     noPublish,
-
     libraryDependencies ++= Seq(
-      "org.http4s" %% "http4s-ember-server" % Versions.http4s,
-
-      "ch.qos.logback" % "logback-classic" % Versions.logback % Runtime,
+      "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
+      "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
     ),
   )
 
