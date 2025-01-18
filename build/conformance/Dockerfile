@@ -1,4 +1,4 @@
-FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.10.5_3.3.4 AS sbt_image
+FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.10.7_3.3.4 AS sbt_image
 
 FROM alpine AS conformance
 RUN apk add --no-cache bash curl tar
