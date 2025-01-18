@@ -18,19 +18,19 @@ EOF
 
 FROM sbt_image AS build
 
-ADD ../conformance /app/conformance
-ADD ../core /app/core
-ADD ../project /app/project
-ADD ../build.sbt /app/build.sbt
+ADD conformance /app/conformance
+ADD core /app/core
+ADD project /app/project
+ADD build.sbt /app/build.sbt
 
 WORKDIR /app
 RUN sbt stage
 
 FROM sbt_image AS runner
 
-COPY --from=conformance /conformance /conformance
-ADD conformance-build/suite.yaml /conformance/
-ADD conformance-build/suite-stable.yaml /conformance/
+COPY --from=conformance / /conformance
+ADD build/conformance/suite.yaml /conformance/
+ADD build/conformance/suite-stable.yaml /conformance/
 COPY --from=build /app/conformance/target/universal/stage /app
 WORKDIR /conformance
 
