@@ -28,7 +28,7 @@ RUN sbt stage
 
 FROM sbt_image AS runner
 
-COPY --from=conformance / /conformance
+COPY --from=conformance /conformance /conformance
 ADD build/conformance/suite.yaml /conformance/
 ADD build/conformance/suite-stable.yaml /conformance/
 COPY --from=build /app/conformance/target/universal/stage /app
