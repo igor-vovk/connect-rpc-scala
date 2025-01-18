@@ -1,6 +1,5 @@
 package org.ivovk.connect_rpc_scala.http.json
 
-
 import com.google.protobuf.UnsafeByteOperations.unsafeWrap
 import connectrpc.ErrorDetailsAny
 import org.json4s.JsonAST.{JObject, JString, JValue}
@@ -17,13 +16,13 @@ object ErrorDetailsAnyFormat {
 
   val writer: (Printer, ErrorDetailsAny) => JValue = { (printer, any) =>
     JObject(
-      "type" -> JString(any.`type`),
-      "value" -> JString(base64enc.encodeToString(any.value.toByteArray))
+      "type"  -> JString(any.`type`),
+      "value" -> JString(base64enc.encodeToString(any.value.toByteArray)),
     )
   }
 
   val parser: (Parser, JValue) => ErrorDetailsAny = {
-    case (parser, obj@JObject(fields)) =>
+    case (parser, obj @ JObject(fields)) =>
       (obj \ "type", obj \ "value") match {
         case (JString(t), JString(v)) =>
           ErrorDetailsAny(t, unsafeWrap(base64dec.decode(v)))

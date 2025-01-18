@@ -18,7 +18,7 @@ import scalapb.GeneratedMessage
 import scala.concurrent.duration.*
 import scala.util.chaining.*
 
-class ConnectHandler[F[_] : Async](
+class ConnectHandler[F[_]: Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
   headerMapping: HeaderMapping,
@@ -38,9 +38,11 @@ class ConnectHandler[F[_] : Async](
       case MethodType.UNARY =>
         handleUnary(req, method)
       case unsupported =>
-        Async[F].raiseError(new StatusException(
-          io.grpc.Status.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported")
-        ))
+        Async[F].raiseError(
+          new StatusException(
+            io.grpc.Status.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported")
+          )
+        )
 
     f.handleErrorWith(errorHandler.handle)
   }
@@ -68,7 +70,7 @@ class ConnectHandler[F[_] : Async](
           .pipe(
             req.timeout match {
               case Some(timeout) => _.withDeadlineAfter(timeout, MILLISECONDS)
-              case None => identity
+              case None          => identity
             }
           )
 
@@ -77,7 +79,7 @@ class ConnectHandler[F[_] : Async](
           method.descriptor,
           callOptions,
           headerMapping.toMetadata(req.headers),
-          message
+          message,
         )
       }
       .map { response =>

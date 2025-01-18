@@ -6,9 +6,9 @@ import org.http4s.{MediaType, ParseFailure, QueryParamDecoder}
 object QueryParams {
 
   private val encodingQPDecoder = QueryParamDecoder[String].emap {
-    case "json" => Right(MediaTypes.`application/json`)
+    case "json"  => Right(MediaTypes.`application/json`)
     case "proto" => Right(MediaTypes.`application/proto`)
-    case other => Left(ParseFailure(other, "Invalid encoding"))
+    case other   => Left(ParseFailure(other, "Invalid encoding"))
   }
 
   object EncodingQP extends QueryParamDecoderMatcher[MediaType]("encoding")(encodingQPDecoder)

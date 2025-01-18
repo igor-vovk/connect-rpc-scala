@@ -12,7 +12,14 @@ import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import test.HttpCommunicationTest.TestServiceGrpc.TestService
-import test.HttpCommunicationTest.{AddRequest, AddResponse, GetRequest, GetResponse, RequestBodyMappingRequest, RequestBodyMappingResponse}
+import test.HttpCommunicationTest.{
+  AddRequest,
+  AddResponse,
+  GetRequest,
+  GetResponse,
+  RequestBodyMappingRequest,
+  RequestBodyMappingResponse,
+}
 
 import java.net.URLEncoder
 import scala.concurrent.{ExecutionContext, Future}
@@ -24,13 +31,11 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
     override def add(request: AddRequest): Future[AddResponse] =
       Future.successful(AddResponse(request.a + request.b))
 
-    override def get(request: GetRequest): Future[GetResponse] = {
+    override def get(request: GetRequest): Future[GetResponse] =
       Future.successful(GetResponse("Key is: " + request.key))
-    }
 
-    override def requestBodyMapping(request: RequestBodyMappingRequest): Future[RequestBodyMappingResponse] = {
+    override def requestBodyMapping(request: RequestBodyMappingRequest): Future[RequestBodyMappingResponse] =
       Future.successful(RequestBodyMappingResponse(request.subRequest))
-    }
   }
 
   // String-JSON encoder
@@ -47,12 +52,13 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
         )
       }
       .use { response =>
-        for
-          body <- response.as[String]
+        for body <- response.as[String]
         yield {
           assert(body == """{"sum":3}""")
           assert(response.status == Status.Ok)
-          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
+          assert(
+            response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`)
+          )
         }
       }
       .unsafeRunSync()
@@ -70,18 +76,19 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
             Method.GET,
             Uri(
               path = Root / "test.TestService" / "Get",
-              query = Query.fromPairs("encoding" -> "json", "message" -> requestJson)
-            )
+              query = Query.fromPairs("encoding" -> "json", "message" -> requestJson),
+            ),
           )
         )
       }
       .use { response =>
-        for
-          body <- response.as[String]
+        for body <- response.as[String]
         yield {
           assert(body == """{"value":"Key is: 123"}""")
           assert(response.status == Status.Ok)
-          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
+          assert(
+            response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`)
+          )
         }
       }
       .unsafeRunSync()
@@ -97,12 +104,13 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
         )
       }
       .use { response =>
-        for
-          body <- response.as[String]
+        for body <- response.as[String]
         yield {
           assert(body == """{"value":"Key is: 123"}""")
           assert(response.status == Status.Ok)
-          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
+          assert(
+            response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`)
+          )
         }
       }
       .unsafeRunSync()
@@ -118,12 +126,13 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
         )
       }
       .use { response =>
-        for
-          body <- response.as[String]
+        for body <- response.as[String]
         yield {
           assert(body == """{"requested":{"a":1,"b":2}}""")
           assert(response.status == Status.Ok)
-          assert(response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`))
+          assert(
+            response.headers.get[`Content-Type`].map(_.mediaType).contains(MediaTypes.`application/json`)
+          )
         }
       }
       .unsafeRunSync()
@@ -141,8 +150,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
         )
       }
       .use { response =>
-        for
-          body <- response.as[String]
+        for body <- response.as[String]
         yield {
           assert(body == """{"sum":3}""")
           assert(response.status == Status.Ok)
@@ -165,9 +173,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
       .use { response =>
         for {
           body <- response.as[String]
-        } yield {
-          assert(response.status == Status.NotFound)
-        }
+        } yield assert(response.status == Status.NotFound)
       }
       .unsafeRunSync()
   }

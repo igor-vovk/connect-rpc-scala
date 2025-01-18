@@ -12,8 +12,8 @@ import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters.*
 
-class ConnectErrorHandler[F[_] : Applicative](
-  headerMapping: HeaderMapping,
+class ConnectErrorHandler[F[_]: Applicative](
+  headerMapping: HeaderMapping
 ) extends ErrorHandler[F] {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -23,17 +23,17 @@ class ConnectErrorHandler[F[_] : Applicative](
       case e: StatusException =>
         e.getStatus.getDescription match {
           case "an implementation is missing" => io.grpc.Status.UNIMPLEMENTED
-          case _ => e.getStatus
+          case _                              => e.getStatus
         }
       case e: StatusRuntimeException => e.getStatus
-      case _: MessageFailure => io.grpc.Status.INVALID_ARGUMENT
-      case _ => io.grpc.Status.INTERNAL
+      case _: MessageFailure         => io.grpc.Status.INVALID_ARGUMENT
+      case _                         => io.grpc.Status.INTERNAL
     }
 
     val (message, metadata) = e match {
       case e: StatusRuntimeException => (Option(e.getStatus.getDescription), e.getTrailers)
-      case e: StatusException => (Option(e.getStatus.getDescription), e.getTrailers)
-      case e => (Option(e.getMessage), new Metadata())
+      case e: StatusException        => (Option(e.getStatus.getDescription), e.getTrailers)
+      case e                         => (Option(e.getMessage), new Metadata())
     }
 
     val httpStatus  = grpcStatus.toHttpStatus
@@ -51,11 +51,14 @@ class ConnectErrorHandler[F[_] : Applicative](
       logger.trace(s"<<< Error processing request", e)
     }
 
-    Response[F](httpStatus, headers = headers).withMessage(connectrpc.Error(
-      code = connectCode,
-      message = message,
-      details = details
-    )).pure[F]
+    Response[F](httpStatus, headers = headers)
+      .withMessage(
+        connectrpc.Error(
+          code = connectCode,
+          message = message,
+          details = details,
+        )
+      )
+      .pure[F]
   }
 }
-

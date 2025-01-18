@@ -12,7 +12,7 @@ object Compressor {
   val supportedEncodings: Set[ContentCoding] = Set(ContentCoding.gzip)
 }
 
-class Compressor[F[_] : Sync] {
+class Compressor[F[_]: Sync] {
 
   given Compression[F] = Compression.forSync[F]
 

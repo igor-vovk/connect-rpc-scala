@@ -18,28 +18,28 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
         MethodName("CountriesService", "CreateCountry"),
         null,
         Some(HttpRule().withPost("/countries").withBody("country")),
-        null
+        null,
       ),
       MethodRegistry.Entry(
         MethodName("CountriesService", "ListCountries"),
         null,
         Some(HttpRule().withGet("/countries/list")),
-        null
+        null,
       ),
       MethodRegistry.Entry(
         MethodName("CountriesService", "GetCountry"),
         null,
         Some(HttpRule().withGet("/countries/{country_id}")),
-        null
+        null,
       ),
       MethodRegistry.Entry(
         MethodName("CountriesService", "UpdateCountry"),
         null,
         Some(HttpRule().withPut("/countries/{country_id}").withBody("*")),
-        null
-      )
+        null,
+      ),
     ),
-    Root / "api"
+    Root / "api",
   )
 
   test("matches request with GET method") {

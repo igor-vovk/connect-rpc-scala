@@ -12,7 +12,9 @@ class MethodRegistryTest extends AnyFunSuite {
   object TestService extends MethodRegistryTestService {
     override def simpleMethod(request: SimpleMethodRequest): Future[SimpleMethodResponse] = ???
 
-    override def httpAnnotationMethod(request: HttpAnnotationMethodRequest): Future[HttpAnnotationMethodResponse] = ???
+    override def httpAnnotationMethod(
+      request: HttpAnnotationMethodRequest
+    ): Future[HttpAnnotationMethodResponse] = ???
   }
 
   test("support simple methods") {

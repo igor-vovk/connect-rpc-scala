@@ -10,7 +10,11 @@ import org.ivovk.connect_rpc_scala.connect.{ConnectErrorHandler, ConnectHandler,
 import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.codec.*
-import org.ivovk.connect_rpc_scala.transcoding.{TranscodingHandler, TranscodingRoutesProvider, TranscodingUrlMatcher}
+import org.ivovk.connect_rpc_scala.transcoding.{
+  TranscodingHandler,
+  TranscodingRoutesProvider,
+  TranscodingUrlMatcher,
+}
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
@@ -18,13 +22,16 @@ import scala.concurrent.duration.*
 
 object ConnectRouteBuilder {
 
-  def forService[F[_] : Async](service: ServerServiceDefinition): ConnectRouteBuilder[F] =
+  def forService[F[_]: Async](service: ServerServiceDefinition): ConnectRouteBuilder[F] =
     forServices(Seq(service))
 
-  def forServices[F[_] : Async](service: ServerServiceDefinition, other: ServerServiceDefinition*): ConnectRouteBuilder[F] =
+  def forServices[F[_]: Async](
+    service: ServerServiceDefinition,
+    other: ServerServiceDefinition*
+  ): ConnectRouteBuilder[F] =
     forServices(service +: other)
 
-  def forServices[F[_] : Async](services: Seq[ServerServiceDefinition]): ConnectRouteBuilder[F] =
+  def forServices[F[_]: Async](services: Seq[ServerServiceDefinition]): ConnectRouteBuilder[F] =
     new ConnectRouteBuilder(
       services = services,
       serverConfigurator = identity,
@@ -41,7 +48,7 @@ object ConnectRouteBuilder {
 
 }
 
-final class ConnectRouteBuilder[F[_] : Async] private(
+final class ConnectRouteBuilder[F[_]: Async] private (
   services: Seq[ServerServiceDefinition],
   serverConfigurator: Endo[ServerBuilder[_]],
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
@@ -127,8 +134,8 @@ final class ConnectRouteBuilder[F[_] : Async] private(
   /**
    * By default, response trailers are treated as headers (no "trailer-" prefix added).
    *
-   * Both `fs2-grpc` and `zio-grpc` support only trailing headers,
-   * so having this option enabled is a single way to send headers from the server to a client.
+   * Both `fs2-grpc` and `zio-grpc` support only trailing headers, so having this option enabled is a single
+   * way to send headers from the server to a client.
    */
   def disableTreatingTrailersAsHeaders: ConnectRouteBuilder[F] =
     copy(treatTrailersAsHeaders = false)
@@ -147,9 +154,8 @@ final class ConnectRouteBuilder[F[_] : Async] private(
    *
    * Otherwise, [[build]] method is preferred.
    */
-  def buildRoutes: Resource[F, HttpRoutes[F]] = {
-    for
-      channel <- InProcessChannelBridge.create(
+  def buildRoutes: Resource[F, HttpRoutes[F]] =
+    for channel <- InProcessChannelBridge.create(
         services,
         serverConfigurator,
         channelConfigurator,
@@ -163,7 +169,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
         treatTrailersAsHeaders,
       )
 
-      val jsonSerDeser  = customJsonSerDeser.getOrElse(JsonSerDeserBuilder[F]().build)
+      val jsonSerDeser = customJsonSerDeser.getOrElse(JsonSerDeserBuilder[F]().build)
       val codecRegistry = MessageCodecRegistry[F](
         jsonSerDeser.codec,
         ProtoMessageCodec[F](),
@@ -172,7 +178,7 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       val methodRegistry = MethodRegistry(services)
 
       val connectErrorHandler = ConnectErrorHandler[F](
-        headerMapping,
+        headerMapping
       )
 
       val connectHandler = ConnectHandler[F](
@@ -202,11 +208,10 @@ final class ConnectRouteBuilder[F[_] : Async] private(
       val transcodingRoutes = TranscodingRoutesProvider[F](
         transcodingUrlMatcher,
         transcodingHandler,
-        jsonSerDeser
+        jsonSerDeser,
       ).routes
 
       connectRoutes <+> transcodingRoutes
     }
-  }
 
 }

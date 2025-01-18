@@ -18,7 +18,7 @@ import scalapb.GeneratedMessage
 import scala.concurrent.duration.*
 import scala.util.chaining.*
 
-class TranscodingHandler[F[_] : Async](
+class TranscodingHandler[F[_]: Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
   headerMapping: HeaderMapping,
@@ -48,7 +48,7 @@ class TranscodingHandler[F[_] : Async](
       .pipe(
         headers.timeout match {
           case Some(timeout) => _.withDeadlineAfter(timeout, MILLISECONDS)
-          case None => identity
+          case None          => identity
         }
       )
 
@@ -58,7 +58,7 @@ class TranscodingHandler[F[_] : Async](
         method.descriptor,
         callOptions,
         headerMapping.toMetadata(headers),
-        message
+        message,
       )
       .map { response =>
         val headers = headerMapping.toHeaders(response.headers) ++

@@ -10,20 +10,26 @@ trait ExceptionSyntax {
 
   extension (e: StatusRuntimeException) {
     def withDetails[T <: GeneratedMessage](t: T): StatusRuntimeException = {
-      e.getTrailers.put(GrpcHeaders.ErrorDetailsKey, connectrpc.ErrorDetailsAny(
-        `type` = t.companion.scalaDescriptor.fullName,
-        value = t.toByteString
-      ))
+      e.getTrailers.put(
+        GrpcHeaders.ErrorDetailsKey,
+        connectrpc.ErrorDetailsAny(
+          `type` = t.companion.scalaDescriptor.fullName,
+          value = t.toByteString,
+        ),
+      )
       e
     }
   }
 
   extension (e: StatusException) {
     def withDetails[T <: GeneratedMessage](t: T): StatusException = {
-      e.getTrailers.put(GrpcHeaders.ErrorDetailsKey, connectrpc.ErrorDetailsAny(
-        `type` = t.companion.scalaDescriptor.fullName,
-        value = t.toByteString
-      ))
+      e.getTrailers.put(
+        GrpcHeaders.ErrorDetailsKey,
+        connectrpc.ErrorDetailsAny(
+          `type` = t.companion.scalaDescriptor.fullName,
+          value = t.toByteString,
+        ),
+      )
       e
     }
   }
@@ -33,12 +39,11 @@ trait ExceptionSyntax {
 trait ProtoMappingsSyntax {
 
   extension [T <: GeneratedMessage](t: T) {
-    def toProtoAny: com.google.protobuf.any.Any = {
+    def toProtoAny: com.google.protobuf.any.Any =
       com.google.protobuf.any.Any(
         typeUrl = "type.googleapis.com/" + t.companion.scalaDescriptor.fullName,
-        value = t.toByteString
+        value = t.toByteString,
       )
-    }
   }
 
 }

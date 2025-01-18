@@ -8,7 +8,7 @@ import scala.util.chaining.*
 case class ResponseEntity[F[_]](
   headers: Headers,
   body: EntityBody[F],
-  length: Option[Long] = None
+  length: Option[Long] = None,
 ) {
 
   def applyTo(response: Response[F]): Response[F] = {
@@ -16,7 +16,7 @@ case class ResponseEntity[F[_]](
       .pipe(
         length match
           case Some(length) => _.withContentLength(`Content-Length`(length))
-          case None => identity
+          case None         => identity
       )
 
     response.copy(

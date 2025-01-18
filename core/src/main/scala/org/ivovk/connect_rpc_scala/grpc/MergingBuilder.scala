@@ -28,7 +28,8 @@ private class SingleMergingBuilder[T <: Message](t: T)(using cmp: Companion[T]) 
   override def build: T = t
 }
 
-private class ListMergingBuilder[T <: Message](ts: List[T])(using cmp: Companion[T]) extends MergingBuilder[T] {
+private class ListMergingBuilder[T <: Message](ts: List[T])(using cmp: Companion[T])
+    extends MergingBuilder[T] {
   override def merge(other: T): MergingBuilder[T] = {
     val empty = cmp.defaultInstance
 
@@ -40,13 +41,11 @@ private class ListMergingBuilder[T <: Message](ts: List[T])(using cmp: Companion
 
   /**
    * Iterates over the list in reverse order and writes each element to the output stream.
-   * 
-   * Iterates over the array in one pass:
-   * Going down – counting the size of the array.
-   * Last element – creating the array.
-   * Going up – writing elements to the array.
+   *
+   * Iterates over the array in one pass: Going down – counting the size of the array. Last element – creating
+   * the array. Going up – writing elements to the array.
    */
-  private def writeInReverseOrder(ts: List[T], size: Int = 0): WriteState = {
+  private def writeInReverseOrder(ts: List[T], size: Int = 0): WriteState =
     if (ts.isEmpty) {
       val arr    = new Array[Byte](size)
       val output = CodedOutputStream.newInstance(arr)
@@ -61,7 +60,6 @@ private class ListMergingBuilder[T <: Message](ts: List[T])(using cmp: Companion
 
       state
     }
-  }
 
   override def build: T = {
     val arr = writeInReverseOrder(ts).arr

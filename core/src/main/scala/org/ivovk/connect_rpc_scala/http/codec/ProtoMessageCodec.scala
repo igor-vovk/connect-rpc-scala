@@ -14,7 +14,7 @@ import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Compan
 import java.util.Base64
 import scala.util.chaining.*
 
-class ProtoMessageCodec[F[_] : Async] extends MessageCodec[F] {
+class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
 
   private val logger     = LoggerFactory.getLogger(getClass)
   private val base64dec  = Base64.getUrlDecoder

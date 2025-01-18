@@ -3,7 +3,7 @@ package org.ivovk.connect_rpc_scala.grpc
 import io.grpc.MethodDescriptor
 
 type Service = String
-type Method = String
+type Method  = String
 
 object MethodName {
   def from(descriptor: MethodDescriptor[_, _]): MethodName =

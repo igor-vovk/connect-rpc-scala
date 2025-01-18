@@ -14,7 +14,7 @@ import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Compan
 
 import java.net.URLDecoder
 
-class JsonMessageCodec[F[_] : Sync](
+class JsonMessageCodec[F[_]: Sync](
   parser: Parser,
   printer: Printer,
   decodingTransform: JsonTransform = AsIsJsonTransform,
@@ -27,13 +27,15 @@ class JsonMessageCodec[F[_] : Sync](
 
   override def decode[A <: Message](entity: RequestEntity[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
     val charset = entity.charset.nioCharset
-    val string  = entity.message match {
+    val string = entity.message match {
       case str: String =>
         Sync[F].delay(URLDecoder.decode(str, charset))
       case stream: Stream[F, Byte] =>
-        compressor.decompressed(entity.encoding, stream)
+        compressor
+          .decompressed(entity.encoding, stream)
           .through(decodeWithCharset(charset))
-          .compile.string
+          .compile
+          .string
     }
 
     string
@@ -49,8 +51,7 @@ class JsonMessageCodec[F[_] : Sync](
 
             parser.fromJson(decodingTransform(json))
           }
-        else
-          cmp.defaultInstance.pure[F]
+        else cmp.defaultInstance.pure[F]
       }
       .attemptT
       .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
@@ -74,9 +75,8 @@ class JsonMessageCodec[F[_] : Sync](
     compressor.compressed(options.encoding, entity)
   }
 
-  def withDecodingJsonTransform(transform: JsonTransform): JsonMessageCodec[F] = {
+  def withDecodingJsonTransform(transform: JsonTransform): JsonMessageCodec[F] =
     if transform == this.decodingTransform then this
     else new JsonMessageCodec[F](parser, printer, transform)
-  }
 
 }

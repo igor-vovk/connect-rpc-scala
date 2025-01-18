@@ -1,8 +1,12 @@
 package org.ivovk.connect_rpc_scala.conformance
 
 import cats.effect.{IO, IOApp, Sync}
-import com.comcast.ip4s.{Port, host, port}
-import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatRequest, ServerCompatResponse}
+import com.comcast.ip4s.{host, port, Port}
+import connectrpc.conformance.v1.{
+  ConformanceServiceFs2GrpcTrailers,
+  ServerCompatRequest,
+  ServerCompatResponse,
+}
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.Logger
 import org.ivovk.connect_rpc_scala.ConnectRouteBuilder
@@ -14,12 +18,10 @@ import java.nio.ByteBuffer
 /**
  * In short:
  *
- * - Upon launch, `ServerCompatRequest` message is sent from the test runner to the server to STDIN.
- *
- * - Server is started and listens on a random port.
- *
- * - `ServerCompatResponse` is sent from the server to STDOUT, which instructs the test runner
- * on which port the server is listening.
+ *   - Upon launch, `ServerCompatRequest` message is sent from the test runner to the server to STDIN.
+ *   - Server is started and listens on a random port.
+ *   - `ServerCompatResponse` is sent from the server to STDOUT, which instructs the test runner on which port
+ *     the server is listening.
  *
  * All diagnostics should be written to STDERR.
  *
@@ -52,7 +54,7 @@ object Main extends IOApp.Simple {
       logger = Logger.httpApp[IO](
         logHeaders = false,
         logBody = false,
-        logAction = Some(str => IO(this.logger.trace(str)))
+        logAction = Some(str => IO(this.logger.trace(str))),
       )(app)
 
       server <- EmberServerBuilder.default[IO]
@@ -81,13 +83,18 @@ object Main extends IOApp.Simple {
 }
 
 object ServerCompatSerDeser {
-  def readRequest[F[_] : Sync](in: InputStream): F[ServerCompatRequest] =
+  def readRequest[F[_]: Sync](
+    in: InputStream
+  ): F[ServerCompatRequest] =
     Sync[F].delay {
       val length = IntSerDeser.read(in)
       ServerCompatRequest.parseFrom(in.readNBytes(length))
     }
 
-  def writeResponse[F[_] : Sync](out: java.io.OutputStream, resp: ServerCompatResponse): F[Unit] =
+  def writeResponse[F[_]: Sync](
+    out: java.io.OutputStream,
+    resp: ServerCompatResponse,
+  ): F[Unit] =
     Sync[F].delay {
       IntSerDeser.write(out, resp.serializedSize)
       out.flush()
@@ -97,7 +104,9 @@ object ServerCompatSerDeser {
 }
 
 object IntSerDeser {
-  def read(in: InputStream): Int = ByteBuffer.wrap(in.readNBytes(4)).getInt
+  def read(in: InputStream): Int =
+    ByteBuffer.wrap(in.readNBytes(4)).getInt
 
-  def write(out: java.io.OutputStream, i: Int): Unit = out.write(ByteBuffer.allocate(4).putInt(i).array())
+  def write(out: java.io.OutputStream, i: Int): Unit =
+    out.write(ByteBuffer.allocate(4).putInt(i).array())
 }

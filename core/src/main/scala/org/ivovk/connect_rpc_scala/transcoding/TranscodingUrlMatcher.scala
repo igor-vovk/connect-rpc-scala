@@ -30,7 +30,7 @@ object TranscodingUrlMatcher {
   sealed trait RouteTree
 
   case class RootNode(
-    children: Vector[RouteTree],
+    children: Vector[RouteTree]
   ) extends RouteTree
 
   case class Node(
@@ -40,20 +40,20 @@ object TranscodingUrlMatcher {
   ) extends RouteTree
 
   case class Leaf(
-    entry: Entry,
+    entry: Entry
   ) extends RouteTree
 
-  private def mkTree(entries: Seq[Entry]): Vector[RouteTree] = {
-    entries.groupByOrd(_.pattern.segments.headOption)
+  private def mkTree(entries: Seq[Entry]): Vector[RouteTree] =
+    entries
+      .groupByOrd(_.pattern.segments.headOption)
       .flatMap { (maybeSegment, entries) =>
         maybeSegment match {
           case None =>
             entries.map(Leaf(_))
           case Some(head) =>
             val variableDef = this.isVariable(head)
-            val segment     =
-              if variableDef then
-                head.encoded.substring(1, head.encoded.length - 1)
+            val segment =
+              if variableDef then head.encoded.substring(1, head.encoded.length - 1)
               else head.encoded
 
             List(
@@ -66,7 +66,6 @@ object TranscodingUrlMatcher {
         }
       }
       .toVector
-  }
 
   extension [A](it: Iterable[A]) {
     // groupBy with preserving original ordering
@@ -123,40 +122,50 @@ object TranscodingUrlMatcher {
     }
 
     new TranscodingUrlMatcher(
-      RootNode(mkTree(entries)),
+      RootNode(mkTree(entries))
     )
   }
 
   private def extractMethodAndPattern(rule: HttpRule): (Option[Method], Uri.Path) = {
     val (method, str) = rule.pattern match
-      case HttpRule.Pattern.Get(value) => (Method.GET.some, value)
-      case HttpRule.Pattern.Put(value) => (Method.PUT.some, value)
-      case HttpRule.Pattern.Post(value) => (Method.POST.some, value)
-      case HttpRule.Pattern.Delete(value) => (Method.DELETE.some, value)
-      case HttpRule.Pattern.Patch(value) => (Method.PATCH.some, value)
-      case HttpRule.Pattern.Custom(CustomHttpPattern(kind, value, _)) if kind == "*" => (none, value)
-      case other => throw new RuntimeException(s"Unsupported pattern case $other (Rule: $rule)")
+      case HttpRule.Pattern.Get(value) =>
+        (Method.GET.some, value)
+      case HttpRule.Pattern.Put(value) =>
+        (Method.PUT.some, value)
+      case HttpRule.Pattern.Post(value) =>
+        (Method.POST.some, value)
+      case HttpRule.Pattern.Delete(value) =>
+        (Method.DELETE.some, value)
+      case HttpRule.Pattern.Patch(value) =>
+        (Method.PATCH.some, value)
+      case HttpRule.Pattern.Custom(CustomHttpPattern(kind, value, _)) if kind == "*" =>
+        (none, value)
+      case other =>
+        throw new RuntimeException(s"Unsupported pattern case $other (Rule: $rule)")
 
     val path = Uri.Path.unsafeFromString(str).dropEndsWithSlash
 
     (method, path)
   }
 
-  private def extractRequestBodyTransform(rule: HttpRule): JsonTransform = {
+  private def extractRequestBodyTransform(rule: HttpRule): JsonTransform =
     rule.body match
-      case "*" | "" => AsIsJsonTransform
+      case "*" | ""  => AsIsJsonTransform
       case fieldName => SubKeyJsonTransform(fieldName)
-  }
 }
 
 class TranscodingUrlMatcher[F[_]](
-  tree: TranscodingUrlMatcher.RootNode,
+  tree: TranscodingUrlMatcher.RootNode
 ) {
 
   import TranscodingUrlMatcher.*
 
   def matchRequest(req: Request[F]): Option[MatchedRequest] = {
-    def doMatch(node: RouteTree, path: List[Uri.Path.Segment], pathVars: List[JField]): Option[MatchedRequest] = {
+    def doMatch(
+      node: RouteTree,
+      path: List[Uri.Path.Segment],
+      pathVars: List[JField],
+    ): Option[MatchedRequest] =
       node match {
         case Node(isVariable, patternSegment, children) if path.nonEmpty =>
           val pathSegment = path.head.encoded
@@ -166,8 +175,7 @@ class TranscodingUrlMatcher[F[_]](
             val newPatchVars = (patternSegment -> JString(pathSegment)) :: pathVars
 
             children.colFirst(doMatch(_, pathTail, newPatchVars))
-          else if pathSegment == patternSegment then
-            children.colFirst(doMatch(_, pathTail, pathVars))
+          else if pathSegment == patternSegment then children.colFirst(doMatch(_, pathTail, pathVars))
           else none
         case Leaf(entry) if path.isEmpty && entry.httpMethod.forall(_ == req.method) =>
           val queryParams = req.uri.query.toList.map((k, v) => k -> JString(v.getOrElse("")))
@@ -180,7 +188,6 @@ class TranscodingUrlMatcher[F[_]](
           ).some
         case _ => none
       }
-    }
 
     val path = req.uri.path.segments.toList
 

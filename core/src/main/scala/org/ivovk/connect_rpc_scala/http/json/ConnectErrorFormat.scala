@@ -20,30 +20,33 @@ object ConnectErrorFormat {
   }
 
   val writer: (Printer, Error) => JValue = { (printer, error) =>
-    JObject(List.concat(
-      Some("code" -> stringErrorCodes(error.code.value)),
-      error.message.map("message" -> JString(_)),
-      Option(error.details).filterNot(_.isEmpty).map(d => "details" -> JArray(d.map(printer.toJson).toList)),
-    ))
+    JObject(
+      List.concat(
+        Some("code" -> stringErrorCodes(error.code.value)),
+        error.message.map("message" -> JString(_)),
+        Option(error.details).filterNot(_.isEmpty).map(d => "details" -> JArray(d.map(printer.toJson).toList)),
+      )
+    )
   }
 
   val parser: (Parser, JValue) => Error = {
-    case (parser, obj@JObject(fields)) =>
+    case (parser, obj @ JObject(fields)) =>
       val code = obj \ "code" match
         case JString(code) =>
-          connectrpc.Code.fromName(s"CODE_${code.toUpperCase}")
+          connectrpc.Code
+            .fromName(s"CODE_${code.toUpperCase}")
             .getOrElse(throw new IllegalArgumentException(s"Unknown error code: $code"))
         case _ => throw new IllegalArgumentException(s"Error parsing Error: $obj")
 
       val message = obj \ "message" match
         case JString(message) => Some(message)
-        case JNothing => None
-        case _ => throw new IllegalArgumentException(s"Error parsing Error: $obj")
+        case JNothing         => None
+        case _                => throw new IllegalArgumentException(s"Error parsing Error: $obj")
 
       val details = obj \ "details" match
         case JArray(details) => details.map(parser.fromJson[ErrorDetailsAny])
-        case JNothing => Seq.empty
-        case _ => throw new IllegalArgumentException(s"Error parsing Error: $obj")
+        case JNothing        => Seq.empty
+        case _               => throw new IllegalArgumentException(s"Error parsing Error: $obj")
 
       Error(
         code = code,

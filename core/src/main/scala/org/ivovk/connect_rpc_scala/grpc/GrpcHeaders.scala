@@ -7,7 +7,10 @@ import org.ivovk.connect_rpc_scala.syntax.metadata.{*, given}
 
 object GrpcHeaders {
 
-  @deprecated("Use `asciiKey` from the `org.ivovk.connect_rpc_scala.syntax.metadata` package instead", "0.2.5")
+  @deprecated(
+    "Use `asciiKey` from the `org.ivovk.connect_rpc_scala.syntax.metadata` package instead",
+    "0.2.5",
+  )
   def asciiKey(name: String): Key[String] = metadata.asciiKey(name)
 
   val XUserAgentKey: Key[String] = metadata.asciiKey("x-user-agent")

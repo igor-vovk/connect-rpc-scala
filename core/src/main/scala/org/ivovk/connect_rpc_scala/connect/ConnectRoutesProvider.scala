@@ -11,7 +11,7 @@ import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 
-class ConnectRoutesProvider[F[_] : MonadThrow](
+class ConnectRoutesProvider[F[_]: MonadThrow](
   pathPrefix: Uri.Path,
   methodRegistry: MethodRegistry,
   codecRegistry: MessageCodecRegistry[F],
@@ -19,8 +19,9 @@ class ConnectRoutesProvider[F[_] : MonadThrow](
 ) {
 
   def routes: HttpRoutes[F] = HttpRoutes[F] {
-    case req@Method.GET -> `pathPrefix` / service / method :? EncodingQP(mediaType) +& MessageQP(message) =>
-      OptionT.fromOption[F](methodRegistry.get(service, method))
+    case req @ Method.GET -> `pathPrefix` / service / method :? EncodingQP(mediaType) +& MessageQP(message) =>
+      OptionT
+        .fromOption[F](methodRegistry.get(service, method))
         // Temporary support GET-requests for all methods,
         // until https://github.com/scalapb/ScalaPB/pull/1774 is merged
         .filter(_.descriptor.isSafe || true)
@@ -31,8 +32,9 @@ class ConnectRoutesProvider[F[_] : MonadThrow](
             handler.handle(entity, methodEntry)(using codec)
           }
         }
-    case req@Method.POST -> `pathPrefix` / service / method =>
-      OptionT.fromOption[F](methodRegistry.get(service, method))
+    case req @ Method.POST -> `pathPrefix` / service / method =>
+      OptionT
+        .fromOption[F](methodRegistry.get(service, method))
         .semiflatMap { methodEntry =>
           withCodec(codecRegistry, req.contentType.map(_.mediaType)) { codec =>
             val entity = RequestEntity.fromBody(req)
@@ -46,8 +48,8 @@ class ConnectRoutesProvider[F[_] : MonadThrow](
 
   private def withCodec(
     registry: MessageCodecRegistry[F],
-    mediaType: Option[MediaType]
-  )(r: MessageCodec[F] => F[Response[F]]): F[Response[F]] = {
+    mediaType: Option[MediaType],
+  )(r: MessageCodec[F] => F[Response[F]]): F[Response[F]] =
     mediaType.flatMap(registry.byMediaType) match {
       case Some(codec) => r(codec)
       case None =>
@@ -56,6 +58,5 @@ class ConnectRoutesProvider[F[_] : MonadThrow](
 
         Response(UnsupportedMediaType).withEntity(message).pure[F]
     }
-  }
 
 }

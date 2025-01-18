@@ -10,14 +10,14 @@ class JsonSerializationTest extends AnyFunSuite {
     val formatRegistry = json4s.JsonFormat.DefaultRegistry
       .registerMessageFormatter[connectrpc.ErrorDetailsAny](
         ErrorDetailsAnyFormat.writer,
-        ErrorDetailsAnyFormat.parser
+        ErrorDetailsAnyFormat.parser,
       )
 
-    val parser = new json4s.Parser().withFormatRegistry(formatRegistry)
+    val parser  = new json4s.Parser().withFormatRegistry(formatRegistry)
     val printer = new json4s.Printer().withFormatRegistry(formatRegistry)
 
-    val any = connectrpc.ErrorDetailsAny("type", ByteString.copyFrom(Array[Byte](1, 2, 3)))
-    val json = printer.print(any)
+    val any    = connectrpc.ErrorDetailsAny("type", ByteString.copyFrom(Array[Byte](1, 2, 3)))
+    val json   = printer.print(any)
     val parsed = parser.fromJsonString[connectrpc.ErrorDetailsAny](json)
 
     assert(parsed == any)
@@ -27,14 +27,14 @@ class JsonSerializationTest extends AnyFunSuite {
     val formatRegistry = json4s.JsonFormat.DefaultRegistry
       .registerMessageFormatter[connectrpc.Error](
         ConnectErrorFormat.writer,
-        ConnectErrorFormat.parser
+        ConnectErrorFormat.parser,
       )
 
-    val parser = new json4s.Parser().withFormatRegistry(formatRegistry)
+    val parser  = new json4s.Parser().withFormatRegistry(formatRegistry)
     val printer = new json4s.Printer().withFormatRegistry(formatRegistry)
 
-    val error = connectrpc.Error(connectrpc.Code.FailedPrecondition, Some("message"), Seq.empty)
-    val json = printer.print(error)
+    val error  = connectrpc.Error(connectrpc.Code.FailedPrecondition, Some("message"), Seq.empty)
+    val json   = printer.print(error)
     val parsed = parser.fromJsonString[connectrpc.Error](json)
 
     assert(parsed == error)

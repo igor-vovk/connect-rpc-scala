@@ -14,39 +14,35 @@ import scala.jdk.CollectionConverters.*
 
 case class UnaryHandlerResponse(payload: ConformancePayload, trailers: Metadata)
 
-class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrailers[F, Metadata] {
+class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrailers[F, Metadata] {
 
   override def unary(
     request: UnaryRequest,
-    ctx: Metadata
-  ): F[(UnaryResponse, Metadata)] = {
-    for
-      res <- handleUnaryRequest(
+    ctx: Metadata,
+  ): F[(UnaryResponse, Metadata)] =
+    for res <- handleUnaryRequest(
         request.getResponseDefinition,
         Seq(request.toProtoAny),
-        ctx
+        ctx,
       )
     yield (
       UnaryResponse(res.payload.some),
-      res.trailers
+      res.trailers,
     )
-  }
 
   override def idempotentUnary(
     request: IdempotentUnaryRequest,
     ctx: Metadata,
-  ): F[(IdempotentUnaryResponse, Metadata)] = {
-    for
-      res <- handleUnaryRequest(
+  ): F[(IdempotentUnaryResponse, Metadata)] =
+    for res <- handleUnaryRequest(
         request.getResponseDefinition,
         Seq(request.toProtoAny),
-        ctx
+        ctx,
       )
     yield (
       IdempotentUnaryResponse(res.payload.some),
-      res.trailers
+      res.trailers,
     )
-  }
 
   private def handleUnaryRequest(
     responseDefinition: UnaryResponseDefinition,
@@ -56,13 +52,15 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
     val requestInfo = ConformancePayload.RequestInfo(
       requestHeaders = mkConformanceHeaders(ctx),
       timeoutMs = extractTimeoutMs(ctx),
-      requests = requests
+      requests = requests,
     )
 
-    val trailers = mkMetadata(Seq.concat(
-      responseDefinition.responseHeaders,
-      responseDefinition.responseTrailers.map(h => h.copy(name = s"trailer-${h.name}")),
-    ))
+    val trailers = mkMetadata(
+      Seq.concat(
+        responseDefinition.responseHeaders,
+        responseDefinition.responseTrailers.map(h => h.copy(name = s"trailer-${h.name}")),
+      )
+    )
 
     val responseData = responseDefinition.response match {
       case UnaryResponseDefinition.Response.ResponseData(bs) =>
@@ -81,20 +79,19 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
       UnaryHandlerResponse(
         ConformancePayload(
           responseData.getOrElse(ByteString.EMPTY),
-          requestInfo.some
+          requestInfo.some,
         ),
-        trailers
+        trailers,
       ).pure[F],
-      sleep
+      sleep,
     )
 
   }
 
-  private def mkConformanceHeaders(metadata: Metadata): Seq[Header] = {
+  private def mkConformanceHeaders(metadata: Metadata): Seq[Header] =
     metadata.keys().asScala.map { key =>
       Header(key, metadata.getAll(asciiKey[String](key)).asScala.toSeq)
     }.toSeq
-  }
 
   private def mkMetadata(headers: Seq[Header]): Metadata = {
     val metadata = new Metadata()
@@ -108,29 +105,28 @@ class ConformanceServiceImpl[F[_] : Async] extends ConformanceServiceFs2GrpcTrai
     metadata
   }
 
-  private def extractTimeoutMs(metadata: Metadata): Option[Long] = {
+  private def extractTimeoutMs(metadata: Metadata): Option[Long] =
     Option(metadata.get(GrpcUtil.TIMEOUT_KEY)).map(_ / 1_000_000)
-  }
 
   override def serverStream(
     request: ServerStreamRequest,
-    ctx: Metadata
+    ctx: Metadata,
   ): fs2.Stream[F, ServerStreamResponse] = ???
 
   override def clientStream(
     request: fs2.Stream[F, ClientStreamRequest],
-    ctx: Metadata
+    ctx: Metadata,
   ): F[(ClientStreamResponse, Metadata)] = ???
 
   override def bidiStream(
     request: fs2.Stream[F, BidiStreamRequest],
-    ctx: Metadata
+    ctx: Metadata,
   ): fs2.Stream[F, BidiStreamResponse] = ???
 
   // This endpoint must stay unimplemented
   override def unimplemented(
     request: UnimplementedRequest,
-    ctx: Metadata
+    ctx: Metadata,
   ): F[(UnimplementedResponse, Metadata)] = ???
 
 }

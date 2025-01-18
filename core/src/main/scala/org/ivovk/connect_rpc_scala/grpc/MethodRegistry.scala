@@ -24,7 +24,7 @@ object MethodRegistry {
         val methodDescriptor = smd.getMethodDescriptor
 
         val requestMarshaller = methodDescriptor.getRequestMarshaller match
-          case m: scalapb.grpc.Marshaller[_] => m
+          case m: scalapb.grpc.Marshaller[_]               => m
           case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => tm
           case unsupported => throw new RuntimeException(s"Unsupported marshaller $unsupported")
 
@@ -49,22 +49,21 @@ object MethodRegistry {
 
   private val HttpFieldNumber = 72295728
 
-  private def extractHttpRule(methodDescriptor: MethodDescriptor[_, _]): Option[HttpRule] = {
-    methodDescriptor.getSchemaDescriptor match
+  private def extractHttpRule(methodDescriptor: MethodDescriptor[_, _]): Option[HttpRule] =
+    methodDescriptor.getSchemaDescriptor match {
       case sd: ConcreteProtoMethodDescriptorSupplier =>
         val fields = sd.getMethodDescriptor.getOptions.getUnknownFields
 
         if fields.hasField(HttpFieldNumber) then
           Some(HttpRule.parseFrom(fields.getField(HttpFieldNumber).getLengthDelimitedList.get(0).toByteArray))
-        else
-          None
+        else None
       case _ =>
         None
-  }
+    }
 
 }
 
-class MethodRegistry private(entries: Seq[MethodRegistry.Entry]) {
+class MethodRegistry private (entries: Seq[MethodRegistry.Entry]) {
 
   private val serviceMethodEntries: Map[Service, Map[Method, MethodRegistry.Entry]] = entries
     .groupMapReduce(_.name.service)(e => Map(e.name.method -> e))(_ ++ _)

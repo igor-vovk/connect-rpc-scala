@@ -9,13 +9,14 @@ import org.ivovk.connect_rpc_scala.http.RequestEntity
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, MessageCodec}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
-class TranscodingRoutesProvider[F[_] : MonadThrow](
+class TranscodingRoutesProvider[F[_]: MonadThrow](
   urlMatcher: TranscodingUrlMatcher[F],
   handler: TranscodingHandler[F],
-  serDeser: JsonSerDeser[F]
+  serDeser: JsonSerDeser[F],
 ) {
   def routes: HttpRoutes[F] = HttpRoutes[F] { req =>
-    OptionT.fromOption[F](urlMatcher.matchRequest(req))
+    OptionT
+      .fromOption[F](urlMatcher.matchRequest(req))
       .semiflatMap { case MatchedRequest(method, pathJson, queryJson, reqBodyTransform) =>
         given Companion[Message] = method.requestMessageCompanion
 
@@ -29,7 +30,7 @@ class TranscodingRoutesProvider[F[_] : MonadThrow](
             handler.handleUnary(
               bodyMessage.merge(pathMessage).merge(queryMessage).build,
               req.headers,
-              method
+              method,
             )
           }
       }

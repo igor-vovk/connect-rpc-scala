@@ -8,7 +8,6 @@ import org.ivovk.connect_rpc_scala.http.Headers.`Connect-Timeout-Ms`
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
-
 object RequestEntity {
   extension (h: Headers) {
     def timeout: Option[Long] =
@@ -21,6 +20,7 @@ object RequestEntity {
 
 /**
  * Encoded message and headers with the knowledge how this message can be decoded.
+ *
  * Similar to [[org.http4s.Media]], but extends the message with `String` type representing message that is
  * passed in a query parameter.
  */

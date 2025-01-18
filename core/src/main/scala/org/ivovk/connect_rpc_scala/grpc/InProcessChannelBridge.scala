@@ -15,21 +15,20 @@ object InProcessChannelBridge {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  def create[F[_] : Sync](
+  def create[F[_]: Sync](
     services: Seq[ServerServiceDefinition],
     serverConfigurator: Endo[ServerBuilder[?]],
     channelConfigurator: Endo[ManagedChannelBuilder[?]],
     executor: Executor,
     waitForShutdown: Duration,
-  ): Resource[F, Channel] = {
+  ): Resource[F, Channel] =
     for
-      name <- Resource.eval(Sync[F].delay(InProcessServerBuilder.generateName()))
-      server <- createServer(name, services, serverConfigurator, executor, waitForShutdown)
+      name    <- Resource.eval(Sync[F].delay(InProcessServerBuilder.generateName()))
+      server  <- createServer(name, services, serverConfigurator, executor, waitForShutdown)
       channel <- createStub(name, channelConfigurator, executor, waitForShutdown)
     yield channel
-  }
 
-  private def createServer[F[_] : Sync](
+  private def createServer[F[_]: Sync](
     name: String,
     services: Seq[ServerServiceDefinition],
     serverConfigurator: Endo[ServerBuilder[?]],
@@ -43,18 +42,21 @@ object InProcessChannelBridge {
         .pipe(serverConfigurator)
         .build().start()
     }
-    val release = (s: Server) => Sync[F].delay {
-      val res = s.shutdown().awaitTermination(waitForShutdown.toMillis, TimeUnit.MILLISECONDS)
+    val release = (s: Server) =>
+      Sync[F].delay {
+        val res = s.shutdown().awaitTermination(waitForShutdown.toMillis, TimeUnit.MILLISECONDS)
 
-      if (!res) {
-        logger.warn(s"GRPC server did not shut down in $waitForShutdown, consider increasing shutdown timeout")
+        if (!res) {
+          logger.warn(
+            s"GRPC server did not shut down in $waitForShutdown, consider increasing shutdown timeout"
+          )
+        }
       }
-    }
 
     Resource.make(acquire)(release)
   }
 
-  private def createStub[F[_] : Sync](
+  private def createStub[F[_]: Sync](
     name: String,
     channelConfigurator: Endo[ManagedChannelBuilder[?]],
     executor: Executor,
@@ -66,13 +68,16 @@ object InProcessChannelBridge {
         .pipe(channelConfigurator)
         .build()
     }
-    val release = (c: ManagedChannel) => Sync[F].delay {
-      val res = c.shutdown().awaitTermination(waitForShutdown.toMillis, TimeUnit.MILLISECONDS)
+    val release = (c: ManagedChannel) =>
+      Sync[F].delay {
+        val res = c.shutdown().awaitTermination(waitForShutdown.toMillis, TimeUnit.MILLISECONDS)
 
-      if (!res) {
-        logger.warn(s"GRPC channel did not shut down in $waitForShutdown, consider increasing shutdown timeout")
+        if (!res) {
+          logger.warn(
+            s"GRPC channel did not shut down in $waitForShutdown, consider increasing shutdown timeout"
+          )
+        }
       }
-    }
 
     Resource.make(acquire)(release)
   }

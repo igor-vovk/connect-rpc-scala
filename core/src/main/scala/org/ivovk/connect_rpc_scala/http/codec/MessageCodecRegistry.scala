@@ -9,7 +9,7 @@ object MessageCodecRegistry {
 
 }
 
-class MessageCodecRegistry[F[_]] private(encoders: Map[MediaType, MessageCodec[F]]) {
+class MessageCodecRegistry[F[_]] private (encoders: Map[MediaType, MessageCodec[F]]) {
 
   def byMediaType(mediaType: MediaType): Option[MessageCodec[F]] = encoders.get(mediaType)
 
