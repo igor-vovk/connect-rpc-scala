@@ -163,7 +163,7 @@ How-tos that go beyond the basic usage:
 Run the following command to run Connect-RPC conformance tests:
 
 ```shell
-docker build . --output "out" --progress=plain
+docker build conformance-build --output "out" --progress=plain
 ```
 
 Execution results are output to STDOUT.

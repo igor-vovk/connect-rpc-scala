@@ -16,10 +16,10 @@ EOF
 
 FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.10.5_3.3.4 AS build
 
-ADD ./conformance /app/conformance
-ADD ./core /app/core
-ADD ./project /app/project
-ADD ./build.sbt /app/build.sbt
+ADD conformance /app/conformance
+ADD core /app/core
+ADD project /app/project
+ADD build.sbt /app/build.sbt
 
 WORKDIR /app
 RUN sbt stage
