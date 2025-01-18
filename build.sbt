@@ -71,10 +71,21 @@ lazy val conformance = project
     ),
   )
 
+lazy val benchmarking = project
+  .dependsOn(core)
+  .enablePlugins(Fs2Grpc)
+  .settings(
+    noPublish,
+    libraryDependencies ++= Seq(
+      "org.http4s" %% "http4s-ember-server" % Versions.http4s
+    ),
+  )
+
 lazy val root = (project in file("."))
   .aggregate(
     core,
     conformance,
+    benchmarking,
   )
   .settings(
     name := "connect-rpc-scala",
