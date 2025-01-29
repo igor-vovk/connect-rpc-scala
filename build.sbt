@@ -71,6 +71,16 @@ lazy val conformance = project
     ),
   )
 
+lazy val netty = project
+  .dependsOn(core)
+  .settings(
+    noPublish,
+    libraryDependencies ++= Seq(
+      "io.grpc"  % "grpc-netty" % Versions.grpc,
+      "io.netty" % "netty-all"  % "4.1.117.Final",
+    ),
+  )
+
 lazy val root = (project in file("."))
   .aggregate(
     core,
