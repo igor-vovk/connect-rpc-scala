@@ -51,6 +51,13 @@ object InProcessChannelBridge {
             s"GRPC server did not shut down in $waitForShutdown, consider increasing shutdown timeout"
           )
         }
+
+        val res2 = s.shutdownNow().awaitTermination(waitForShutdown.toMillis, TimeUnit.MILLISECONDS)
+        if (!res2) {
+          logger.warn(
+            s"GRPC server did not shut down in $waitForShutdown, consider increasing shutdown timeout"
+          )
+        }
       }
 
     Resource.make(acquire)(release)

@@ -12,8 +12,7 @@ RUN <<EOF
     CONFORMANCE_URL="https://github.com/connectrpc/conformance/releases/download/${CONFORMANCE_VERSION}/connectconformance-${CONFORMANCE_VERSION}-${UNAME_OS}-${UNAME_ARCH}.tar.gz"
     echo "Downloading conformance from ${CONFORMANCE_URL}"
     curl -sSL "${CONFORMANCE_URL}" -o conformance.tgz
-    tar -xvzf conformance.tgz
-    chmod +x connectconformance
+    tar -xvzf conformance.tgz && chmod +x connectconformance
 EOF
 
 FROM sbt_image AS build
@@ -40,7 +39,7 @@ RUN mkdir "/logs"
 RUN echo ">>>>> Running stable tests <<<<<"
 RUN LOGS_PATH="/logs" \
     ./connectconformance \
-    --conf suite-stable.yaml \
+    --conf suite.yaml \
     --mode server \
     --parallel 1 \
     -v -vv --trace \
@@ -51,7 +50,7 @@ RUN LOGS_PATH="/logs" \
 RUN echo ">>>>> Running unstable tests <<<<<"
 RUN LOGS_PATH="/logs" \
     ./connectconformance \
-    --conf suite.yaml \
+    --conf suite-unstable.yaml \
     --mode server \
     --parallel 1 \
     -v -vv --trace \

@@ -23,6 +23,7 @@ object ClientCalls {
         call.start(CallbackListener[Resp](cb), headers)
         call.sendMessage(request)
         call.halfClose()
+        // request 2 messages to catch a case when a server sends more than one message
         call.request(2)
 
         Some(Async[F].delay(call.cancel("Cancelled", null)))
