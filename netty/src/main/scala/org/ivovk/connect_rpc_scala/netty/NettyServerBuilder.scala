@@ -21,7 +21,9 @@ import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import java.net.InetSocketAddress
 import scala.concurrent.ExecutionContext
 
-case class Server(address: InetSocketAddress)
+case class Server(
+  address: InetSocketAddress
+)
 
 class NettyServerBuilder[F[_]: Sync](
   services: Seq[ServerServiceDefinition],
@@ -66,7 +68,9 @@ class NettyServerBuilder[F[_]: Sync](
         .sync()
         .channel()
 
-      Server(channel.localAddress().asInstanceOf[InetSocketAddress])
+      Server(
+        address = channel.localAddress().asInstanceOf[InetSocketAddress]
+      )
     }
 
     val release: F[Unit] = Sync[F].delay {

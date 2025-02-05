@@ -23,7 +23,6 @@ ThisBuild / tpolecatExcludeOptions ++= Set(
 
 lazy val noPublish = List(
   publish         := {},
-  publishLocal    := {},
   publishArtifact := false,
   publish / skip  := true,
 )
@@ -32,7 +31,7 @@ lazy val Versions = new {
   val grpc    = "1.70.0"
   val http4s  = "0.23.30"
   val logback = "1.5.16"
-  val netty = "4.1.117.Final"
+  val netty   = "4.1.117.Final"
   val scalapb = _root_.scalapb.compiler.Version.scalapbVersion
 }
 
@@ -64,7 +63,7 @@ lazy val core = project
 lazy val netty = project
   .dependsOn(core)
   .settings(
-    noPublish,
+    name := "connect-rpc-scala-netty",
     libraryDependencies ++= Seq(
       "io.grpc"  % "grpc-netty" % Versions.grpc,
       "io.netty" % "netty-all"  % Versions.netty,

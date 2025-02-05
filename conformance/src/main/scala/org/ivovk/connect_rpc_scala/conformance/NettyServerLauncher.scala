@@ -3,8 +3,10 @@ package org.ivovk.connect_rpc_scala.conformance
 import cats.effect.{IO, IOApp}
 import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatResponse}
 import org.ivovk.connect_rpc_scala.ConnectRouteBuilder
+import org.ivovk.connect_rpc_scala.conformance.Http4sServerLauncher.getClass
 import org.ivovk.connect_rpc_scala.conformance.util.ServerCompatSerDeser
 import org.ivovk.connect_rpc_scala.netty.NettyServerBuilder
+import org.slf4j.LoggerFactory
 
 /**
  * In short:
@@ -21,6 +23,8 @@ import org.ivovk.connect_rpc_scala.netty.NettyServerBuilder
  * [[https://github.com/connectrpc/conformance/blob/main/docs/configuring_and_running_tests.md]]
  */
 object NettyServerLauncher extends IOApp.Simple {
+
+  private val logger = LoggerFactory.getLogger(getClass)
 
   override def run: IO[Unit] = {
     val res = for
@@ -40,7 +44,10 @@ object NettyServerLauncher extends IOApp.Simple {
         }
         .build
 
-      server <- NettyServerBuilder[IO](Seq(service)).build()
+      server <- NettyServerBuilder[IO](
+        Seq(service),
+        port = 0, // random port
+      ).build()
 
       addr = server.address
       resp = ServerCompatResponse(addr.getHostString, addr.getPort)
@@ -48,6 +55,7 @@ object NettyServerLauncher extends IOApp.Simple {
       _ <- ServerCompatSerDeser.writeResponse[IO](System.out, resp).toResource
 
       _ = System.err.println(s"Server started on $addr...")
+      _ = logger.info(s"Netty-server started on $addr...")
     yield ()
 
     res
