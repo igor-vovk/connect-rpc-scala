@@ -32,6 +32,7 @@ lazy val Versions = new {
   val grpc    = "1.70.0"
   val http4s  = "0.23.30"
   val logback = "1.5.16"
+  val netty = "4.1.117.Final"
   val scalapb = _root_.scalapb.compiler.Version.scalapbVersion
 }
 
@@ -60,8 +61,18 @@ lazy val core = project
     ),
   )
 
-lazy val conformance = project
+lazy val netty = project
   .dependsOn(core)
+  .settings(
+    noPublish,
+    libraryDependencies ++= Seq(
+      "io.grpc"  % "grpc-netty" % Versions.grpc,
+      "io.netty" % "netty-all"  % Versions.netty,
+    ),
+  )
+
+lazy val conformance = project
+  .dependsOn(core, netty)
   .enablePlugins(Fs2Grpc, JavaAppPackaging)
   .settings(
     noPublish,
@@ -71,19 +82,10 @@ lazy val conformance = project
     ),
   )
 
-lazy val netty = project
-  .dependsOn(core)
-  .settings(
-    noPublish,
-    libraryDependencies ++= Seq(
-      "io.grpc"  % "grpc-netty" % Versions.grpc,
-      "io.netty" % "netty-all"  % "4.1.117.Final",
-    ),
-  )
-
 lazy val root = (project in file("."))
   .aggregate(
     core,
+    netty,
     conformance,
   )
   .settings(

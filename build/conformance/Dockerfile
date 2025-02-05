@@ -47,17 +47,17 @@ RUN LOGS_PATH="/logs" \
     -- \
     /app/bin/conformance
 
-# Run unstable tests; allow them to fail
-RUN echo ">>>>> Running unstable tests <<<<<"
-RUN LOGS_PATH="/logs" \
-    ./connectconformance \
-    --conf suite.yaml \
-    --mode server \
-    --parallel 1 \
-    -v -vv --trace \
-    -- \
-    /app/bin/conformance; \
-    exit 0
+## Run unstable tests; allow them to fail
+#RUN echo ">>>>> Running unstable tests <<<<<"
+#RUN LOGS_PATH="/logs" \
+#    ./connectconformance \
+#    --conf suite.yaml \
+#    --mode server \
+#    --parallel 1 \
+#    -v -vv --trace \
+#    -- \
+#    /app/bin/conformance; \
+#    exit 0
 
 FROM scratch AS export
 
