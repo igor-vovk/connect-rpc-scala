@@ -2,21 +2,13 @@ package org.ivovk.connect_rpc_scala.http
 
 import cats.MonadThrow
 import fs2.Stream
-import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
-import org.http4s.{Charset, ContentCoding, Headers, Request}
-import org.ivovk.connect_rpc_scala.http.Headers.`Connect-Timeout-Ms`
+import io.grpc.Metadata
+import org.http4s.ContentCoding
+import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
-object RequestEntity {
-  extension (h: Headers) {
-    def timeout: Option[Long] =
-      h.get[`Connect-Timeout-Ms`].map(_.value)
-  }
-
-  def fromBody[F[_]](req: Request[F]): RequestEntity[F] =
-    RequestEntity(req.body, req.headers)
-}
+import java.nio.charset.Charset
 
 /**
  * Encoded message and headers with the knowledge how this message can be decoded.
@@ -26,20 +18,17 @@ object RequestEntity {
  */
 case class RequestEntity[F[_]](
   message: String | Stream[F, Byte],
-  headers: Headers,
+  headers: Metadata,
 ) {
   import RequestEntity.*
 
-  private def contentType: Option[`Content-Type`] =
-    headers.get[`Content-Type`]
+  private def contentType: Option[GrpcHeaders.ContentType] =
+    Option(headers.get(GrpcHeaders.ContentTypeKey))
 
-  def charset: Charset =
-    contentType.flatMap(_.charset).getOrElse(Charset.`UTF-8`)
+  def charset: Charset = contentType.flatMap(_.nioCharset).getOrElse(Charset.defaultCharset())
 
   def encoding: Option[ContentCoding] =
-    headers.get[`Content-Encoding`].map(_.contentCoding)
-
-  def timeout: Option[Long] = headers.timeout
+    Option(headers.get(GrpcHeaders.ContentEncodingKey)).map(ContentCoding.unsafeFromString)
 
   def as[A <: Message: Companion](using M: MonadThrow[F], codec: MessageCodec[F]): F[A] =
     M.rethrow(codec.decode(this)(using summon[Companion[A]]).value)

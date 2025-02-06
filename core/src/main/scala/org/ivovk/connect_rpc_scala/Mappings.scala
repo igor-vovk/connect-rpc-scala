@@ -19,11 +19,21 @@ object HeaderMapping {
   val DefaultOutgoingHeadersFilter: HeadersFilter = name => !name.startsWith("grpc-")
 }
 
+trait HeadersToMetadata {
+  def toMetadata(headers: Headers): Metadata
+}
+
+trait MetadataToHeaders {
+  def toHeaders(metadata: Metadata): Headers
+  def trailersToHeaders(metadata: Metadata): Headers
+}
+
 class HeaderMapping(
   headersFilter: HeadersFilter,
   metadataFilter: HeadersFilter,
   treatTrailersAsHeaders: Boolean,
-) {
+) extends HeadersToMetadata,
+      MetadataToHeaders {
 
   private val keyCache: mutable.Map[String, Metadata.Key[String]] =
     new mutable.WeakHashMap[String, Metadata.Key[String]]()
@@ -31,7 +41,7 @@ class HeaderMapping(
   private inline def cachedAsciiKey(name: String): Metadata.Key[String] =
     keyCache.getOrElseUpdate(name, asciiKey(name))
 
-  def toMetadata(headers: Headers): Metadata = {
+  override def toMetadata(headers: Headers): Metadata = {
     val metadata = new Metadata()
     headers.headers.foreach { header =>
       val headerName = header.name.toString
@@ -73,10 +83,10 @@ class HeaderMapping(
     new Headers(b.result())
   }
 
-  def toHeaders(metadata: Metadata): Headers =
+  override def toHeaders(metadata: Metadata): Headers =
     headers(metadata)
 
-  def trailersToHeaders(metadata: Metadata): Headers =
+  override def trailersToHeaders(metadata: Metadata): Headers =
     headers(metadata, trailing = !treatTrailersAsHeaders)
 
 }

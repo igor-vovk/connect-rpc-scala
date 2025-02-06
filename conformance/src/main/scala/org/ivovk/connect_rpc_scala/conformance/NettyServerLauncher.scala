@@ -44,10 +44,16 @@ object NettyServerLauncher extends IOApp.Simple {
         }
         .build
 
-      server <- NettyServerBuilder[IO](
-        Seq(service),
-        port = 0, // random port
-      ).build()
+      server <- NettyServerBuilder
+        .forServices[IO](Seq(service))
+        .withJsonCodecConfigurator {
+          // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
+          // JSON-serialization conformance tests
+          _
+            .registerType[connectrpc.conformance.v1.UnaryRequest]
+            .registerType[connectrpc.conformance.v1.IdempotentUnaryRequest]
+        }
+        .build()
 
       addr = server.address
       resp = ServerCompatResponse(addr.getHostString, addr.getPort)

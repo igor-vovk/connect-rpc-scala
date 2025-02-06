@@ -6,6 +6,7 @@ import fs2.text.decodeWithCharset
 import fs2.{Chunk, Stream}
 import org.http4s.headers.`Content-Type`
 import org.http4s.{DecodeResult, Headers, InvalidMessageBodyFailure, MediaType}
+import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
 import org.json4s.jackson.JsonMethods
 import org.slf4j.LoggerFactory
@@ -26,7 +27,7 @@ class JsonMessageCodec[F[_]: Sync](
   override val mediaType: MediaType = MediaTypes.`application/json`
 
   override def decode[A <: Message](entity: RequestEntity[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
-    val charset = entity.charset.nioCharset
+    val charset = entity.charset
     val string = entity.message match {
       case str: String =>
         Sync[F].delay(URLDecoder.decode(str, charset))
@@ -41,7 +42,9 @@ class JsonMessageCodec[F[_]: Sync](
     string
       .flatMap { str =>
         if (logger.isTraceEnabled) {
-          logger.trace(s">>> Headers: ${entity.headers.redactSensitive()}")
+          logger.trace(
+            s">>> Headers: ${GrpcHeaders.redactSensitiveHeaders(entity.headers)}"
+          )
           logger.trace(s">>> JSON: $str")
         }
 

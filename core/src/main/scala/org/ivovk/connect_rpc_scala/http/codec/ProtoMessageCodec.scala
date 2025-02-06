@@ -7,6 +7,7 @@ import fs2.Stream
 import fs2.io.{readOutputStream, toInputStreamResource}
 import org.http4s.headers.`Content-Type`
 import org.http4s.{DecodeResult, Headers, InvalidMessageBodyFailure, MediaType}
+import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
@@ -25,7 +26,7 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
   override def decode[A <: Message](entity: RequestEntity[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
     val msg = entity.message match {
       case str: String =>
-        Async[F].delay(cmp.parseFrom(base64dec.decode(str.getBytes(entity.charset.nioCharset))))
+        Async[F].delay(cmp.parseFrom(base64dec.decode(str.getBytes(entity.charset))))
       case stream: Stream[F, Byte] =>
         toInputStreamResource(compressor.decompressed(entity.encoding, stream))
           .use(is => Async[F].delay(cmp.parseFrom(is)))
@@ -35,7 +36,7 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
       .pipe(
         if logger.isTraceEnabled then
           _.map { msg =>
-            logger.trace(s">>> Headers: ${entity.headers.redactSensitive()}")
+            logger.trace(s">>> Headers: ${GrpcHeaders.redactSensitiveHeaders(entity.headers)}")
             logger.trace(s">>> Proto: ${msg.toProtoString}")
             msg
           }

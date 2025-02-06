@@ -191,6 +191,7 @@ final class ConnectRouteBuilder[F[_]: Async] private (
         pathPrefix,
         methodRegistry,
         codecRegistry,
+        headerMapping,
         connectHandler,
       ).routes
 
@@ -208,6 +209,7 @@ final class ConnectRouteBuilder[F[_]: Async] private (
       val transcodingRoutes = TranscodingRoutesProvider[F](
         transcodingUrlMatcher,
         transcodingHandler,
+        headerMapping,
         jsonSerDeser,
       ).routes
 

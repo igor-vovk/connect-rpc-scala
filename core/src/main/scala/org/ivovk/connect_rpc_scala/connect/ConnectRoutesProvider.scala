@@ -6,6 +6,7 @@ import cats.implicits.*
 import org.http4s.Status.UnsupportedMediaType
 import org.http4s.dsl.request.*
 import org.http4s.{HttpRoutes, MediaType, Method, Response, Uri}
+import org.ivovk.connect_rpc_scala.HeadersToMetadata
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
 import org.ivovk.connect_rpc_scala.http.QueryParams.*
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
@@ -15,6 +16,7 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
   pathPrefix: Uri.Path,
   methodRegistry: MethodRegistry,
   codecRegistry: MessageCodecRegistry[F],
+  headerMapping: HeadersToMetadata,
   handler: ConnectHandler[F],
 ) {
 
@@ -26,9 +28,9 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
         // until https://github.com/scalapb/ScalaPB/pull/1774 is merged
         .filter(_.descriptor.isSafe || true)
         .semiflatMap { methodEntry =>
-          withCodec(codecRegistry, mediaType.some) { codec =>
-            val entity = RequestEntity[F](message, req.headers)
+          val entity = RequestEntity[F](message, headerMapping.toMetadata(req.headers))
 
+          withCodec(codecRegistry, mediaType.some) { codec =>
             handler.handle(entity, methodEntry)(using codec)
           }
         }
@@ -36,9 +38,9 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
       OptionT
         .fromOption[F](methodRegistry.get(service, method))
         .semiflatMap { methodEntry =>
-          withCodec(codecRegistry, req.contentType.map(_.mediaType)) { codec =>
-            val entity = RequestEntity.fromBody(req)
+          val entity = RequestEntity(req.body, headerMapping.toMetadata(req.headers))
 
+          withCodec(codecRegistry, req.contentType.map(_.mediaType)) { codec =>
             handler.handle(entity, methodEntry)(using codec)
           }
         }

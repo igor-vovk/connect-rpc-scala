@@ -3,15 +3,12 @@ package org.ivovk.connect_rpc_scala.transcoding
 import cats.effect.Async
 import cats.implicits.*
 import io.grpc.*
+import org.http4s.Response
 import org.http4s.Status.Ok
-import org.http4s.{Header, Headers, Response}
-import org.ivovk.connect_rpc_scala.{ErrorHandler, HeaderMapping}
 import org.ivovk.connect_rpc_scala.Mappings.*
-import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, MethodRegistry}
-import org.ivovk.connect_rpc_scala.http.Headers.`X-Test-Case-Name`
-import org.ivovk.connect_rpc_scala.http.RequestEntity
-import org.ivovk.connect_rpc_scala.http.RequestEntity.*
+import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
+import org.ivovk.connect_rpc_scala.{ErrorHandler, HeaderMapping}
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
 
@@ -28,12 +25,12 @@ class TranscodingHandler[F[_]: Async](
 
   def handleUnary(
     message: GeneratedMessage,
-    headers: Headers,
+    headers: Metadata,
     method: MethodRegistry.Entry,
   )(using MessageCodec[F], EncodeOptions): F[Response[F]] = {
     if (logger.isTraceEnabled) {
       // Used in conformance tests
-      headers.get[`X-Test-Case-Name`] match {
+      Option(headers.get(GrpcHeaders.XTestCaseNameKey)) match {
         case Some(header) =>
           logger.trace(s">>> Test Case: ${header.value}")
         case None => // ignore
@@ -46,8 +43,8 @@ class TranscodingHandler[F[_]: Async](
 
     val callOptions = CallOptions.DEFAULT
       .pipe(
-        headers.timeout match {
-          case Some(timeout) => _.withDeadlineAfter(timeout, MILLISECONDS)
+        Option(headers.get(GrpcHeaders.ConnectTimeoutMsKey)) match {
+          case Some(timeout) => _.withDeadlineAfter(timeout.value, MILLISECONDS)
           case None          => identity
         }
       )
@@ -57,7 +54,7 @@ class TranscodingHandler[F[_]: Async](
         channel,
         method.descriptor,
         callOptions,
-        headerMapping.toMetadata(headers),
+        headers,
         message,
       )
       .map { response =>

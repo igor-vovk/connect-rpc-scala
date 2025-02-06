@@ -22,10 +22,18 @@ class ConnectHttpServerHandler(
         val pathParts  = decodedUri.path.split('/').toList
 
         val grpcMethod = pathParts match
-          case service :: method :: Nil =>
-            methodRegistry.get(service, method)
+          case serviceName :: methodName :: Nil =>
+            methodRegistry.get(serviceName, methodName)
           case _ =>
             None
+
+        grpcMethod match {
+          case None =>
+            writeResponse(ctx, "Method not found")
+            return
+          case Some(methodEntry) =>
+            methodEntry.requestMessageCompanion
+        }
         val requestBody = request.content.toString(CharsetUtil.UTF_8)
 
         responseData.setLength(0)
