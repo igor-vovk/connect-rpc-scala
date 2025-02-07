@@ -22,8 +22,8 @@ object GrpcHeaders {
   }
 
   given AsciiMarshaller[ContentType] = asciiMarshaller { s =>
-    val Array(mediaType, charset) = s.split("; charset=")
-    ContentType(mediaType, Option(charset))
+    val arr = s.split("; charset=")
+    ContentType(arr(0), arr.lift(1))
   }(c => c.charset.fold(c.mediaType)(charset => s"${c.mediaType}; charset=$charset"))
 
   private[connect_rpc_scala] val ContentTypeKey: Key[ContentType] = metadata.asciiKey("content-type")
@@ -50,19 +50,16 @@ object GrpcHeaders {
 
   private[connect_rpc_scala] val AuthorizationKey: Key[String] = metadata.asciiKey("authorization")
 
-  def redactSensitiveHeaders(headers: Metadata): Metadata = {
-    val headers2 = new Metadata()
-    val keys     = headers.keys()
+  private val SensitiveHeaders: Set[Key[?]] = Set(AuthorizationKey, CookieKey, SetCookieKey)
 
-    for (keyName <- keys.iterator().asScala)
-      if (
-        keyName == AuthorizationKey.name() || keyName == CookieKey.name() || keyName == SetCookieKey.name()
-      ) {
-        headers2.put(asciiKey[String](keyName), "REDACTED")
-      } else {
-        val key = metadata.asciiKey(keyName)
-        headers2.put(key, headers2.get(key))
-      }
+  def redactSensitiveHeaders(
+    headers: Metadata,
+    headersToRemove: Set[Key[?]] = SensitiveHeaders,
+  ): Metadata = {
+    val headers2 = new Metadata()
+
+    headers2.merge(headers)
+    headersToRemove.foreach(headers2.discardAll)
 
     headers2
   }

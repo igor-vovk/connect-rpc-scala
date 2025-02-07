@@ -112,7 +112,11 @@ class NettyServerBuilder[F[_]: Sync] private (
         .channel()
 
       Server(
-        address = channel.localAddress().asInstanceOf[InetSocketAddress]
+        address = channel.localAddress() match {
+          case inet: InetSocketAddress =>
+            inet
+          case _ => throw new RuntimeException("Failed to get local address")
+        }
       )
     }
 
