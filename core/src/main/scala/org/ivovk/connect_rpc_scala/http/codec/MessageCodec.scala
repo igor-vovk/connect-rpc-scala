@@ -4,8 +4,6 @@ import org.http4s.{ContentCoding, DecodeResult, MediaType}
 import org.ivovk.connect_rpc_scala.http.{RequestEntity, ResponseEntity}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
-import scala.util.chaining.*
-
 case class EncodeOptions(
   encoding: Option[ContentCoding]
 )

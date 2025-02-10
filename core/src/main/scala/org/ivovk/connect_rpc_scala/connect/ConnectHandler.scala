@@ -10,12 +10,12 @@ import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.RequestEntity
 import org.ivovk.connect_rpc_scala.http.codec.{Compressor, EncodeOptions, MessageCodec}
+import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.ivovk.connect_rpc_scala.{ErrorHandler, MetadataToHeaders}
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
 
 import scala.concurrent.duration.*
-import scala.util.chaining.*
 
 class ConnectHandler[F[_]: Async](
   channel: Channel,
@@ -66,12 +66,9 @@ class ConnectHandler[F[_]: Async](
         }
 
         val callOptions = CallOptions.DEFAULT
-          .pipe(
-            Option(req.headers.get(GrpcHeaders.ConnectTimeoutMsKey)) match {
-              case Some(timeout) => _.withDeadlineAfter(timeout.value, MILLISECONDS)
-              case None          => identity
-            }
-          )
+          .pipeIfDefined(Option(req.headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, header) =>
+            options.withDeadlineAfter(header.value, MILLISECONDS)
+          }
 
         ClientCalls.asyncUnaryCall(
           channel,

@@ -22,8 +22,13 @@ object GrpcHeaders {
   }
 
   given AsciiMarshaller[ContentType] = asciiMarshaller { s =>
-    val arr = s.split("; charset=")
-    ContentType(arr(0), arr.lift(1))
+    if s.contains(";") then
+      val arr       = s.split("; charset=")
+      val mediaType = arr(0)
+      val charset   = if (arr.length > 1) Some(arr(1)) else None
+
+      ContentType(mediaType, charset)
+    else ContentType(s)
   }(c => c.charset.fold(c.mediaType)(charset => s"${c.mediaType}; charset=$charset"))
 
   private[connect_rpc_scala] val ContentTypeKey: Key[ContentType] = metadata.asciiKey("content-type")

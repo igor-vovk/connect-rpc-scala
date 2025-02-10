@@ -2,8 +2,7 @@ package org.ivovk.connect_rpc_scala.http
 
 import org.http4s.headers.`Content-Length`
 import org.http4s.{EntityBody, Headers, Response}
-
-import scala.util.chaining.*
+import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 
 case class ResponseEntity[F[_]](
   headers: Headers,
@@ -13,11 +12,9 @@ case class ResponseEntity[F[_]](
 
   def applyTo(response: Response[F]): Response[F] = {
     val headers = (response.headers ++ this.headers)
-      .pipe(
-        length match
-          case Some(length) => _.withContentLength(`Content-Length`(length))
-          case None         => identity
-      )
+      .pipeIfDefined(length) { (hs, len) =>
+        hs.withContentLength(`Content-Length`(len))
+      }
 
     response.copy(
       headers = headers,

@@ -5,8 +5,6 @@ import org.ivovk.connect_rpc_scala.http.json.{ConnectErrorFormat, ErrorDetailsAn
 import scalapb.json4s.{FormatRegistry, JsonFormat, TypeRegistry}
 import scalapb.{json4s, GeneratedMessage, GeneratedMessageCompanion}
 
-import scala.util.chaining.*
-
 case class JsonSerDeser[F[_]](
   parser: json4s.Parser,
   codec: JsonMessageCodec[F],

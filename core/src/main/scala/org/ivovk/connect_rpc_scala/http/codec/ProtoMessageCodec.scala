@@ -9,11 +9,11 @@ import org.http4s.headers.`Content-Type`
 import org.http4s.{DecodeResult, Headers, InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
+import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 import java.util.Base64
-import scala.util.chaining.*
 
 class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
 
@@ -33,15 +33,13 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
     }
 
     msg
-      .pipe(
-        if logger.isTraceEnabled then
-          _.map { msg =>
-            logger.trace(s">>> Headers: ${GrpcHeaders.redactSensitiveHeaders(entity.headers)}")
-            logger.trace(s">>> Proto: ${msg.toProtoString}")
-            msg
-          }
-        else identity
-      )
+      .pipeIf(logger.isTraceEnabled) {
+        _.map { msg =>
+          logger.trace(s">>> Headers: ${GrpcHeaders.redactSensitiveHeaders(entity.headers)}")
+          logger.trace(s">>> Proto: ${msg.toProtoString}")
+          msg
+        }
+      }
       .attemptT
       .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }

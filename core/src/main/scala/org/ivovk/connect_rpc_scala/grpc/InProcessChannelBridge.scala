@@ -4,12 +4,12 @@ import cats.Endo
 import cats.effect.{Resource, Sync}
 import io.grpc.*
 import io.grpc.inprocess.{InProcessChannelBuilder, InProcessServerBuilder}
+import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.util.concurrent.{Executor, TimeUnit}
 import scala.concurrent.duration.Duration
 import scala.jdk.CollectionConverters.*
-import scala.util.chaining.*
 
 object InProcessChannelBridge {
 

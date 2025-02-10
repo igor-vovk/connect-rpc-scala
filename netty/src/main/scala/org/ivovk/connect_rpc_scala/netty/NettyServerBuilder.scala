@@ -91,17 +91,17 @@ class NettyServerBuilder[F[_]: Sync] private (
       .childHandler(new ChannelInitializer[SocketChannel]() {
         override def initChannel(channel: SocketChannel): Unit = {
           val pipeline       = channel.pipeline()
-          val connectHandler = ConnectHttpServerHandler(methodRegistry)
+          val connectHandler = new ConnectHttpServerHandler(methodRegistry)
 
           pipeline
-            .pipeIf(enableLogging)(_.addLast("logger", LoggingHandler(LogLevel.INFO)))
-            .addLast("serverCodec", HttpServerCodec())
-            .addLast("keepAlive", HttpServerKeepAliveHandler())
-            .addLast("aggregator", HttpObjectAggregator(1048576))
-            .addLast("compressor", HttpContentCompressor())
-            .addLast("idleStateHandler", IdleStateHandler(60, 30, 0))
-            .addLast("readTimeoutHandler", ReadTimeoutHandler(30))
-            .addLast("writeTimeoutHandler", WriteTimeoutHandler(30))
+            .pipeIf(enableLogging)(_.addLast("logger", new LoggingHandler(LogLevel.INFO)))
+            .addLast("serverCodec", new HttpServerCodec())
+            .addLast("keepAlive", new HttpServerKeepAliveHandler())
+            .addLast("aggregator", new HttpObjectAggregator(1048576))
+            .addLast("compressor", new HttpContentCompressor())
+            .addLast("idleStateHandler", new IdleStateHandler(60, 30, 0))
+            .addLast("readTimeoutHandler", new ReadTimeoutHandler(30))
+            .addLast("writeTimeoutHandler", new WriteTimeoutHandler(30))
             .addLast("handler", connectHandler)
         }
       })

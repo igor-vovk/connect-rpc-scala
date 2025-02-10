@@ -8,12 +8,12 @@ import org.http4s.Status.Ok
 import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
+import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.ivovk.connect_rpc_scala.{ErrorHandler, HeaderMapping}
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
 
 import scala.concurrent.duration.*
-import scala.util.chaining.*
 
 class TranscodingHandler[F[_]: Async](
   channel: Channel,
@@ -42,12 +42,9 @@ class TranscodingHandler[F[_]: Async](
     }
 
     val callOptions = CallOptions.DEFAULT
-      .pipe(
-        Option(headers.get(GrpcHeaders.ConnectTimeoutMsKey)) match {
-          case Some(timeout) => _.withDeadlineAfter(timeout.value, MILLISECONDS)
-          case None          => identity
-        }
-      )
+      .pipeIfDefined(Option(headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, timeout) =>
+        options.withDeadlineAfter(timeout.value, MILLISECONDS)
+      }
 
     ClientCalls
       .asyncUnaryCall(

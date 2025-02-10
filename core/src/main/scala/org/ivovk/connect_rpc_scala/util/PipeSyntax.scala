@@ -9,6 +9,9 @@ object PipeSyntax {
       if cond then f(a)
       else a
 
+    inline def pipeIfDefined[B](inline opt: Option[B])(inline f: (A, B) => A): A =
+      opt.fold(a)(b => f(a, b))
+
     inline def tap[B](inline f: A => B): A = { f(a); a }
 
   }
