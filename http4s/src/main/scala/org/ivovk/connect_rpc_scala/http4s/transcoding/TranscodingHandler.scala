@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala.transcoding
+package org.ivovk.connect_rpc_scala.http4s.transcoding
 
 import cats.effect.Async
 import cats.implicits.*
@@ -9,7 +9,8 @@ import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
-import org.ivovk.connect_rpc_scala.{ErrorHandler, HeaderMapping}
+import org.ivovk.connect_rpc_scala.ErrorHandler
+import org.ivovk.connect_rpc_scala.http4s.Http4sHeaderMapping
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
 
@@ -18,7 +19,7 @@ import scala.concurrent.duration.*
 class TranscodingHandler[F[_]: Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
-  headerMapping: HeaderMapping,
+  headerMapping: Http4sHeaderMapping,
 ) {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)

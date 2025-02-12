@@ -1,9 +1,9 @@
-package org.ivovk.connect_rpc_scala.transcoding
+package org.ivovk.connect_rpc_scala.http4s.transcoding
 
 import cats.MonadThrow
 import cats.data.OptionT
 import cats.implicits.*
-import org.http4s.HttpRoutes
+import org.http4s.{Headers, HttpRoutes}
 import org.ivovk.connect_rpc_scala.HeadersToMetadata
 import org.ivovk.connect_rpc_scala.grpc.MergingBuilder.*
 import org.ivovk.connect_rpc_scala.http.RequestEntity
@@ -13,7 +13,7 @@ import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Compan
 class TranscodingRoutesProvider[F[_]: MonadThrow](
   urlMatcher: TranscodingUrlMatcher[F],
   handler: TranscodingHandler[F],
-  headerMapping: HeadersToMetadata,
+  headerMapping: HeadersToMetadata[Headers],
   serDeser: JsonSerDeser[F],
 ) {
 

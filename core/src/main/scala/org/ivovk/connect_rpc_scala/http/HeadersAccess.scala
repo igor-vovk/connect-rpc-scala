@@ -5,14 +5,14 @@ import org.typelevel.ci.CIStringSyntax
 
 import scala.annotation.targetName
 
-object Headers {
+object HeadersAccess {
 
   @targetName("ConnectTimeoutMs")
   case class `Connect-Timeout-Ms`(value: Long)
 
   @targetName("ConnectTimeoutMs$")
   object `Connect-Timeout-Ms` {
-    def parse(s: String): ParseResult[`Connect-Timeout-Ms`] =
+    private def parse(s: String): ParseResult[`Connect-Timeout-Ms`] =
       ParseResult.fromTryCatchNonFatal(s)(`Connect-Timeout-Ms`(s.toLong))
 
     implicit val header: Header[`Connect-Timeout-Ms`, Header.Single] = Header.createRendered(

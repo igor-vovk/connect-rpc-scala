@@ -1,20 +1,47 @@
 package org.ivovk.connect_rpc_scala.netty
 
+import cats.effect.std.Dispatcher
+import fs2.{Chunk, Stream}
+import io.grpc.Channel
 import io.netty.buffer.Unpooled
-import io.netty.channel.{ChannelHandlerContext, SimpleChannelInboundHandler}
+import io.netty.channel.{ChannelHandlerContext, ChannelInboundHandlerAdapter}
 import io.netty.handler.codec.http.*
 import io.netty.util.CharsetUtil
+import org.ivovk.connect_rpc_scala.HeaderMapping
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
+import org.ivovk.connect_rpc_scala.http.codec.MessageCodecRegistry
+import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 
-class ConnectHttpServerHandler(
-  methodRegistry: MethodRegistry
-) extends SimpleChannelInboundHandler[Any] {
+class ConnectHttpServerHandlerFactory[F[_]](
+  dispatcher: Dispatcher[F],
+  channel: Channel,
+  methodRegistry: MethodRegistry,
+  headerMapping: HeaderMapping[HttpHeaders],
+  codecRegistry: MessageCodecRegistry[F],
+) {
+  def createHandler() =
+    new ConnectHttpServerHandler[F](
+      dispatcher = dispatcher,
+      channel = channel,
+      methodRegistry = methodRegistry,
+      headerMapping = headerMapping,
+      codecRegistry = codecRegistry,
+    )
+}
+
+class ConnectHttpServerHandler[F[_]](
+  dispatcher: Dispatcher[F],
+  channel: Channel,
+  methodRegistry: MethodRegistry,
+  headerMapping: HeaderMapping[HttpHeaders],
+  codecRegistry: MessageCodecRegistry[F],
+) extends ChannelInboundHandlerAdapter {
   private val responseData = new StringBuilder()
 
   override def channelReadComplete(ctx: ChannelHandlerContext): Unit =
     ctx.flush()
 
-  override def channelRead0(ctx: ChannelHandlerContext, msg: Any): Unit =
+  override def channelRead(ctx: ChannelHandlerContext, msg: AnyRef): Unit =
     msg match {
       case request: FullHttpRequest =>
 //        val ctype      = request.headers().get(HttpHeaderNames.CONTENT_TYPE)
@@ -32,7 +59,17 @@ class ConnectHttpServerHandler(
             writeResponse(ctx, "Method not found")
             return
           case Some(methodEntry) =>
-            methodEntry.requestMessageCompanion
+            val requestEntity = RequestEntity[F](
+              message = Stream.chunk(Chunk.array(request.content.array())),
+              headers = headerMapping.toMetadata(request.headers()),
+            )
+
+            for requestMessage <- codecRegistry.byMediaType(MediaTypes.`application/json`).get
+                .decode(requestEntity)(using methodEntry.requestMessageCompanion)
+            yield ()
+
+            // Just to make it compile
+            println(requestMessage)
         }
         val requestBody = request.content.toString(CharsetUtil.UTF_8)
 

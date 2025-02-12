@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala
+package org.ivovk.connect_rpc_scala.http4s
 
 import cats.data.Kleisli
 import cats.effect.*
@@ -45,7 +45,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
   test("POST request") {
     val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
 
-    ConnectRouteBuilder.forService[IO](service).build
+    Http4sRouteBuilder.forService[IO](service).build
       .flatMap { routes =>
         Client.fromHttpApp(routes).run(
           Request[IO](Method.POST, uri"/test.TestService/Add").withEntity(""" { "a": 1, "b": 2} """)
@@ -67,7 +67,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
   test("GET request") {
     val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
 
-    ConnectRouteBuilder.forService[IO](service).build
+    Http4sRouteBuilder.forService[IO](service).build
       .flatMap { app =>
         val requestJson = URLEncoder.encode("""{"key":"123"}""", Charset.`UTF-8`.nioCharset)
 
@@ -97,7 +97,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
   test("Http-annotated GET request") {
     val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
 
-    ConnectRouteBuilder.forService[IO](service).build
+    Http4sRouteBuilder.forService[IO](service).build
       .flatMap { app =>
         Client.fromHttpApp(app).run(
           Request[IO](Method.GET, uri"/get/123")
@@ -119,7 +119,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
   test("Http field mapping") {
     val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
 
-    ConnectRouteBuilder.forService[IO](service).build
+    Http4sRouteBuilder.forService[IO](service).build
       .flatMap { app =>
         Client.fromHttpApp(app).run(
           Request[IO](Method.POST, uri"/body_mapping").withEntity(""" { "a": 1, "b": 2} """)
@@ -141,7 +141,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
   test("support path prefixes") {
     val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
 
-    ConnectRouteBuilder.forService[IO](service)
+    Http4sRouteBuilder.forService[IO](service)
       .withPathPrefix(Root / "connect")
       .build
       .flatMap { app =>
@@ -162,7 +162,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
   test("return 404 on unknown prefix") {
     val service = TestService.bindService(TestServiceImpl, ExecutionContext.global)
 
-    ConnectRouteBuilder.forService[IO](service)
+    Http4sRouteBuilder.forService[IO](service)
       .withPathPrefix(Root / "connect")
       .build
       .flatMap { app =>
@@ -183,7 +183,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
 
     val fallbackResponse = Response[IO](Status.MovedPermanently).withEntity("fallback")
 
-    ConnectRouteBuilder.forService[IO](service)
+    Http4sRouteBuilder.forService[IO](service)
       .buildRoutes
       .map(r => Kleisli((a: Request[IO]) => r.run(a).getOrElse(fallbackResponse)))
       .flatMap { app =>

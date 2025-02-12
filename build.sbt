@@ -28,12 +28,20 @@ lazy val noPublish = List(
 )
 
 lazy val Versions = new {
-  val grpc    = "1.70.0"
-  val http4s  = "0.23.30"
-  val logback = "1.5.16"
-  val netty   = "4.1.117.Final"
-  val scalapb = _root_.scalapb.compiler.Version.scalapbVersion
+  val grpc      = "1.70.0"
+  val http4s    = "0.23.30"
+  val logback   = "1.5.16"
+  val netty     = "4.1.117.Final"
+  val scalapb   = _root_.scalapb.compiler.Version.scalapbVersion
+  val scalatest = "3.2.19"
 }
+
+lazy val CommonDependencies = Seq(
+  libraryDependencies ++= Seq(
+    "ch.qos.logback" % "logback-classic" % Versions.logback   % Runtime,
+    "org.scalatest" %% "scalatest"       % Versions.scalatest % Test,
+  )
+)
 
 lazy val core = project
   .settings(
@@ -53,37 +61,53 @@ lazy val core = project
       "io.grpc"               % "grpc-core"            % Versions.grpc,
       "io.grpc"               % "grpc-protobuf"        % Versions.grpc,
       "io.grpc"               % "grpc-inprocess"       % Versions.grpc,
-      "org.http4s"           %% "http4s-dsl"           % Versions.http4s,
-      "org.http4s"           %% "http4s-client"        % Versions.http4s  % Test,
-      "org.scalatest"        %% "scalatest"            % "3.2.19"         % Test,
-      "ch.qos.logback"        % "logback-classic"      % Versions.logback % Test,
+      // TODO: stop using http4s-core and remove the dependency from the module
+      "org.http4s" %% "http4s-core" % Versions.http4s,
     ),
   )
+  .settings(CommonDependencies)
+
+lazy val http4s = project
+  .dependsOn(core)
+  .settings(
+    name := "connect-rpc-scala-http4s",
+    Test / PB.targets := Seq(
+      scalapb.gen() -> (Test / sourceManaged).value
+    ),
+    libraryDependencies ++= Seq(
+      "org.http4s" %% "http4s-dsl"    % Versions.http4s,
+      "org.http4s" %% "http4s-client" % Versions.http4s % Test,
+    ),
+  )
+  .settings(CommonDependencies)
 
 lazy val netty = project
   .dependsOn(core)
   .settings(
     name := "connect-rpc-scala-netty",
     libraryDependencies ++= Seq(
+      // TODO: not needed in this form. It is here to switch to grpc-netty-shaded at some point
       "io.grpc"  % "grpc-netty" % Versions.grpc,
       "io.netty" % "netty-all"  % Versions.netty,
     ),
   )
+  .settings(CommonDependencies)
 
 lazy val conformance = project
-  .dependsOn(core, netty)
+  .dependsOn(http4s, netty)
   .enablePlugins(Fs2Grpc, JavaAppPackaging)
   .settings(
     noPublish,
     libraryDependencies ++= Seq(
-      "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
-      "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
+      "org.http4s" %% "http4s-ember-server" % Versions.http4s
     ),
   )
+  .settings(CommonDependencies)
 
 lazy val root = (project in file("."))
   .aggregate(
     core,
+    http4s,
     netty,
     conformance,
   )

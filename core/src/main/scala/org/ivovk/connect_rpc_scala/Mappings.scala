@@ -1,103 +1,55 @@
 package org.ivovk.connect_rpc_scala
 
 import io.grpc.{Metadata, Status}
-import org.http4s.{Header, Headers, Response}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import org.ivovk.connect_rpc_scala.syntax.all.{*, given}
-import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
 
 import scala.collection.mutable
 
 type HeadersFilter = String => Boolean
 
+trait HeadersToMetadata[H] {
+  def toMetadata(headers: H): Metadata
+}
+
+trait MetadataToHeaders[H] {
+  def toHeaders(metadata: Metadata): H
+  def trailersToHeaders(metadata: Metadata): H
+}
+
 object HeaderMapping {
   val DefaultIncomingHeadersFilter: HeadersFilter = name =>
     !(name.startsWith("Connection") || name.startsWith("connection"))
 
   val DefaultOutgoingHeadersFilter: HeadersFilter = name => !name.startsWith("grpc-")
-}
-
-trait HeadersToMetadata {
-  def toMetadata(headers: Headers): Metadata
-}
-
-trait MetadataToHeaders {
-  def toHeaders(metadata: Metadata): Headers
-  def trailersToHeaders(metadata: Metadata): Headers
-}
-
-class HeaderMapping(
-  headersFilter: HeadersFilter,
-  metadataFilter: HeadersFilter,
-  treatTrailersAsHeaders: Boolean,
-) extends HeadersToMetadata,
-      MetadataToHeaders {
 
   private val keyCache: mutable.Map[String, Metadata.Key[String]] =
     new mutable.WeakHashMap[String, Metadata.Key[String]]()
 
-  private inline def cachedAsciiKey(name: String): Metadata.Key[String] =
+  def cachedAsciiKey(name: String): Metadata.Key[String] =
     keyCache.getOrElseUpdate(name, asciiKey(name))
 
-  override def toMetadata(headers: Headers): Metadata = {
-    val metadata = new Metadata()
-    headers.headers.foreach { header =>
-      val headerName = header.name.toString
-      if (headersFilter(headerName)) {
-        metadata.put(metadataKeyByHeaderName(headerName), header.value)
-      }
-    }
-    metadata
-  }
-
-  private def metadataKeyByHeaderName(name: String): Metadata.Key[String] =
+  def metadataKeyByHeaderName(name: String): Metadata.Key[String] =
     name match {
+      // Rename `User-Agent` to `x-user-agent` because `user-agent` is overridden by gRPC
       case "User-Agent" | "user-agent" =>
-        // Rename `User-Agent` to `x-user-agent` because `user-agent` gets overridden by gRPC
         GrpcHeaders.XUserAgentKey
-      case _ =>
-        cachedAsciiKey(name)
+      case _ => cachedAsciiKey(name)
     }
-
-  private def headers(
-    metadata: Metadata,
-    trailing: Boolean = false,
-  ): Headers = {
-    val keys = metadata.keys()
-    if (keys.isEmpty) return Headers.empty
-
-    val b = List.newBuilder[Header.Raw]
-
-    keys.forEach { key =>
-      if (metadataFilter(key)) {
-        val name = if (trailing) CIString(s"trailer-$key") else CIString(key)
-
-        metadata.getAll(cachedAsciiKey(key)).forEach { value =>
-          b += Header.Raw(name, value)
-        }
-      }
-    }
-
-    new Headers(b.result())
-  }
-
-  override def toHeaders(metadata: Metadata): Headers =
-    headers(metadata)
-
-  override def trailersToHeaders(metadata: Metadata): Headers =
-    headers(metadata, trailing = !treatTrailersAsHeaders)
 
 }
+
+trait HeaderMapping[H] extends HeadersToMetadata[H], MetadataToHeaders[H]
 
 object Mappings extends StatusCodeMappings, ResponseCodeExtensions
 
 trait ResponseCodeExtensions {
-  extension [F[_]](response: Response[F]) {
+  extension [F[_]](response: org.http4s.Response[F]) {
     def withMessage(
       entity: GeneratedMessage
-    )(using codec: MessageCodec[F], options: EncodeOptions): Response[F] =
+    )(using codec: MessageCodec[F], options: EncodeOptions): org.http4s.Response[F] =
       codec.encode(entity, options).applyTo(response)
   }
 }

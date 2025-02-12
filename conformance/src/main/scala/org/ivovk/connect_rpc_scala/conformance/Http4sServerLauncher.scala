@@ -5,12 +5,12 @@ import com.comcast.ip4s.{host, port, Port}
 import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatResponse}
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.Logger
-import org.ivovk.connect_rpc_scala.ConnectRouteBuilder
 import org.ivovk.connect_rpc_scala.conformance.util.ServerCompatSerDeser
+import org.ivovk.connect_rpc_scala.http4s.Http4sRouteBuilder
 import org.slf4j.LoggerFactory
 
 /**
- * In short:
+ * Flow:
  *
  *   - Upon launch, `ServerCompatRequest` message is sent from the test runner to the server to STDIN.
  *   - Server is started and listens on a random port.
@@ -35,7 +35,7 @@ object Http4sServerLauncher extends IOApp.Simple {
         ConformanceServiceImpl[IO]()
       )
 
-      app <- ConnectRouteBuilder.forService[IO](service)
+      app <- Http4sRouteBuilder.forService[IO](service)
         .withJsonCodecConfigurator {
           // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
           // JSON-serialization conformance tests

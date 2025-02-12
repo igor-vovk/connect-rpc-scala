@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala
+package org.ivovk.connect_rpc_scala.http4s
 
 import cats.Endo
 import cats.data.OptionT
@@ -6,33 +6,34 @@ import cats.effect.{Async, Resource}
 import cats.implicits.*
 import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import org.http4s.{HttpApp, HttpRoutes, Uri}
-import org.ivovk.connect_rpc_scala.connect.{ConnectErrorHandler, ConnectHandler, ConnectRoutesProvider}
 import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.codec.*
-import org.ivovk.connect_rpc_scala.transcoding.{
+import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectErrorHandler, ConnectHandler, ConnectRoutesProvider}
+import org.ivovk.connect_rpc_scala.http4s.transcoding.{
   TranscodingHandler,
   TranscodingRoutesProvider,
   TranscodingUrlMatcher,
 }
+import org.ivovk.connect_rpc_scala.{ErrorHandler, HeaderMapping, HeadersFilter}
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 
-object ConnectRouteBuilder {
+object Http4sRouteBuilder {
 
-  def forService[F[_]: Async](service: ServerServiceDefinition): ConnectRouteBuilder[F] =
+  def forService[F[_]: Async](service: ServerServiceDefinition): Http4sRouteBuilder[F] =
     forServices(Seq(service))
 
   def forServices[F[_]: Async](
     service: ServerServiceDefinition,
     other: ServerServiceDefinition*
-  ): ConnectRouteBuilder[F] =
+  ): Http4sRouteBuilder[F] =
     forServices(service +: other)
 
-  def forServices[F[_]: Async](services: Seq[ServerServiceDefinition]): ConnectRouteBuilder[F] =
-    new ConnectRouteBuilder(
+  def forServices[F[_]: Async](services: Seq[ServerServiceDefinition]): Http4sRouteBuilder[F] =
+    new Http4sRouteBuilder(
       services = services,
       serverConfigurator = identity,
       channelConfigurator = identity,
@@ -48,7 +49,7 @@ object ConnectRouteBuilder {
 
 }
 
-final class ConnectRouteBuilder[F[_]: Async] private (
+final class Http4sRouteBuilder[F[_]: Async] private (
   services: Seq[ServerServiceDefinition],
   serverConfigurator: Endo[ServerBuilder[_]],
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
@@ -74,8 +75,8 @@ final class ConnectRouteBuilder[F[_]: Async] private (
     waitForShutdown: Duration = waitForShutdown,
     treatTrailersAsHeaders: Boolean = treatTrailersAsHeaders,
     transcodingErrorHandler: Option[ErrorHandler[F]] = transcodingErrorHandler,
-  ): ConnectRouteBuilder[F] =
-    new ConnectRouteBuilder(
+  ): Http4sRouteBuilder[F] =
+    new Http4sRouteBuilder(
       services,
       serverConfigurator,
       channelConfigurator,
@@ -89,13 +90,13 @@ final class ConnectRouteBuilder[F[_]: Async] private (
       transcodingErrorHandler,
     )
 
-  def withServerConfigurator(method: Endo[ServerBuilder[_]]): ConnectRouteBuilder[F] =
+  def withServerConfigurator(method: Endo[ServerBuilder[_]]): Http4sRouteBuilder[F] =
     copy(serverConfigurator = method)
 
-  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectRouteBuilder[F] =
+  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): Http4sRouteBuilder[F] =
     copy(channelConfigurator = method)
 
-  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): ConnectRouteBuilder[F] =
+  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): Http4sRouteBuilder[F] =
     copy(customJsonSerDeser = Some(method(JsonSerDeserBuilder[F]()).build))
 
   /**
@@ -103,7 +104,7 @@ final class ConnectRouteBuilder[F[_]: Async] private (
    *
    * By default, headers with "connection" prefix are filtered out (GRPC requirement).
    */
-  def withIncomingHeadersFilter(filter: String => Boolean): ConnectRouteBuilder[F] =
+  def withIncomingHeadersFilter(filter: String => Boolean): Http4sRouteBuilder[F] =
     copy(incomingHeadersFilter = filter)
 
   /**
@@ -111,7 +112,7 @@ final class ConnectRouteBuilder[F[_]: Async] private (
    *
    * By default, headers with "grpc-" prefix are filtered out.
    */
-  def withOutgoingHeadersFilter(filter: String => Boolean): ConnectRouteBuilder[F] =
+  def withOutgoingHeadersFilter(filter: String => Boolean): Http4sRouteBuilder[F] =
     copy(outgoingHeadersFilter = filter)
 
   /**
@@ -119,16 +120,16 @@ final class ConnectRouteBuilder[F[_]: Async] private (
    *
    * "/" by default.
    */
-  def withPathPrefix(path: Uri.Path): ConnectRouteBuilder[F] =
+  def withPathPrefix(path: Uri.Path): Http4sRouteBuilder[F] =
     copy(pathPrefix = path)
 
-  def withExecutor(executor: Executor): ConnectRouteBuilder[F] =
+  def withExecutor(executor: Executor): Http4sRouteBuilder[F] =
     copy(executor = executor)
 
   /**
    * Amount of time to wait while GRPC server finishes processing requests that are in progress.
    */
-  def withWaitForShutdown(duration: Duration): ConnectRouteBuilder[F] =
+  def withWaitForShutdown(duration: Duration): Http4sRouteBuilder[F] =
     copy(waitForShutdown = duration)
 
   /**
@@ -137,10 +138,10 @@ final class ConnectRouteBuilder[F[_]: Async] private (
    * Both `fs2-grpc` and `zio-grpc` support only trailing headers, so having this option enabled is a single
    * way to send headers from the server to a client.
    */
-  def disableTreatingTrailersAsHeaders: ConnectRouteBuilder[F] =
+  def disableTreatingTrailersAsHeaders: Http4sRouteBuilder[F] =
     copy(treatTrailersAsHeaders = false)
 
-  def withTranscodingErrorHandler(handler: ErrorHandler[F]): ConnectRouteBuilder[F] =
+  def withTranscodingErrorHandler(handler: ErrorHandler[F]): Http4sRouteBuilder[F] =
     copy(transcodingErrorHandler = Some(handler))
 
   /**
@@ -163,7 +164,7 @@ final class ConnectRouteBuilder[F[_]: Async] private (
         waitForShutdown,
       )
     yield {
-      val headerMapping = HeaderMapping(
+      val headerMapping = Http4sHeaderMapping(
         incomingHeadersFilter,
         outgoingHeadersFilter,
         treatTrailersAsHeaders,

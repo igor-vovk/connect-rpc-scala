@@ -1,10 +1,10 @@
-package org.ivovk.connect_rpc_scala.connect
+package org.ivovk.connect_rpc_scala.http4s.connect
 
 import cats.effect.Async
 import cats.implicits.*
 import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
-import org.http4s.Response
+import org.http4s.{Headers, Response}
 import org.http4s.Status.Ok
 import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
@@ -20,7 +20,7 @@ import scala.concurrent.duration.*
 class ConnectHandler[F[_]: Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
-  headerMapping: MetadataToHeaders,
+  headerMapping: MetadataToHeaders[Headers],
 ) {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)

@@ -6,7 +6,7 @@ import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Compan
 object MergingBuilder {
   extension [T <: Message](t: T) {
     def merge(other: T)(using Companion[T]): MergingBuilder[T] =
-      SingleMergingBuilder(t).merge(other)
+      MergingBuilder1(t).merge(other)
   }
 }
 
@@ -16,25 +16,24 @@ sealed trait MergingBuilder[T <: Message] {
   def build: T
 }
 
-private class SingleMergingBuilder[T <: Message](t: T)(using cmp: Companion[T]) extends MergingBuilder[T] {
+private class MergingBuilder1[T <: Message](t: T)(using cmp: Companion[T]) extends MergingBuilder[T] {
   override def merge(other: T): MergingBuilder[T] = {
     val empty = cmp.defaultInstance
 
     if other == empty then this
-    else if t == empty then SingleMergingBuilder(other)
-    else ListMergingBuilder(other :: t :: Nil)
+    else if t == empty then MergingBuilder1(other)
+    else MergingBuilderN(other :: t :: Nil)
   }
 
   override def build: T = t
 }
 
-private class ListMergingBuilder[T <: Message](ts: List[T])(using cmp: Companion[T])
-    extends MergingBuilder[T] {
+private class MergingBuilderN[T <: Message](ts: List[T])(using cmp: Companion[T]) extends MergingBuilder[T] {
   override def merge(other: T): MergingBuilder[T] = {
     val empty = cmp.defaultInstance
 
     if other == empty then this
-    else ListMergingBuilder(other :: ts)
+    else MergingBuilderN(other :: ts)
   }
 
   private case class WriteState(arr: Array[Byte], output: CodedOutputStream)

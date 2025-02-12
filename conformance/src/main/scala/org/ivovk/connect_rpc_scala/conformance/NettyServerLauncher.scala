@@ -2,14 +2,12 @@ package org.ivovk.connect_rpc_scala.conformance
 
 import cats.effect.{IO, IOApp}
 import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatResponse}
-import org.ivovk.connect_rpc_scala.ConnectRouteBuilder
-import org.ivovk.connect_rpc_scala.conformance.Http4sServerLauncher.getClass
 import org.ivovk.connect_rpc_scala.conformance.util.ServerCompatSerDeser
 import org.ivovk.connect_rpc_scala.netty.NettyServerBuilder
 import org.slf4j.LoggerFactory
 
 /**
- * In short:
+ * Flow:
  *
  *   - Upon launch, `ServerCompatRequest` message is sent from the test runner to the server to STDIN.
  *   - Server is started and listens on a random port.
@@ -34,18 +32,8 @@ object NettyServerLauncher extends IOApp.Simple {
         ConformanceServiceImpl[IO]()
       )
 
-      app <- ConnectRouteBuilder.forService[IO](service)
-        .withJsonCodecConfigurator {
-          // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
-          // JSON-serialization conformance tests
-          _
-            .registerType[connectrpc.conformance.v1.UnaryRequest]
-            .registerType[connectrpc.conformance.v1.IdempotentUnaryRequest]
-        }
-        .build
-
       server <- NettyServerBuilder
-        .forServices[IO](Seq(service))
+        .forService[IO](service)
         .withJsonCodecConfigurator {
           // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
           // JSON-serialization conformance tests

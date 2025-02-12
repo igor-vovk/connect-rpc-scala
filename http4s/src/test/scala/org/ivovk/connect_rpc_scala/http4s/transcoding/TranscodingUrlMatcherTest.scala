@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala.transcoding
+package org.ivovk.connect_rpc_scala.http4s.transcoding
 
 import cats.effect.IO
 import com.google.api.http.HttpRule

@@ -1,14 +1,14 @@
-package org.ivovk.connect_rpc_scala.connect
+package org.ivovk.connect_rpc_scala.http4s.connect
 
 import cats.MonadThrow
 import cats.data.OptionT
 import cats.implicits.*
 import org.http4s.Status.UnsupportedMediaType
 import org.http4s.dsl.request.*
-import org.http4s.{HttpRoutes, MediaType, Method, Response, Uri}
+import org.http4s.{Headers, HttpRoutes, MediaType, Method, Response, Uri}
 import org.ivovk.connect_rpc_scala.HeadersToMetadata
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
-import org.ivovk.connect_rpc_scala.http.QueryParams.*
+import org.ivovk.connect_rpc_scala.http4s.QueryParams.*
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 
@@ -16,7 +16,7 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
   pathPrefix: Uri.Path,
   methodRegistry: MethodRegistry,
   codecRegistry: MessageCodecRegistry[F],
-  headerMapping: HeadersToMetadata,
+  headerMapping: HeadersToMetadata[Headers],
   handler: ConnectHandler[F],
 ) {
 
