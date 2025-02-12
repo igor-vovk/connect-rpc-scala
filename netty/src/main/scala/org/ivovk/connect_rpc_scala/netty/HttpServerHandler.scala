@@ -1,42 +1,42 @@
 package org.ivovk.connect_rpc_scala.netty
 
+import cats.MonadThrow
 import cats.effect.std.Dispatcher
 import fs2.{Chunk, Stream}
-import io.grpc.Channel
 import io.netty.buffer.Unpooled
 import io.netty.channel.{ChannelHandlerContext, ChannelInboundHandlerAdapter}
 import io.netty.handler.codec.http.*
-import io.netty.util.CharsetUtil
+import org.http4s.MediaType
 import org.ivovk.connect_rpc_scala.HeaderMapping
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
-import org.ivovk.connect_rpc_scala.http.codec.MessageCodecRegistry
+import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
+import org.ivovk.connect_rpc_scala.netty.connect.ConnectHandler
 
-class ConnectHttpServerHandlerFactory[F[_]](
+class ConnectHttpServerHandlerFactory[F[_]: MonadThrow](
   dispatcher: Dispatcher[F],
-  channel: Channel,
   methodRegistry: MethodRegistry,
   headerMapping: HeaderMapping[HttpHeaders],
   codecRegistry: MessageCodecRegistry[F],
+  connectHandler: ConnectHandler[F],
 ) {
   def createHandler() =
-    new ConnectHttpServerHandler[F](
+    new HttpServerHandler[F](
       dispatcher = dispatcher,
-      channel = channel,
       methodRegistry = methodRegistry,
       headerMapping = headerMapping,
       codecRegistry = codecRegistry,
+      connectHandler = connectHandler,
     )
 }
 
-class ConnectHttpServerHandler[F[_]](
+class HttpServerHandler[F[_]: MonadThrow](
   dispatcher: Dispatcher[F],
-  channel: Channel,
   methodRegistry: MethodRegistry,
   headerMapping: HeaderMapping[HttpHeaders],
   codecRegistry: MessageCodecRegistry[F],
+  connectHandler: ConnectHandler[F],
 ) extends ChannelInboundHandlerAdapter {
-  private val responseData = new StringBuilder()
 
   override def channelReadComplete(ctx: ChannelHandlerContext): Unit =
     ctx.flush()
@@ -44,41 +44,45 @@ class ConnectHttpServerHandler[F[_]](
   override def channelRead(ctx: ChannelHandlerContext, msg: AnyRef): Unit =
     msg match {
       case request: FullHttpRequest =>
-//        val ctype      = request.headers().get(HttpHeaderNames.CONTENT_TYPE)
         val decodedUri = QueryStringDecoder(request.uri)
         val pathParts  = decodedUri.path.split('/').toList
 
-        val grpcMethod = pathParts match
+        val grpcMethod = pathParts match {
           case serviceName :: methodName :: Nil =>
             methodRegistry.get(serviceName, methodName)
           case _ =>
             None
+        }
 
-        grpcMethod match {
+        val mediaType = Option(request.headers().get(HttpHeaderNames.CONTENT_TYPE))
+          .map(MediaType.unsafeParse)
+          .getOrElse(MediaTypes.`application/json`)
+
+        given MessageCodec[F] = codecRegistry.byMediaType(mediaType).get
+
+        val response = grpcMethod match {
           case None =>
-            writeResponse(ctx, "Method not found")
-            return
+            val response = new DefaultFullHttpResponse(
+              HttpVersion.HTTP_1_1,
+              HttpResponseStatus.BAD_REQUEST,
+              Unpooled.wrappedBuffer("Method not found".getBytes),
+            )
+            response.headers()
+              .set("Content-Type", "text/plain; charset=UTF-8")
+              .set("Content-Length", response.content().readableBytes())
+
+            response
           case Some(methodEntry) =>
             val requestEntity = RequestEntity[F](
               message = Stream.chunk(Chunk.array(request.content.array())),
               headers = headerMapping.toMetadata(request.headers()),
             )
 
-            for requestMessage <- codecRegistry.byMediaType(MediaTypes.`application/json`).get
-                .decode(requestEntity)(using methodEntry.requestMessageCompanion)
-            yield ()
-
-            // Just to make it compile
-            println(requestMessage)
+            // TODO: sync???
+            dispatcher.unsafeRunSync(connectHandler.handle(requestEntity, methodEntry))
         }
-        val requestBody = request.content.toString(CharsetUtil.UTF_8)
 
-        responseData.setLength(0)
-        responseData
-          .append(s"\nMethod: $grpcMethod")
-          .append(requestBody)
-
-        writeResponse(ctx, responseData.toString())
+        ctx.writeAndFlush(response)
     }
 
   override def exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable): Unit = {
@@ -86,17 +90,4 @@ class ConnectHttpServerHandler[F[_]](
     ctx.close()
   }
 
-  private def writeResponse(ctx: ChannelHandlerContext, message: String): Unit = {
-    val bytes = message.getBytes
-    val response = new DefaultFullHttpResponse(
-      HttpVersion.HTTP_1_1,
-      HttpResponseStatus.OK,
-      Unpooled.wrappedBuffer(message.getBytes),
-    )
-    response.headers()
-      .set("Content-Type", "text/plain; charset=UTF-8")
-      .set("Content-Length", bytes.length)
-
-    ctx.writeAndFlush(response)
-  }
 }

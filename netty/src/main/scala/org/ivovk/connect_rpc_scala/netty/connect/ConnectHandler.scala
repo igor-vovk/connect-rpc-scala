@@ -1,27 +1,27 @@
-package org.ivovk.connect_rpc_scala.http4s.connect
+package org.ivovk.connect_rpc_scala.netty.connect
 
 import cats.effect.Async
 import cats.implicits.*
 import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
-import org.http4s.Status.Ok
-import org.http4s.{Headers, Response}
+import io.netty.buffer.Unpooled
+import io.netty.handler.codec.http.*
 import org.ivovk.connect_rpc_scala.MetadataToHeaders
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.RequestEntity
 import org.ivovk.connect_rpc_scala.http.codec.{Compressor, EncodeOptions, MessageCodec}
-import org.ivovk.connect_rpc_scala.http4s.ErrorHandler
-import org.ivovk.connect_rpc_scala.http4s.ResponseExtensions.*
+import org.ivovk.connect_rpc_scala.netty.ErrorHandler
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
+import scodec.bits.ByteVector
 
 import scala.concurrent.duration.*
 
 class ConnectHandler[F[_]: Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
-  headerMapping: MetadataToHeaders[Headers],
+  headerMapping: MetadataToHeaders[HttpHeaders],
 ) {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -29,7 +29,7 @@ class ConnectHandler[F[_]: Async](
   def handle(
     req: RequestEntity[F],
     method: MethodRegistry.Entry,
-  )(using MessageCodec[F]): F[Response[F]] = {
+  )(using MessageCodec[F]): F[HttpResponse] = {
     given EncodeOptions = EncodeOptions(
       encoding = req.encoding.filter(Compressor.supportedEncodings.contains)
     )
@@ -50,7 +50,7 @@ class ConnectHandler[F[_]: Async](
   private def handleUnary(
     req: RequestEntity[F],
     method: MethodRegistry.Entry,
-  )(using MessageCodec[F], EncodeOptions): F[Response[F]] = {
+  )(using codec: MessageCodec[F], encodeOptions: EncodeOptions): F[HttpResponse] = {
     if (logger.isTraceEnabled) {
       // Used in conformance tests
       Option(req.headers.get(GrpcHeaders.XTestCaseNameKey)) match {
@@ -79,15 +79,32 @@ class ConnectHandler[F[_]: Async](
           message,
         )
       }
-      .map { response =>
-        val headers = headerMapping.toHeaders(response.headers) ++
-          headerMapping.trailersToHeaders(response.trailers)
+      .flatMap { response =>
+        val headers = headerMapping.toHeaders(response.headers)
+          .add(headerMapping.trailersToHeaders(response.trailers))
 
         if (logger.isTraceEnabled) {
-          logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+          logger.trace(s"<<< Headers: $headers")
         }
 
-        Response(Ok, headers = headers).withMessage(response.value)
+        val responseEntity = codec.encode(response.value, encodeOptions)
+
+        responseEntity.body.compile.to(ByteVector)
+          .map { byteVector =>
+            val bytes = byteVector.toArray
+            val httpResponse = new DefaultFullHttpResponse(
+              HttpVersion.HTTP_1_1,
+              HttpResponseStatus.OK,
+              Unpooled.wrappedBuffer(bytes),
+            )
+            httpResponse.headers()
+              .pipeEach(responseEntity.headers) { case (headers, (name, value)) =>
+                headers.set(name, value)
+              }
+              .set("Content-Length", bytes.length)
+
+            httpResponse
+          }
       }
   }
 

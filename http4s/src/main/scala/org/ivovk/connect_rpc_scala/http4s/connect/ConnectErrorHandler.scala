@@ -5,10 +5,10 @@ import cats.implicits.*
 import io.grpc.{Metadata, StatusException, StatusRuntimeException}
 import org.http4s.{MessageFailure, Response}
 import org.ivovk.connect_rpc_scala.Mappings.*
+import org.ivovk.connect_rpc_scala.http4s.ResponseExtensions.*
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec
-import org.ivovk.connect_rpc_scala.ErrorHandler
-import org.ivovk.connect_rpc_scala.http4s.Http4sHeaderMapping
+import org.ivovk.connect_rpc_scala.http4s.{ErrorHandler, Http4sHeaderMapping}
 import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters.*

@@ -5,8 +5,7 @@ import cats.implicits.*
 import com.google.protobuf.CodedOutputStream
 import fs2.Stream
 import fs2.io.{readOutputStream, toInputStreamResource}
-import org.http4s.headers.`Content-Type`
-import org.http4s.{DecodeResult, Headers, InvalidMessageBodyFailure, MediaType}
+import org.http4s.{DecodeResult, InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
@@ -53,7 +52,7 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
     val chunkSize  = CodedOutputStream.DEFAULT_BUFFER_SIZE min dataLength
 
     val entity = ResponseEntity(
-      headers = Headers(`Content-Type`(mediaType)),
+      headers = Map("Content-Type" -> mediaType.show),
       body = readOutputStream(chunkSize)(os => Async[F].delay(message.writeTo(os))),
       length = Some(dataLength.toLong),
     )

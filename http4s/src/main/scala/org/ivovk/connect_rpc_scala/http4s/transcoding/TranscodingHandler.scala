@@ -5,12 +5,11 @@ import cats.implicits.*
 import io.grpc.*
 import org.http4s.Response
 import org.http4s.Status.Ok
-import org.ivovk.connect_rpc_scala.Mappings.*
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
+import org.ivovk.connect_rpc_scala.http4s.ResponseExtensions.*
+import org.ivovk.connect_rpc_scala.http4s.{ErrorHandler, Http4sHeaderMapping}
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
-import org.ivovk.connect_rpc_scala.ErrorHandler
-import org.ivovk.connect_rpc_scala.http4s.Http4sHeaderMapping
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
 

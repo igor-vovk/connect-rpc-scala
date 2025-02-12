@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala
+package org.ivovk.connect_rpc_scala.http4s
 
 import org.http4s.Response
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec

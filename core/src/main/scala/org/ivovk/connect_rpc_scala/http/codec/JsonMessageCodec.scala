@@ -4,8 +4,7 @@ import cats.effect.Sync
 import cats.implicits.*
 import fs2.text.decodeWithCharset
 import fs2.{Chunk, Stream}
-import org.http4s.headers.`Content-Type`
-import org.http4s.{DecodeResult, Headers, InvalidMessageBodyFailure, MediaType}
+import org.http4s.{DecodeResult, InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
 import org.json4s.jackson.JsonMethods
@@ -70,7 +69,7 @@ class JsonMessageCodec[F[_]: Sync](
     val bytes = string.getBytes()
 
     val entity = ResponseEntity[F](
-      headers = Headers(`Content-Type`(mediaType)),
+      headers = Map("Content-Type" -> mediaType.show),
       body = Stream.chunk(Chunk.array(bytes)),
       length = Some(bytes.length.toLong),
     )

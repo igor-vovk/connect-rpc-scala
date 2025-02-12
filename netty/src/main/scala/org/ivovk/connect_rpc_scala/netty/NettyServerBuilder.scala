@@ -19,6 +19,7 @@ import org.ivovk.connect_rpc_scala.http.codec.{
   MessageCodecRegistry,
   ProtoMessageCodec,
 }
+import org.ivovk.connect_rpc_scala.netty.connect.ConnectHandler
 import org.ivovk.connect_rpc_scala.netty.headers.NettyHeaderMapping
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.ivovk.connect_rpc_scala.{HeaderMapping, HeadersFilter}
@@ -139,12 +140,18 @@ class NettyServerBuilder[F[_]: Async] private (
       ProtoMessageCodec[F](),
     )
 
+    val connectHandler = new ConnectHandler[F](
+      channel = channel,
+      errorHandler = ???,
+      headerMapping = headerMapping,
+    )
+
     val connectHandlerFactory = new ConnectHttpServerHandlerFactory(
       dispatcher = dispatcher,
-      channel = channel,
       methodRegistry = methodRegistry,
       headerMapping = headerMapping,
       codecRegistry = codecRegistry,
+      connectHandler = connectHandler,
     )
 
     val bossGroup = new NioEventLoopGroup(1)
