@@ -5,6 +5,7 @@ import fs2.Stream
 import fs2.compression.Compression
 import io.grpc.{Status, StatusException}
 import org.http4s.ContentCoding
+import org.http4s.util.StringWriter
 import org.ivovk.connect_rpc_scala.http.ResponseEntity
 
 object Compressor {
@@ -29,9 +30,14 @@ class Compressor[F[_]: Sync] {
     encoding match {
       case Some(ContentCoding.gzip) =>
         val coding = ContentCoding.gzip
+        val writer = new StringWriter()
+        coding.render(writer)
 
         ResponseEntity(
-          headers = entity.headers.updated("Content-Encoding", coding.coding.toLowerCase + coding.qValue),
+          headers = entity.headers.updated(
+            "Content-Encoding",
+            writer.result,
+          ),
           body = entity.body.through(Compression[F].gzip()),
         )
       case Some(other) =>
