@@ -29,7 +29,7 @@ jobs:
       - name: Run tests
         run: sbt test
 
-  conformance-test:
+  conformance:
     runs-on: ubuntu-latest
 
     strategy:
@@ -38,9 +38,9 @@ jobs:
           - name: Netty
             args: --build-arg launcher=NettyServerLauncher --build-arg config=suite-netty.yaml
           - name: Http4s
-            args: --build-arg launcher=Http4sServerLauncher --build-arg config=suite-stable.yaml
+            args: --build-arg launcher=Http4sServerLauncher --build-arg config=suite-http4s.yaml
           - name: Http4s non-stable
-            args: --build-arg launcher=Http4sServerLauncher --build-arg config=suite.yaml --build-arg stable=false
+            args: --build-arg launcher=Http4sServerLauncher --build-arg config=suite-http4s-nonstable.yaml --build-arg stable=false
 
     steps:
       - name: Checkout repository
