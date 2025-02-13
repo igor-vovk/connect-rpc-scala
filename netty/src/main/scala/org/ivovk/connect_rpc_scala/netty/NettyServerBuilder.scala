@@ -11,7 +11,7 @@ import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.codec.http.{HttpObjectAggregator, HttpServerCodec, HttpServerKeepAliveHandler}
 import io.netty.handler.logging.{LoggingHandler, LogLevel}
-import io.netty.handler.timeout.{IdleStateHandler, ReadTimeoutHandler, WriteTimeoutHandler}
+import io.netty.handler.timeout.IdleStateHandler
 import org.ivovk.connect_rpc_scala.grpc.{InProcessChannelBridge, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{
   JsonSerDeser,
@@ -23,6 +23,7 @@ import org.ivovk.connect_rpc_scala.netty.connect.{ConnectErrorHandler, ConnectHa
 import org.ivovk.connect_rpc_scala.netty.headers.NettyHeaderMapping
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.ivovk.connect_rpc_scala.{HeaderMapping, HeadersFilter}
+import org.slf4j.LoggerFactory
 
 import java.net.InetSocketAddress
 import java.util.concurrent.Executor
@@ -71,7 +72,7 @@ class NettyServerBuilder[F[_]: Async] private (
   port: Int,
 ) {
 
-//  private val logger: Logger = LoggerFactory.getLogger(getClass)
+  private val logger = LoggerFactory.getLogger(getClass)
 
   private def copy(
     services: Seq[ServerServiceDefinition] = services,
@@ -158,11 +159,8 @@ class NettyServerBuilder[F[_]: Async] private (
       connectHandler = connectHandler,
     )
 
-    val bossGroup = new NioEventLoopGroup(1)
-    val workerGroup = new NioEventLoopGroup(
-      Runtime.getRuntime.availableProcessors(),
-      ExecutionContext.global,
-    )
+    val bossGroup   = new NioEventLoopGroup(1)
+    val workerGroup = new NioEventLoopGroup(1)
 
     val bootstrap = new ServerBootstrap()
       .group(bossGroup, workerGroup)
@@ -178,8 +176,8 @@ class NettyServerBuilder[F[_]: Async] private (
             .addLast("aggregator", new HttpObjectAggregator(1048576))
             // .addLast("compressor", new HttpContentCompressor())
             .addLast("idleStateHandler", new IdleStateHandler(60, 30, 0))
-            .addLast("readTimeoutHandler", new ReadTimeoutHandler(30))
-            .addLast("writeTimeoutHandler", new WriteTimeoutHandler(30))
+            // .addLast("readTimeoutHandler", new ReadTimeoutHandler(30))
+            // .addLast("writeTimeoutHandler", new WriteTimeoutHandler(30))
             .addLast("handler", connectHandlerFactory.createHandler())
         }
       })
@@ -199,6 +197,8 @@ class NettyServerBuilder[F[_]: Async] private (
     }
 
     val release: F[Unit] = Async[F].delay {
+      logger.trace("Shutting down server")
+
       bossGroup.shutdownGracefully()
       workerGroup.shutdownGracefully()
     }

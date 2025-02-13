@@ -163,7 +163,8 @@ How-tos that go beyond the basic usage:
 Run the following command to run Connect-RPC conformance tests:
 
 ```shell
-docker build -f build/conformance/Dockerfile . --progress=plain --output "out"
+docker build -f build/conformance/Dockerfile . --progress=plain --output "out" \
+  --build-arg launcher=NettyServerLauncher --build-arg config=suite.yaml --build-arg stable=true
 ```
 
 Execution results are output to STDOUT.

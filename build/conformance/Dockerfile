@@ -25,24 +25,27 @@ RUN sbt stage
 FROM sbt_image AS runner
 
 COPY --from=conformance /conformance /conformance
-ADD build/conformance/suite.yaml /conformance/
-ADD build/conformance/suite-stable.yaml /conformance/
+ADD build/conformance/*.yaml /conformance/
 COPY --from=build /app/conformance/target/universal/stage /app
 WORKDIR /conformance
 
 RUN mkdir "/logs"
 
+ARG launcher
+ARG config="suite.yaml"
+ARG stable="true"
+
 # Run stable tests first
 RUN echo ">>>>> Running stable tests <<<<<"
 RUN LOGS_PATH="/logs" \
     ./connectconformance \
-    --conf suite-stable.yaml \
+    --conf $config \
     --mode server \
     --parallel 1 \
     -v -vv --trace \
     -- \
-    /app/bin/conformance -main org.ivovk.connect_rpc_scala.conformance.NettyServerLauncher; \
-    exit 0
+    /app/bin/conformance -main org.ivovk.connect_rpc_scala.conformance.$launcher; \
+    if [ "$stable" = "true" ]; then exit 0; fi
 
 ## Run unstable tests; allow them to fail
 #RUN echo ">>>>> Running unstable tests <<<<<"
