@@ -103,7 +103,7 @@ Installing with SBT (you also need to install one of `http4s` server implementat
 
 ```scala
 libraryDependencies ++= Seq(
-  "me.ivovk" %% "connect-rpc-scala-core" % "<version>",
+  "me.ivovk" %% "connect-rpc-scala-http4s" % "<version>",
   "org.http4s" %% "http4s-ember-server" % "0.23.29"
 )
 ```
@@ -119,7 +119,7 @@ E.g., it takes a list of GRPC services and returns a list of `http4s` routes bas
 This interface is implemented by `ConnectRouteBuilder`class:
 
 ```scala
-import org.ivovk.connect_rpc_scala.ConnectRpcHttpRoutes
+import org.ivovk.connect_rpc_scala.http4s.Http4sRouteBuilder
 
 // Your GRPC service(s)
 val grpcServices: Seq[io.grpc.ServiceDefinition] = ???
@@ -129,7 +129,7 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
 
   for {
     // Create httpApp with Connect-RPC routes, specifying your GRPC services
-    httpApp <- ConnectRouteBuilder.forServices[IO](grpcServices).build
+    httpApp <- Http4sRouteBuilder.forServices[IO](grpcServices).build
 
     // Create http server
     httpServer <- EmberServerBuilder.default[IO]
