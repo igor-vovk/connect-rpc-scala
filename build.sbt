@@ -23,6 +23,7 @@ ThisBuild / tpolecatExcludeOptions ++= Set(
 
 lazy val noPublish = List(
   publish         := {},
+  publishLocal    := {},
   publishArtifact := false,
   publish / skip  := true,
 )
