@@ -45,19 +45,7 @@ RUN LOGS_PATH="/logs" \
     -v -vv --trace \
     -- \
     /app/bin/conformance -main org.ivovk.connect_rpc_scala.conformance.$launcher; \
-    if [ "$stable" = "true" ]; then exit 0; fi
-
-## Run unstable tests; allow them to fail
-#RUN echo ">>>>> Running unstable tests <<<<<"
-#RUN LOGS_PATH="/logs" \
-#    ./connectconformance \
-#    --conf suite.yaml \
-#    --mode server \
-#    --parallel 1 \
-#    -v -vv --trace \
-#    -- \
-#    /app/bin/conformance; \
-#    exit 0
+    if [ "$stable" = "false" ]; then exit 0; fi
 
 FROM scratch AS export
 
