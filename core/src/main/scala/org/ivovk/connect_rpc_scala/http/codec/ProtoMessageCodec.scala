@@ -6,7 +6,6 @@ import com.google.protobuf.CodedOutputStream
 import fs2.Stream
 import fs2.io.{readOutputStream, toInputStreamResource}
 import org.http4s.{DecodeResult, InvalidMessageBodyFailure, MediaType}
-import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
@@ -34,7 +33,6 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
     msg
       .pipeIf(logger.isTraceEnabled) {
         _.map { msg =>
-          logger.trace(s">>> Headers: ${GrpcHeaders.redactSensitiveHeaders(entity.headers)}")
           logger.trace(s">>> Proto: ${msg.toProtoString}")
           msg
         }

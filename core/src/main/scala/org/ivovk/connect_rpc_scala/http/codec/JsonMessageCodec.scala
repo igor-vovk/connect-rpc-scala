@@ -5,7 +5,6 @@ import cats.implicits.*
 import fs2.text.decodeWithCharset
 import fs2.{Chunk, Stream}
 import org.http4s.{DecodeResult, InvalidMessageBodyFailure, MediaType}
-import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
 import org.json4s.jackson.JsonMethods
 import org.slf4j.LoggerFactory
@@ -41,9 +40,6 @@ class JsonMessageCodec[F[_]: Sync](
     string
       .flatMap { str =>
         if (logger.isTraceEnabled) {
-          logger.trace(
-            s">>> Headers: ${GrpcHeaders.redactSensitiveHeaders(entity.headers)}"
-          )
           logger.trace(s">>> JSON: $str")
         }
 

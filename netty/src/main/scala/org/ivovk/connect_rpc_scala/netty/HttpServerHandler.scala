@@ -3,7 +3,7 @@ package org.ivovk.connect_rpc_scala.netty
 import cats.MonadThrow
 import cats.effect.std.Dispatcher
 import fs2.{Chunk, Stream}
-import io.netty.buffer.Unpooled
+import io.netty.buffer.{ByteBufUtil, Unpooled}
 import io.netty.channel.{ChannelHandlerContext, ChannelInboundHandlerAdapter}
 import io.netty.handler.codec.http.*
 import org.http4s.MediaType
@@ -12,6 +12,7 @@ import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 import org.ivovk.connect_rpc_scala.netty.connect.ConnectHandler
+import org.slf4j.LoggerFactory
 
 class ConnectHttpServerHandlerFactory[F[_]: MonadThrow](
   dispatcher: Dispatcher[F],
@@ -38,14 +39,21 @@ class HttpServerHandler[F[_]: MonadThrow](
   connectHandler: ConnectHandler[F],
 ) extends ChannelInboundHandlerAdapter {
 
+  private val logger = LoggerFactory.getLogger(getClass)
+
   override def channelReadComplete(ctx: ChannelHandlerContext): Unit =
     ctx.flush()
 
   override def channelRead(ctx: ChannelHandlerContext, msg: AnyRef): Unit =
     msg match {
       case request: FullHttpRequest =>
-        val decodedUri = QueryStringDecoder(request.uri)
-        val pathParts  = decodedUri.path.split('/').toList
+        if (logger.isTraceEnabled) {
+          logger.trace(s">>> HTTP request: ${request.uri()}")
+          logger.trace(s">>> Headers: ${request.headers()}")
+        }
+
+        val decodedUri = QueryStringDecoder(request.uri())
+        val pathParts  = decodedUri.path.substring(1).split('/').toList
 
         val grpcMethod = pathParts match {
           case serviceName :: methodName :: Nil =>
@@ -68,13 +76,20 @@ class HttpServerHandler[F[_]: MonadThrow](
               Unpooled.wrappedBuffer("Method not found".getBytes),
             )
             response.headers()
-              .set("Content-Type", "text/plain; charset=UTF-8")
-              .set("Content-Length", response.content().readableBytes())
+              .set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8")
+              .set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes())
 
             response
           case Some(methodEntry) =>
+            val message =
+              if (request.content().hasArray) {
+                Stream.chunk(Chunk.array(request.content.array()))
+              } else {
+                Stream.chunk(Chunk.array(ByteBufUtil.getBytes(request.content)))
+              }
+
             val requestEntity = RequestEntity[F](
-              message = Stream.chunk(Chunk.array(request.content.array())),
+              message = message,
               headers = headerMapping.toMetadata(request.headers()),
             )
 

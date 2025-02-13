@@ -9,7 +9,7 @@ case class EncodeOptions(
 )
 
 object EncodeOptions {
-  given EncodeOptions = EncodeOptions(None)
+  given Default: EncodeOptions = EncodeOptions(None)
 }
 
 trait MessageCodec[F[_]] {

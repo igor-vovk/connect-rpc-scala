@@ -2,19 +2,17 @@ package org.ivovk.connect_rpc_scala.netty.connect
 
 import cats.effect.Async
 import cats.implicits.*
-import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
-import io.netty.buffer.Unpooled
-import io.netty.handler.codec.http.*
+import io.grpc.{CallOptions, Channel, StatusException}
+import io.netty.handler.codec.http.{HttpHeaders, HttpResponse}
 import org.ivovk.connect_rpc_scala.MetadataToHeaders
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.RequestEntity
 import org.ivovk.connect_rpc_scala.http.codec.{Compressor, EncodeOptions, MessageCodec}
-import org.ivovk.connect_rpc_scala.netty.ErrorHandler
+import org.ivovk.connect_rpc_scala.netty.{ErrorHandler, Response}
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.LoggerFactory
 import scalapb.GeneratedMessage
-import scodec.bits.ByteVector
 
 import scala.concurrent.duration.*
 
@@ -24,7 +22,7 @@ class ConnectHandler[F[_]: Async](
   headerMapping: MetadataToHeaders[HttpHeaders],
 ) {
 
-  private val logger: Logger = LoggerFactory.getLogger(getClass)
+  private val logger = LoggerFactory.getLogger(getClass)
 
   def handle(
     req: RequestEntity[F],
@@ -83,28 +81,7 @@ class ConnectHandler[F[_]: Async](
         val headers = headerMapping.toHeaders(response.headers)
           .add(headerMapping.trailersToHeaders(response.trailers))
 
-        if (logger.isTraceEnabled) {
-          logger.trace(s"<<< Headers: $headers")
-        }
-
-        val responseEntity = codec.encode(response.value, encodeOptions)
-
-        responseEntity.body.compile.to(ByteVector)
-          .map { byteVector =>
-            val bytes = byteVector.toArray
-            val httpResponse = new DefaultFullHttpResponse(
-              HttpVersion.HTTP_1_1,
-              HttpResponseStatus.OK,
-              Unpooled.wrappedBuffer(bytes),
-            )
-            httpResponse.headers()
-              .pipeEach(responseEntity.headers) { case (headers, (name, value)) =>
-                headers.set(name, value)
-              }
-              .set("Content-Length", bytes.length)
-
-            httpResponse
-          }
+        Response.create(response.value, headers = headers)
       }
   }
 
