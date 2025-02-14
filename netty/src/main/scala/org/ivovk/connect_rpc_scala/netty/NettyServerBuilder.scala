@@ -11,7 +11,7 @@ import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.codec.http.{HttpObjectAggregator, HttpServerCodec, HttpServerKeepAliveHandler}
 import io.netty.handler.logging.{LoggingHandler, LogLevel}
-import io.netty.handler.timeout.IdleStateHandler
+import io.netty.handler.timeout.{IdleStateHandler, ReadTimeoutHandler, WriteTimeoutHandler}
 import org.ivovk.connect_rpc_scala.grpc.{InProcessChannelBridge, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{
   JsonSerDeser,
@@ -32,7 +32,10 @@ import scala.concurrent.duration.*
 
 case class Server(
   address: InetSocketAddress
-)
+) {
+  def host: String = address.getHostString
+  def port: Int    = address.getPort
+}
 
 object NettyServerBuilder {
 
@@ -174,10 +177,9 @@ class NettyServerBuilder[F[_]: Async] private (
             .addLast("serverCodec", new HttpServerCodec())
             .addLast("keepAlive", new HttpServerKeepAliveHandler())
             .addLast("aggregator", new HttpObjectAggregator(1048576))
-            // .addLast("compressor", new HttpContentCompressor())
             .addLast("idleStateHandler", new IdleStateHandler(60, 30, 0))
-            // .addLast("readTimeoutHandler", new ReadTimeoutHandler(30))
-            // .addLast("writeTimeoutHandler", new WriteTimeoutHandler(30))
+            .addLast("readTimeoutHandler", new ReadTimeoutHandler(30))
+            .addLast("writeTimeoutHandler", new WriteTimeoutHandler(30))
             .addLast("handler", connectHandlerFactory.createHandler())
         }
       })

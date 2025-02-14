@@ -4,7 +4,7 @@ features:
   protocols: [ PROTOCOL_CONNECT ]
   codecs: [ CODEC_JSON ]
   stream_types: [ STREAM_TYPE_UNARY ]
-  compressions: [ COMPRESSION_IDENTITY ]
+  compressions: [ COMPRESSION_IDENTITY, COMPRESSION_GZIP ]
   supports_tls: false
   supports_trailers: false
   supports_connect_get: true

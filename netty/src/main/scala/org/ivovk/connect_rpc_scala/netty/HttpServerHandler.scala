@@ -5,7 +5,12 @@ import cats.effect.std.Dispatcher
 import cats.implicits.*
 import fs2.{Chunk, Stream}
 import io.netty.buffer.{ByteBufUtil, Unpooled}
-import io.netty.channel.{ChannelFuture, ChannelHandlerContext, ChannelInboundHandlerAdapter}
+import io.netty.channel.{
+  ChannelFuture,
+  ChannelHandlerContext,
+  ChannelInboundHandlerAdapter,
+  DefaultChannelPromise,
+}
 import io.netty.handler.codec.http.*
 import io.netty.util.concurrent.GenericFutureListener
 import org.http4s.MediaType
@@ -83,17 +88,6 @@ class HttpServerHandler[F[_]: Async](
         given MessageCodec[F] = codecRegistry.byMediaType(mediaType).get
 
         val responseF = grpcMethod match {
-          case None =>
-            val response = new DefaultFullHttpResponse(
-              HttpVersion.HTTP_1_1,
-              HttpResponseStatus.BAD_REQUEST,
-              Unpooled.wrappedBuffer("Method not found".getBytes),
-            )
-            response.headers()
-              .set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8")
-              .set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes())
-
-            response.pure[F]
           case Some(methodEntry) =>
             val message: String | Stream[F, Byte] =
               if isGet then Option(decodedUri.parameters().get("message")).map(_.getFirst()).getOrElse("")
@@ -105,16 +99,49 @@ class HttpServerHandler[F[_]: Async](
             )
 
             connectHandler.handle(requestEntity, methodEntry)
+          case None =>
+            errorResponse("Method not found", HttpResponseStatus.BAD_REQUEST).pure[F]
         }
 
-        val f = for
-          response <- responseF
-          _        <- async(ctx.writeAndFlush(response))
-          _ = ctx.fireChannelReadComplete()
-        yield ()
+        dispatcher.unsafeRunAndForget {
+          responseF.attempt
+            .flatMap { ei =>
+              val response = ei match {
+                case Right(response) => response
+                case Left(e) =>
+                  logger.error("Error processing request", e)
+                  errorResponse(e.getMessage)
+              }
 
-        dispatcher.unsafeRunAndForget(f)
+              async {
+                if (ctx.channel().isOpen) {
+                  ctx.writeAndFlush(response)
+                } else {
+                  logger.warn("Channel is closed, cannot send response for request {}", request.uri())
+
+                  new DefaultChannelPromise(ctx.channel()).setSuccess()
+                }
+              } *>
+                Async[F].delay(ctx.fireChannelReadComplete())
+            }
+        }
     }
+
+  private def errorResponse(
+    msg: String,
+    httpCode: HttpResponseStatus = HttpResponseStatus.INTERNAL_SERVER_ERROR,
+  ): FullHttpResponse = {
+    val response = new DefaultFullHttpResponse(
+      HttpVersion.HTTP_1_1,
+      httpCode,
+      Unpooled.wrappedBuffer(msg.getBytes),
+    )
+    response.headers()
+      .set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8")
+      .set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes())
+
+    response
+  }
 
   private def async(cf: => ChannelFuture): F[Unit] =
     Async[F].async { cb =>

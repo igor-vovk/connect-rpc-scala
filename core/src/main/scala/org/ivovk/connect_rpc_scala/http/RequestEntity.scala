@@ -20,8 +20,6 @@ case class RequestEntity[F[_]](
   message: String | Stream[F, Byte],
   headers: Metadata,
 ) {
-  import RequestEntity.*
-
   private def contentType: Option[GrpcHeaders.ContentType] =
     Option(headers.get(GrpcHeaders.ContentTypeKey))
 

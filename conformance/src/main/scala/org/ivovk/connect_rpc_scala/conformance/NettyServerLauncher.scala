@@ -43,13 +43,12 @@ object NettyServerLauncher extends IOApp.Simple {
         }
         .build()
 
-      addr = server.address
-      resp = ServerCompatResponse(addr.getHostString, addr.getPort)
+      resp = ServerCompatResponse(server.host, server.port)
 
       _ <- ServerCompatSerDeser.writeResponse[IO](System.out, resp).toResource
 
-      _ = System.err.println(s"Server started on $addr...")
-      _ = logger.info(s"Netty-server started on $addr...")
+      _ = System.err.println(s"Server started on ${server.host}:${server.port}...")
+      _ = logger.info(s"Netty-server started on ${server.host}:${server.port}...")
     yield ()
 
     res
