@@ -12,14 +12,7 @@ import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import test.HttpCommunicationTest.TestServiceGrpc.TestService
-import test.HttpCommunicationTest.{
-  AddRequest,
-  AddResponse,
-  GetRequest,
-  GetResponse,
-  RequestBodyMappingRequest,
-  RequestBodyMappingResponse,
-}
+import test.HttpCommunicationTest.*
 
 import java.net.URLEncoder
 import scala.concurrent.{ExecutionContext, Future}
@@ -185,7 +178,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
 
     Http4sRouteBuilder.forService[IO](service)
       .buildRoutes
-      .map(r => Kleisli((a: Request[IO]) => r.run(a).getOrElse(fallbackResponse)))
+      .map(r => Kleisli((a: Request[IO]) => r.connect.run(a).getOrElse(fallbackResponse)))
       .flatMap { app =>
         Client.fromHttpApp(app).run(
           Request[IO](Method.POST, uri"/test.TestService/MethodNotFound")

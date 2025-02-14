@@ -1,9 +1,9 @@
 package org.ivovk.connect_rpc_scala.http4s
 
-import cats.Endo
 import cats.data.OptionT
 import cats.effect.{Async, Resource}
 import cats.implicits.*
+import cats.{Endo, Monad}
 import io.grpc.{ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import org.http4s.{HttpApp, HttpRoutes, Uri}
 import org.ivovk.connect_rpc_scala.grpc.*
@@ -148,14 +148,14 @@ final class Http4sRouteBuilder[F[_]: Async] private (
    * Builds a complete HTTP app with all routes.
    */
   def build: Resource[F, HttpApp[F]] =
-    buildRoutes.map(_.orNotFound)
+    buildRoutes.map(_.all.orNotFound)
 
   /**
    * Use this method if you want to add additional routes and/or http4s middleware.
    *
    * Otherwise, [[build]] method is preferred.
    */
-  def buildRoutes: Resource[F, HttpRoutes[F]] =
+  def buildRoutes: Resource[F, Routes[F]] =
     for channel <- InProcessChannelBridge.create(
         services,
         serverConfigurator,
@@ -214,7 +214,14 @@ final class Http4sRouteBuilder[F[_]: Async] private (
         jsonSerDeser,
       ).routes
 
-      connectRoutes <+> transcodingRoutes
+      Routes(connectRoutes, transcodingRoutes)
     }
 
+}
+
+case class Routes[F[_]: Monad](
+  connect: HttpRoutes[F],
+  transcoding: HttpRoutes[F],
+) {
+  def all: HttpRoutes[F] = connect <+> transcoding
 }
