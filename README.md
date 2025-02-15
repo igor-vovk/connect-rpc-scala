@@ -101,26 +101,26 @@ At the moment, only unary (non-streaming) methods are supported.
 
 The library provides two frontends:
 
-* __http4s__ — based on [http4s](https://http4s.org) server implementations.
+* `connect-rpc-scala-http4s` — based on [http4s](https://http4s.org) server.
   More stable, was added first, but has some limitations, like inability to support streaming.
-* __Netty__ — based on [Netty](https://netty.io) server implementations.
-  Lower-level, has alpha status, but has some advantages, making it a way to go with time:
+* `connect-rpc-scala-netty` — based on [Netty](https://netty.io) server.
+  Lower-level, not-ready-for-production *yet*, but has some advantages, making it a way to go with time:
     - Better performance
     - Support for streaming
     - Ability to reuse Netty from `grpc-netty-shaded` dependency, used by GRPC itself
 
 Feature comparison:
 
-|                          | __Netty__      | __http4s__                                         |
-|--------------------------|----------------|----------------------------------------------------|
-| __Connect protocol__     | ✅              | ✅                                                  |
-| - JSON Codec             | ✅              | ✅                                                  |
-| - Protocol Buffers codec | ⌛ WIP          | ⌛ Working /<br/> 13/72 conformance<br/> tests pass |
-| - Unary requests         | ✅              | ✅                                                  |
-| - Streaming              | planned        | ➖ / not achievable                                 |
-| - GET-requests           | ✅              | ✅                                                  |
-| - Encoding               | identity/gzip  | identity/gzip                                      |
-| - gRPC-Web protocol      | ➖ / considered | ➖ / not planned                                    |
+|                          | __Netty__               | __http4s__                                         |
+|--------------------------|-------------------------|----------------------------------------------------|
+| __Connect protocol__     | ✅                       | ✅                                                  |
+| - JSON Codec             | ✅                       | ✅                                                  |
+| - Protocol Buffers codec | ⌛ Working / 12/85 tests | ⌛ Working /<br/> 13/85 conformance<br/> tests pass |
+| - Unary requests         | ✅                       | ✅                                                  |
+| - Streaming              | planned                 | ➖ / not planned                                    |
+| - GET-requests           | ✅                       | ✅                                                  |
+| - Encoding               | identity/gzip           | identity/gzip                                      |
+| - gRPC-Web protocol      | ➖ / considered          | ➖ / not planned                                    |
 
 |                                                                                 | __Netty__ | __http4s__ |
 |---------------------------------------------------------------------------------|-----------|------------|

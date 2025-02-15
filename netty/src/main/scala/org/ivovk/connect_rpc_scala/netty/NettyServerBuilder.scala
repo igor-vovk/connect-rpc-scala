@@ -1,8 +1,9 @@
 package org.ivovk.connect_rpc_scala.netty
 
-import cats.Endo
 import cats.effect.std.Dispatcher
 import cats.effect.{Async, Resource}
+import cats.implicits.*
+import cats.{Endo, Parallel}
 import io.grpc.{Channel, ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.channel.ChannelInitializer
@@ -10,15 +11,10 @@ import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.codec.http.{HttpObjectAggregator, HttpServerCodec, HttpServerKeepAliveHandler}
-import io.netty.handler.logging.{LoggingHandler, LogLevel}
+import io.netty.handler.logging.{LogLevel, LoggingHandler}
 import io.netty.handler.timeout.{IdleStateHandler, ReadTimeoutHandler, WriteTimeoutHandler}
 import org.ivovk.connect_rpc_scala.grpc.{InProcessChannelBridge, MethodRegistry}
-import org.ivovk.connect_rpc_scala.http.codec.{
-  JsonSerDeser,
-  JsonSerDeserBuilder,
-  MessageCodecRegistry,
-  ProtoMessageCodec,
-}
+import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, JsonSerDeserBuilder, MessageCodecRegistry, ProtoMessageCodec}
 import org.ivovk.connect_rpc_scala.netty.connect.{ConnectErrorHandler, ConnectHandler}
 import org.ivovk.connect_rpc_scala.netty.headers.NettyHeaderMapping
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
@@ -39,10 +35,10 @@ case class Server(
 
 object NettyServerBuilder {
 
-  def forService[F[_]: Async](service: ServerServiceDefinition): NettyServerBuilder[F] =
+  def forService[F[_]: Async: Parallel](service: ServerServiceDefinition): NettyServerBuilder[F] =
     forServices(Seq(service))
 
-  def forServices[F[_]: Async](services: Seq[ServerServiceDefinition]): NettyServerBuilder[F] =
+  def forServices[F[_]: Async: Parallel](services: Seq[ServerServiceDefinition]): NettyServerBuilder[F] =
     new NettyServerBuilder[F](
       services = services,
       serverConfigurator = identity,
@@ -60,7 +56,7 @@ object NettyServerBuilder {
 
 }
 
-class NettyServerBuilder[F[_]: Async] private (
+class NettyServerBuilder[F[_]: Async: Parallel] private (
   services: Seq[ServerServiceDefinition],
   serverConfigurator: Endo[ServerBuilder[_]],
   enableLogging: Boolean,
@@ -154,7 +150,7 @@ class NettyServerBuilder[F[_]: Async] private (
       headerMapping = headerMapping,
     )
 
-    val connectHandlerFactory = new ConnectHttpServerHandlerFactory(
+    val connectHandlerInit = new ConnectHttpHandlerInitializer(
       dispatcher = dispatcher,
       methodRegistry = methodRegistry,
       headerMapping = headerMapping,
@@ -176,11 +172,11 @@ class NettyServerBuilder[F[_]: Async] private (
             .pipeIf(enableLogging)(_.addLast("logger", new LoggingHandler(LogLevel.INFO)))
             .addLast("serverCodec", new HttpServerCodec())
             .addLast("keepAlive", new HttpServerKeepAliveHandler())
-            .addLast("aggregator", new HttpObjectAggregator(1048576))
+            .addLast("aggregator", new HttpObjectAggregator(1 * 1024 * 1024))
             .addLast("idleStateHandler", new IdleStateHandler(60, 30, 0))
             .addLast("readTimeoutHandler", new ReadTimeoutHandler(30))
             .addLast("writeTimeoutHandler", new WriteTimeoutHandler(30))
-            .addLast("handler", connectHandlerFactory.createHandler())
+            .addLast("handler", connectHandlerInit.createHandler())
         }
       })
 
@@ -198,12 +194,12 @@ class NettyServerBuilder[F[_]: Async] private (
       )
     }
 
-    val release: F[Unit] = Async[F].delay {
-      logger.trace("Shutting down server")
-
-      bossGroup.shutdownGracefully()
-      workerGroup.shutdownGracefully()
-    }
+    val release: F[Unit] =
+      Async[F].delay(logger.trace("Shutting down server")) *>
+        (
+          NettyFutureAsync[F].fromFuture_(bossGroup.shutdownGracefully()),
+          NettyFutureAsync[F].fromFuture_(workerGroup.shutdownGracefully()),
+        ).parTupled.void
 
     Resource.make(aloc)(_ => release)
   }

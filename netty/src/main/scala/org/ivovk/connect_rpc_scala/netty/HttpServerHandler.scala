@@ -3,24 +3,19 @@ package org.ivovk.connect_rpc_scala.netty
 import cats.effect.Async
 import cats.effect.std.Dispatcher
 import cats.implicits.*
-import fs2.{Chunk, Stream}
-import io.netty.buffer.{ByteBufUtil, Unpooled}
-import io.netty.channel.{
-  ChannelFuture,
-  ChannelHandlerContext,
-  ChannelInboundHandlerAdapter,
-  DefaultChannelPromise,
-}
+import fs2.Stream
+import io.netty.buffer.Unpooled
+import io.netty.channel.{ChannelFutureListener, ChannelHandlerContext, ChannelInboundHandlerAdapter}
 import io.netty.handler.codec.http.*
-import io.netty.util.concurrent.GenericFutureListener
 import org.ivovk.connect_rpc_scala.HeaderMapping
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
+import org.ivovk.connect_rpc_scala.netty.ByteBufConversions.byteBufToChunk
 import org.ivovk.connect_rpc_scala.netty.connect.ConnectHandler
 import org.slf4j.LoggerFactory
 
-class ConnectHttpServerHandlerFactory[F[_]: Async](
+class ConnectHttpHandlerInitializer[F[_]: Async](
   dispatcher: Dispatcher[F],
   methodRegistry: MethodRegistry,
   headerMapping: HeaderMapping[HttpHeaders],
@@ -43,7 +38,8 @@ class HttpServerHandler[F[_]: Async](
   headerMapping: HeaderMapping[HttpHeaders],
   codecRegistry: MessageCodecRegistry[F],
   connectHandler: ConnectHandler[F],
-) extends ChannelInboundHandlerAdapter {
+) extends ChannelInboundHandlerAdapter,
+      NettyFutureAsync[F] {
   import HttpServerHandler.*
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -75,15 +71,19 @@ class HttpServerHandler[F[_]: Async](
             None
         }
 
-        val mediaType =
-          if aGetMethod then
-            decodedUri.queryParam("encoding")
-              .map(MediaTypes.unsafeParseShort)
-              .getOrElse(MediaTypes.`application/json`)
-          else
-            Option(req.headers().get(HttpHeaderNames.CONTENT_TYPE))
-              .map(MediaTypes.unsafeParse)
-              .getOrElse(MediaTypes.`application/json`)
+        val maybeMediaType =
+          if aGetMethod then decodedUri.queryParam("encoding").map(MediaTypes.parseShort)
+          else Option(req.headers().get(HttpHeaderNames.CONTENT_TYPE)).map(MediaTypes.parse)
+
+        val mediaType = maybeMediaType match {
+          case Some(Right(mt)) => mt
+          case Some(Left(e)) =>
+            ctx.writeAndFlush(errorResponse(e.getMessage, HttpResponseStatus.UNSUPPORTED_MEDIA_TYPE))
+            return
+          case None =>
+            ctx.writeAndFlush(errorResponse("Encoding is missing", HttpResponseStatus.BAD_REQUEST))
+            return
+        }
 
         given MessageCodec[F] = codecRegistry.byMediaType(mediaType).get
 
@@ -91,7 +91,7 @@ class HttpServerHandler[F[_]: Async](
           case Some(methodEntry) =>
             val message: String | Stream[F, Byte] =
               if aGetMethod then decodedUri.queryParam("message").getOrElse("")
-              else Stream.chunk(Chunk.array(ByteBufUtil.getBytes(req.content())))
+              else Stream.chunk(byteBufToChunk(req.content()))
 
             val entity = RequestEntity[F](message, headerMapping.toMetadata(req.headers()))
 
@@ -110,13 +110,13 @@ class HttpServerHandler[F[_]: Async](
                   errorResponse(e.getMessage)
               }
 
-              async[F] {
+              fromFuture_ {
                 if (ctx.channel().isOpen) {
                   ctx.writeAndFlush(response)
                 } else {
                   logger.warn("Channel is closed, cannot send response for request {}", req.uri())
 
-                  new DefaultChannelPromise(ctx.channel()).setSuccess()
+                  ctx.channel().newSucceededFuture()
                 }
               } *>
                 Async[F].delay(ctx.fireChannelReadComplete())
@@ -142,14 +142,18 @@ class HttpServerHandler[F[_]: Async](
 
   override def exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable): Unit = {
     logger.error("Fatal exception caught", cause)
-    ctx.close()
+
+    if (ctx.channel.isOpen) {
+      val response = errorResponse(cause.getMessage, HttpResponseStatus.INTERNAL_SERVER_ERROR)
+
+      ctx.writeAndFlush(response)
+        .addListener(ChannelFutureListener.CLOSE)
+    }
   }
 
 }
 
 object HttpServerHandler {
-
-  private val UnitRight: Either[Throwable, Unit] = Right(())
 
   extension (inline uri: QueryStringDecoder) {
     inline def queryParam(inline name: String): Option[String] =
@@ -158,17 +162,5 @@ object HttpServerHandler {
           if !list.isEmpty then Some(list.get(0)) else None
         }
   }
-
-  private def async[F[_]: Async](cf: => ChannelFuture): F[Unit] =
-    Async[F].async { cb =>
-      Async[F].delay {
-        cf.addListener { (f: ChannelFuture) =>
-          if f.isSuccess then cb(UnitRight)
-          else cb(Left(f.cause()))
-        }
-
-        None
-      }
-    }
 
 }

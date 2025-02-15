@@ -19,17 +19,17 @@ object Response {
   )(using codec: MessageCodec[F], options: EncodeOptions): F[HttpResponse] = {
     val responseEntity = codec.encode(message, options)
 
-    responseEntity.body.compile.to(Array)
-      .map { bytes =>
+    responseEntity.body.chunks.map(ByteBufConversions.chunkToByteBuf).compile.toList
+      .map { byteBufs =>
         val response = new DefaultFullHttpResponse(
           HttpVersion.HTTP_1_1,
           status,
-          Unpooled.wrappedBuffer(bytes),
+          Unpooled.wrappedBuffer(byteBufs*),
         )
 
         response.headers().add(headers)
         responseEntity.headers.foreach((name, value) => response.headers().set(name, value))
-        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, bytes.length)
+        responseEntity.length.foreach(response.headers().set(HttpHeaderNames.CONTENT_LENGTH, _))
 
         if (logger.isTraceEnabled) {
           logger.trace(s"<<< Headers: ${response.headers()}")
