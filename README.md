@@ -97,9 +97,44 @@ The library works with all ScalaPB-based GRPC code-generators:
 
 At the moment, only unary (non-streaming) methods are supported.
 
+## Frontends
+
+The library provides two frontends:
+
+* __http4s__ — based on [http4s](https://http4s.org) server implementations.
+  More stable, was added first, but has some limitations, like inability to support streaming.
+* __Netty__ — based on [Netty](https://netty.io) server implementations.
+  Lower-level, has alpha status, but has some advantages, making it a way to go with time:
+    - Better performance
+    - Support for streaming
+    - Ability to reuse Netty from `grpc-netty-shaded` dependency, used by GRPC itself
+
+Feature comparison:
+
+|                          | __Netty__      | __http4s__                                         |
+|--------------------------|----------------|----------------------------------------------------|
+| __Connect protocol__     | ✅              | ✅                                                  |
+| - JSON Codec             | ✅              | ✅                                                  |
+| - Protocol Buffers codec | ⌛ WIP          | ⌛ Working /<br/> 13/72 conformance<br/> tests pass |
+| - Unary requests         | ✅              | ✅                                                  |
+| - Streaming              | planned        | ➖ / not achievable                                 |
+| - GET-requests           | ✅              | ✅                                                  |
+| - Encoding               | identity/gzip  | identity/gzip                                      |
+| - gRPC-Web protocol      | ➖ / considered | ➖ / not planned                                    |
+
+|                                                                                 | __Netty__ | __http4s__ |
+|---------------------------------------------------------------------------------|-----------|------------|
+| __gRPC Transcoding<br/>(`google.api.http` annotations)__                        | planned   | ✅          |
+| - GET, POST, PUT, DELETE, PATCH methods                                         | ➖         | ✅          |
+| - Path parameters, e.g., `/v1/countries/{name}`                                 | ➖         | ✅          |
+| - Query parameters, repeating query parameters<br/>(e.g., `?a=1&a=2`) as arrays | ➖         | ✅          |
+| - Request body (JSON)                                                           | ➖         | ✅          |
+| - Request body field mapping, e.g. <br/>`body: "request"`, `body: "*"`          | ➖         | ✅          |
+| - Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets`             | ➖         | ➖          |
+
 ## Usage
 
-Installing with SBT (you also need to install one of `http4s` server implementations):
+Installing http4s frontend (you also need to install one of `http4s` server implementations):
 
 ```scala
 libraryDependencies ++= Seq(
@@ -163,12 +198,14 @@ How-tos that go beyond the basic usage:
 Run the following command to run Connect-RPC conformance tests:
 
 For the Netty server:
+
 ```shell
 docker build -f build/conformance/Dockerfile . --progress=plain --output "out" \
   --build-arg launcher=NettyServerLauncher --build-arg config=suite-netty.yaml
 ```
 
 For the Http4s server:
+
 ```shell
 docker build -f build/conformance/Dockerfile . --progress=plain --output "out" \
   --build-arg launcher=Http4sServerLauncher --build-arg config=suite-http4s.yaml
@@ -176,48 +213,6 @@ docker build -f build/conformance/Dockerfile . --progress=plain --output "out" \
 
 Execution results are output to STDOUT.
 Diagnostic data from the server itself is written to the log file `out/out.log`.
-
-#### Connect protocol conformance tests status
-
-✅ JSON codec conformance status: __full conformance__.
-
-⌛ Protobuf codec conformance status: __13/72__ tests pass.
-
-Known issues:
-
-* Errors serialized incorrectly for protobuf codec.
-
-#### Supported features of the protocol
-
-```yaml
-versions: [ HTTP_VERSION_1, HTTP_VERSION_2 ]
-protocols: [ PROTOCOL_CONNECT ]
-codecs: [ CODEC_JSON, CODEC_PROTO ]
-stream_types: [ STREAM_TYPE_UNARY ]
-supports_tls: false
-supports_trailers: false
-supports_connect_get: true
-supports_message_receive_limit: false
-```
-
-### GRPC Transcoding
-
-#### Supported features
-
-- [x] GET, POST, PUT, DELETE, PATCH methods
-- [x] Path parameters, e.g., `/v1/countries/{name}`
-- [x] Query parameters, repeating query parameters (e.g., `?a=1&a=2`) as arrays
-- [x] Request body (JSON)
-- [x] Request body field mapping, e.g. `body: "request"` (supported), `body: "*"` (supported)
-- [ ] Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets` (not supported yet)
-
-### Future improvements
-
-- [x] Support GET-requests ([#10](https://github.com/igor-vovk/connect-rpc-scala/issues/10))
-- [x] Support `google.api.http` annotations (GRPC
-  transcoding) ([#51](https://github.com/igor-vovk/connect-rpc-scala/issues/51))
-- [ ] Support configurable timeouts
-- [ ] Support non-unary (streaming) methods
 
 ### Is it production-ready?
 
