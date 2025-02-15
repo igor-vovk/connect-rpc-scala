@@ -11,10 +11,15 @@ import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.codec.http.{HttpObjectAggregator, HttpServerCodec, HttpServerKeepAliveHandler}
-import io.netty.handler.logging.{LogLevel, LoggingHandler}
+import io.netty.handler.logging.{LoggingHandler, LogLevel}
 import io.netty.handler.timeout.{IdleStateHandler, ReadTimeoutHandler, WriteTimeoutHandler}
 import org.ivovk.connect_rpc_scala.grpc.{InProcessChannelBridge, MethodRegistry}
-import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, JsonSerDeserBuilder, MessageCodecRegistry, ProtoMessageCodec}
+import org.ivovk.connect_rpc_scala.http.codec.{
+  JsonSerDeser,
+  JsonSerDeserBuilder,
+  MessageCodecRegistry,
+  ProtoMessageCodec,
+}
 import org.ivovk.connect_rpc_scala.netty.connect.{ConnectErrorHandler, ConnectHandler}
 import org.ivovk.connect_rpc_scala.netty.headers.NettyHeaderMapping
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
