@@ -63,7 +63,7 @@ class HttpServerHandler[F[_]: Async](
         val aGetMethod = req.method() == HttpMethod.GET
 
         val decodedUri = QueryStringDecoder(req.uri())
-        val pathParts  = extractPathSegments(decodedUri.rawPath(), pathPrefix)
+        val pathParts  = extractPathSegments(decodedUri.rawPath, pathPrefix)
 
         val grpcMethod = pathParts match {
           case Right(serviceName :: methodName :: Nil) =>

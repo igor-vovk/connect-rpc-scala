@@ -8,7 +8,9 @@ import org.ivovk.connect_rpc_scala.HeadersToMetadata
 import org.ivovk.connect_rpc_scala.grpc.MergingBuilder.*
 import org.ivovk.connect_rpc_scala.http.RequestEntity
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, MessageCodec}
+import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
+import org.ivovk.connect_rpc_scala.transcoding.MatchedRequest
 
 class TranscodingRoutesProvider[F[_]: MonadThrow](
   urlMatcher: TranscodingUrlMatcher[F],
@@ -19,7 +21,13 @@ class TranscodingRoutesProvider[F[_]: MonadThrow](
 
   def routes: HttpRoutes[F] = HttpRoutes[F] { req =>
     OptionT
-      .fromOption[F](urlMatcher.matchRequest(req))
+      .fromOption[F](
+        urlMatcher.matchRequest(
+          req.method,
+          req.uri.path.segments.map(_.encoded).toList,
+          req.uri.query.pairs,
+        )
+      )
       .semiflatMap { case MatchedRequest(method, pathJson, queryJson, reqBodyTransform) =>
         given Companion[Message] = method.requestMessageCompanion
 

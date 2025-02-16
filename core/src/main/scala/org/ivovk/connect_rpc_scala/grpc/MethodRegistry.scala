@@ -3,7 +3,7 @@ package org.ivovk.connect_rpc_scala.grpc
 import com.google.api.http.HttpRule
 import io.grpc.{MethodDescriptor, ServerMethodDefinition, ServerServiceDefinition}
 import scalapb.grpc.ConcreteProtoMethodDescriptorSupplier
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
+import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 import scala.jdk.CollectionConverters.*
 
@@ -11,15 +11,15 @@ object MethodRegistry {
 
   case class Entry(
     name: MethodName,
-    requestMessageCompanion: GeneratedMessageCompanion[GeneratedMessage],
+    requestMessageCompanion: Companion[Message],
     httpRule: Option[HttpRule],
-    descriptor: MethodDescriptor[GeneratedMessage, GeneratedMessage],
+    descriptor: MethodDescriptor[Message, Message],
   )
 
   def apply(services: Seq[ServerServiceDefinition]): MethodRegistry = {
     val entries = services
       .flatMap(_.getMethods.asScala)
-      .map(_.asInstanceOf[ServerMethodDefinition[GeneratedMessage, GeneratedMessage]])
+      .map(_.asInstanceOf[ServerMethodDefinition[Message, Message]])
       .map { smd =>
         val methodDescriptor = smd.getMethodDescriptor
 
@@ -32,7 +32,7 @@ object MethodRegistry {
         companionField.setAccessible(true)
 
         val requestCompanion = companionField.get(requestMarshaller)
-          .asInstanceOf[GeneratedMessageCompanion[GeneratedMessage]]
+          .asInstanceOf[Companion[Message]]
 
         val httpRule = extractHttpRule(methodDescriptor)
 
