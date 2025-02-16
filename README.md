@@ -2,8 +2,6 @@
 
 # REST API / GRPC Transcoding for GRPC services written in Scala
 
-![Maven Central](https://img.shields.io/maven-central/v/me.ivovk/connect-rpc-scala-core_3?style=flat-square&color=green)
-
 The library allows exposing GRPC services as REST-APIs using Connect protocol (with JSON messages) + GRPC Transcoding,
 without Envoy or any other proxy.
 
@@ -133,6 +131,8 @@ Feature comparison:
 | - Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets`             | ➖         | ➖          |
 
 ## Usage
+
+![Maven Central](https://img.shields.io/maven-central/v/me.ivovk/connect-rpc-scala-core_3?style=flat-square&color=green)
 
 Installing http4s frontend (you also need to install one of `http4s` server implementations):
 

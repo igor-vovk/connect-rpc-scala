@@ -29,7 +29,7 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
     app = CORS.policy
       // Configure allowed origins
       .withAllowOriginHost(_.host.value == "localhost")
-      .apply(routes)
+      .apply(routes.all)
       .orNotFound
 
     server <- EmberServerBuilder.default[IO]

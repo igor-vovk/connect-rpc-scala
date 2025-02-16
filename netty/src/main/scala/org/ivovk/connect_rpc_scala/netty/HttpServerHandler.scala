@@ -21,6 +21,7 @@ class ConnectHttpHandlerInitializer[F[_]: Async](
   headerMapping: HeaderMapping[HttpHeaders],
   codecRegistry: MessageCodecRegistry[F],
   connectHandler: ConnectHandler[F],
+  pathPrefix: List[String],
 ) {
   def createHandler() =
     new HttpServerHandler[F](
@@ -29,6 +30,7 @@ class ConnectHttpHandlerInitializer[F[_]: Async](
       headerMapping = headerMapping,
       codecRegistry = codecRegistry,
       connectHandler = connectHandler,
+      pathPrefix = pathPrefix,
     )
 }
 
@@ -38,6 +40,7 @@ class HttpServerHandler[F[_]: Async](
   headerMapping: HeaderMapping[HttpHeaders],
   codecRegistry: MessageCodecRegistry[F],
   connectHandler: ConnectHandler[F],
+  pathPrefix: List[String],
 ) extends ChannelInboundHandlerAdapter,
       NettyFutureAsync[F] {
   import HttpServerHandler.*
@@ -60,10 +63,10 @@ class HttpServerHandler[F[_]: Async](
         val aGetMethod = req.method() == HttpMethod.GET
 
         val decodedUri = QueryStringDecoder(req.uri())
-        val pathParts  = decodedUri.rawPath().substring(1).split('/').toList
+        val pathParts  = extractPathSegments(decodedUri.rawPath(), pathPrefix)
 
         val grpcMethod = pathParts match {
-          case serviceName :: methodName :: Nil =>
+          case Right(serviceName :: methodName :: Nil) =>
             // Temporary support GET-requests for all methods,
             // until https://github.com/scalapb/ScalaPB/pull/1774 is merged
             methodRegistry.get(serviceName, methodName) // .filter(_.descriptor.isSafe || aGetMethod)
@@ -154,6 +157,31 @@ class HttpServerHandler[F[_]: Async](
 }
 
 object HttpServerHandler {
+
+  sealed trait PathDecodingError
+
+  case object PrefixMismatch extends PathDecodingError
+
+  /**
+   * Decodes a path into segments and matches them against the prefix, removing the prefix segments from the
+   * path.
+   */
+  def extractPathSegments(
+    path: String,
+    prefixSegments: List[String] = Nil,
+  ): Either[PathDecodingError, List[String]] = {
+    var pathSegments = path.stripPrefix("/").split("/").toList
+
+    var unmatchedPrefix = prefixSegments
+
+    while unmatchedPrefix.nonEmpty do
+      if pathSegments.headOption.contains(unmatchedPrefix.head) then
+        pathSegments = pathSegments.tail
+        unmatchedPrefix = unmatchedPrefix.tail
+      else return Left(PrefixMismatch)
+
+    Right(pathSegments)
+  }
 
   extension (inline uri: QueryStringDecoder) {
     inline def queryParam(inline name: String): Option[String] =

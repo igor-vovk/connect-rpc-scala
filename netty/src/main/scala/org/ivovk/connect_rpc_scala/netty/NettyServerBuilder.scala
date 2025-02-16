@@ -13,6 +13,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.codec.http.{HttpObjectAggregator, HttpServerCodec, HttpServerKeepAliveHandler}
 import io.netty.handler.logging.{LoggingHandler, LogLevel}
 import io.netty.handler.timeout.{IdleStateHandler, ReadTimeoutHandler, WriteTimeoutHandler}
+import org.http4s.Uri
 import org.ivovk.connect_rpc_scala.grpc.{InProcessChannelBridge, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{
   JsonSerDeser,
@@ -52,6 +53,7 @@ object NettyServerBuilder {
       customJsonSerDeser = None,
       incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
       outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
+      pathPrefix = Uri.Path.Root,
       executor = ExecutionContext.global,
       waitForShutdown = 5.seconds,
       treatTrailersAsHeaders = true,
@@ -69,6 +71,7 @@ class NettyServerBuilder[F[_]: Async: Parallel] private (
   customJsonSerDeser: Option[JsonSerDeser[F]],
   incomingHeadersFilter: HeadersFilter,
   outgoingHeadersFilter: HeadersFilter,
+  pathPrefix: Uri.Path,
   executor: Executor,
   waitForShutdown: Duration,
   treatTrailersAsHeaders: Boolean,
@@ -85,6 +88,7 @@ class NettyServerBuilder[F[_]: Async: Parallel] private (
     customJsonSerDeser: Option[JsonSerDeser[F]] = customJsonSerDeser,
     incomingHeadersFilter: HeadersFilter = incomingHeadersFilter,
     outgoingHeadersFilter: HeadersFilter = outgoingHeadersFilter,
+    pathPrefix: Uri.Path = pathPrefix,
     executor: Executor = executor,
     waitForShutdown: Duration = waitForShutdown,
     treatTrailersAsHeaders: Boolean = treatTrailersAsHeaders,
@@ -99,6 +103,7 @@ class NettyServerBuilder[F[_]: Async: Parallel] private (
       customJsonSerDeser = customJsonSerDeser,
       incomingHeadersFilter = incomingHeadersFilter,
       outgoingHeadersFilter = outgoingHeadersFilter,
+      pathPrefix = pathPrefix,
       executor = executor,
       waitForShutdown = waitForShutdown,
       treatTrailersAsHeaders = treatTrailersAsHeaders,
@@ -111,6 +116,9 @@ class NettyServerBuilder[F[_]: Async: Parallel] private (
 
   def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): NettyServerBuilder[F] =
     copy(customJsonSerDeser = Some(method(JsonSerDeserBuilder[F]()).build))
+
+  def withPathPrefix(pathPrefix: Uri.Path): NettyServerBuilder[F] =
+    copy(pathPrefix = pathPrefix)
 
   def withHost(host: String): NettyServerBuilder[F] =
     copy(host = host)
@@ -161,6 +169,7 @@ class NettyServerBuilder[F[_]: Async: Parallel] private (
       headerMapping = headerMapping,
       codecRegistry = codecRegistry,
       connectHandler = connectHandler,
+      pathPrefix = pathPrefix.segments.map(_.encoded).toList,
     )
 
     val bossGroup   = new NioEventLoopGroup(1)
