@@ -9,6 +9,7 @@ import org.http4s.{HttpApp, HttpRoutes, Uri}
 import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.codec.*
+import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
 import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectErrorHandler, ConnectHandler, ConnectRoutesProvider}
 import org.ivovk.connect_rpc_scala.http4s.transcoding.{TranscodingHandler, TranscodingRoutesProvider}
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
@@ -186,7 +187,7 @@ final class Http4sRouteBuilder[F[_]: Async] private (
       )
 
       val connectRoutes = ConnectRoutesProvider[F](
-        pathPrefix,
+        http4sPathToConnectRpcPath(pathPrefix),
         methodRegistry,
         codecRegistry,
         headerMapping,
@@ -195,7 +196,7 @@ final class Http4sRouteBuilder[F[_]: Async] private (
 
       val transcodingUrlMatcher = TranscodingUrlMatcher[F](
         methodRegistry.all,
-        pathPrefix.segments.map(_.encoded).toList,
+        http4sPathToConnectRpcPath(pathPrefix),
       )
 
       val transcodingHandler = TranscodingHandler[F](

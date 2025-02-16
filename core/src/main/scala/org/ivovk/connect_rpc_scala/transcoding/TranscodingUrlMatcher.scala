@@ -5,6 +5,7 @@ import com.google.api.http.{CustomHttpPattern, HttpRule}
 import org.http4s.{Method, Uri}
 import org.ivovk.connect_rpc_scala
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
+import org.ivovk.connect_rpc_scala.http.Paths.{Path, Segment}
 import org.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, JsonTransform, SubKeyJsonTransform}
 import org.ivovk.connect_rpc_scala.http.json.JsonProcessing.*
 import org.ivovk.connect_rpc_scala.util.SeqOps.*
@@ -12,9 +13,6 @@ import org.json4s.JsonAST.{JField, JObject}
 import org.json4s.{JString, JValue}
 
 import scala.collection.immutable.ArraySeq
-
-type Segment = String
-type Path    = Seq[Segment]
 
 case class MatchedRequest(
   method: MethodRegistry.Entry,

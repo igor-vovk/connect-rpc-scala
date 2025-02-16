@@ -9,6 +9,7 @@ import io.netty.channel.{ChannelFutureListener, ChannelHandlerContext, ChannelIn
 import io.netty.handler.codec.http.*
 import org.ivovk.connect_rpc_scala.HeaderMapping
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
+import org.ivovk.connect_rpc_scala.http.Paths.extractPathSegments
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
 import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
 import org.ivovk.connect_rpc_scala.netty.ByteBufConversions.byteBufToChunk
@@ -60,38 +61,38 @@ class HttpServerHandler[F[_]: Async](
           logger.trace(s">>> Headers: ${req.headers()}")
         }
 
-        val aGetMethod = req.method() == HttpMethod.GET
+        val decodedUri   = QueryStringDecoder(req.uri())
+        val pathSegments = extractPathSegments(decodedUri.rawPath, pathPrefix)
 
-        val decodedUri = QueryStringDecoder(req.uri())
-        val pathParts  = extractPathSegments(decodedUri.rawPath, pathPrefix)
-
-        val grpcMethod = pathParts match {
-          case Right(serviceName :: methodName :: Nil) =>
+        val maybeGrpcMethod = pathSegments match {
+          case Some(serviceName :: methodName :: Nil) =>
             // Temporary support GET-requests for all methods,
             // until https://github.com/scalapb/ScalaPB/pull/1774 is merged
             methodRegistry.get(serviceName, methodName) // .filter(_.descriptor.isSafe || aGetMethod)
-          case _ =>
-            None
+          case _ => None
         }
 
-        val maybeMediaType =
-          if aGetMethod then decodedUri.queryParam("encoding").map(MediaTypes.parseShort)
-          else Option(req.headers().get(HttpHeaderNames.CONTENT_TYPE)).map(MediaTypes.parse)
-
-        val mediaType = maybeMediaType match {
-          case Some(Right(mt)) => mt
-          case Some(Left(e)) =>
-            ctx.writeAndFlush(errorResponse(e.getMessage, HttpResponseStatus.UNSUPPORTED_MEDIA_TYPE))
-            return
-          case None =>
-            ctx.writeAndFlush(errorResponse("Encoding is missing", HttpResponseStatus.BAD_REQUEST))
-            return
-        }
-
-        given MessageCodec[F] = codecRegistry.byMediaType(mediaType).get
-
-        val responseF = grpcMethod match {
+        val responseF = maybeGrpcMethod match {
+          // Found a GRPC method, continue processing the request as Connect protocol
           case Some(methodEntry) =>
+            val aGetMethod = req.method() == HttpMethod.GET
+
+            val maybeMediaType =
+              if aGetMethod then decodedUri.queryParam("encoding").map(MediaTypes.parseShort)
+              else Option(req.headers().get(HttpHeaderNames.CONTENT_TYPE)).map(MediaTypes.parse)
+
+            val mediaType = maybeMediaType match {
+              case Some(Right(mt)) => mt
+              case Some(Left(e)) =>
+                sendError(ctx, e.getMessage, HttpResponseStatus.UNSUPPORTED_MEDIA_TYPE)
+                return
+              case None =>
+                sendError(ctx, "Encoding is missing", HttpResponseStatus.BAD_REQUEST)
+                return
+            }
+
+            given MessageCodec[F] = codecRegistry.byMediaType(mediaType).get
+
             val message: String | Stream[F, Byte] =
               if aGetMethod then decodedUri.queryParam("message").getOrElse("")
               else Stream.chunk(byteBufToChunk(req.content()))
@@ -105,6 +106,9 @@ class HttpServerHandler[F[_]: Async](
 
         dispatcher.unsafeRunAndForget {
           responseF.attempt
+            // .flatTap { _ =>
+            //  Async[F].delay(req.release())
+            // }
             .flatMap { ei =>
               val response = ei match {
                 case Right(response) => response
@@ -127,14 +131,23 @@ class HttpServerHandler[F[_]: Async](
         }
     }
 
+  private def sendError(
+    ctx: ChannelHandlerContext,
+    message: String,
+    status: HttpResponseStatus = HttpResponseStatus.INTERNAL_SERVER_ERROR,
+  ): Unit = {
+    val response = errorResponse(message, status)
+    ctx.writeAndFlush(response)
+  }
+
   private def errorResponse(
-    msg: String,
+    message: String,
     httpCode: HttpResponseStatus = HttpResponseStatus.INTERNAL_SERVER_ERROR,
   ): FullHttpResponse = {
     val response = new DefaultFullHttpResponse(
       HttpVersion.HTTP_1_1,
       httpCode,
-      Unpooled.wrappedBuffer(msg.getBytes),
+      Unpooled.wrappedBuffer(message.getBytes),
     )
     response.headers()
       .set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8")
@@ -157,31 +170,6 @@ class HttpServerHandler[F[_]: Async](
 }
 
 object HttpServerHandler {
-
-  sealed trait PathDecodingError
-
-  case object PrefixMismatch extends PathDecodingError
-
-  /**
-   * Decodes a path into segments and matches them against the prefix, removing the prefix segments from the
-   * path.
-   */
-  def extractPathSegments(
-    path: String,
-    prefixSegments: List[String] = Nil,
-  ): Either[PathDecodingError, List[String]] = {
-    var pathSegments = path.stripPrefix("/").split("/").toList
-
-    var unmatchedPrefix = prefixSegments
-
-    while unmatchedPrefix.nonEmpty do
-      if pathSegments.headOption.contains(unmatchedPrefix.head) then
-        pathSegments = pathSegments.tail
-        unmatchedPrefix = unmatchedPrefix.tail
-      else return Left(PrefixMismatch)
-
-    Right(pathSegments)
-  }
 
   extension (inline uri: QueryStringDecoder) {
     inline def queryParam(inline name: String): Option[String] =

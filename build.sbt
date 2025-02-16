@@ -76,7 +76,7 @@ lazy val http4s = project
       scalapb.gen() -> (Test / sourceManaged).value
     ),
     libraryDependencies ++= Seq(
-      "org.http4s" %% "http4s-dsl"    % Versions.http4s,
+      "org.http4s" %% "http4s-dsl"    % Versions.http4s % Test,
       "org.http4s" %% "http4s-client" % Versions.http4s % Test,
     ),
   )

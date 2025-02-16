@@ -4,48 +4,58 @@ import cats.MonadThrow
 import cats.data.OptionT
 import cats.implicits.*
 import org.http4s.Status.UnsupportedMediaType
-import org.http4s.dsl.request.*
-import org.http4s.{Headers, HttpRoutes, MediaType, Method, Response, Uri}
+import org.http4s.{Headers, HttpRoutes, MediaType, Method, Response}
 import org.ivovk.connect_rpc_scala.HeadersToMetadata
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
-import org.ivovk.connect_rpc_scala.http4s.QueryParams.*
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
-import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity}
+import org.ivovk.connect_rpc_scala.http.{MediaTypes, Paths, RequestEntity}
+import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
 
 class ConnectRoutesProvider[F[_]: MonadThrow](
-  pathPrefix: Uri.Path,
+  pathPrefix: Paths.Path,
   methodRegistry: MethodRegistry,
   codecRegistry: MessageCodecRegistry[F],
   headerMapping: HeadersToMetadata[Headers],
   handler: ConnectHandler[F],
 ) {
+  private val OptionTNone: OptionT[F, Response[F]] = OptionT.none[F, Response[F]]
 
-  def routes: HttpRoutes[F] = HttpRoutes[F] {
-    case req @ Method.GET -> `pathPrefix` / service / method :? EncodingQP(mediaType) +& MessageQP(message) =>
+  def routes: HttpRoutes[F] = HttpRoutes[F] { req =>
+    val aGetMethod = req.method == Method.GET
+
+    if !(aGetMethod || req.method == Method.POST) then OptionTNone
+    else {
+      val pathParts = Paths.dropPrefix(http4sPathToConnectRpcPath(req.uri.path), pathPrefix)
+
       OptionT
-        .fromOption[F](methodRegistry.get(service, method))
-        // Temporary support GET-requests for all methods,
-        // until https://github.com/scalapb/ScalaPB/pull/1774 is merged
-        .filter(_.descriptor.isSafe || true)
+        .fromOption[F](pathParts match {
+          case Some(service :: method :: Nil) =>
+            // Temporary support GET-requests for all methods,
+            // until https://github.com/scalapb/ScalaPB/pull/1774 is released
+            methodRegistry.get(service, method) // .filter(_.descriptor.isSafe || aGetMethod)
+          case _ =>
+            None
+        })
         .semiflatMap { methodEntry =>
+          val query = req.uri.query
+          val mediaType =
+            if aGetMethod then
+              query.multiParams.get("encoding")
+                .flatMap(_.headOption)
+                .flatMap(MediaTypes.parseShort(_).toOption)
+            else req.contentType.map(_.mediaType)
+
+          val message: String | fs2.Stream[F, Byte] =
+            if aGetMethod then req.multiParams.get("message").flatMap(_.headOption).getOrElse("")
+            else req.body
+
           val entity = RequestEntity[F](message, headerMapping.toMetadata(req.headers))
 
-          withCodec(codecRegistry, mediaType.some) { codec =>
+          withCodec(codecRegistry, mediaType) { codec =>
             handler.handle(entity, methodEntry)(using codec)
           }
         }
-    case req @ Method.POST -> `pathPrefix` / service / method =>
-      OptionT
-        .fromOption[F](methodRegistry.get(service, method))
-        .semiflatMap { methodEntry =>
-          val entity = RequestEntity(req.body, headerMapping.toMetadata(req.headers))
-
-          withCodec(codecRegistry, req.contentType.map(_.mediaType)) { codec =>
-            handler.handle(entity, methodEntry)(using codec)
-          }
-        }
-    case _ =>
-      OptionT.none
+    }
   }
 
   private def withCodec(
