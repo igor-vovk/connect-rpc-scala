@@ -8,6 +8,8 @@ import org.ivovk.connect_rpc_scala.HeadersToMetadata
 import org.ivovk.connect_rpc_scala.grpc.MergingBuilder.*
 import org.ivovk.connect_rpc_scala.http.RequestEntity
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, MessageCodec}
+import org.ivovk.connect_rpc_scala.http4s.Conversions
+import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 import org.ivovk.connect_rpc_scala.transcoding.MatchedRequest
@@ -24,7 +26,7 @@ class TranscodingRoutesProvider[F[_]: MonadThrow](
       .fromOption[F](
         urlMatcher.matchRequest(
           req.method,
-          req.uri.path.segments.map(_.encoded).toList,
+          http4sPathToConnectRpcPath(req.uri.path),
           req.uri.query.pairs,
         )
       )

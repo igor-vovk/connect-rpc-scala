@@ -32,7 +32,7 @@ lazy val Versions = new {
   val grpc      = "1.72.0"
   val http4s    = "0.23.30"
   val logback   = "1.5.18"
-  val netty     = "4.1.121.Final"
+  val netty     = "4.2.0.Final"
   val scalapb   = _root_.scalapb.compiler.Version.scalapbVersion
   val scalatest = "3.2.19"
 }

@@ -6,10 +6,10 @@ import cats.implicits.*
 import cats.{Endo, Parallel}
 import io.grpc.{Channel, ManagedChannelBuilder, ServerBuilder, ServerServiceDefinition}
 import io.netty.bootstrap.ServerBootstrap
-import io.netty.channel.ChannelInitializer
-import io.netty.channel.nio.NioEventLoopGroup
+import io.netty.channel.nio.NioIoHandler
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
+import io.netty.channel.{ChannelInitializer, MultiThreadIoEventLoopGroup}
 import io.netty.handler.codec.http.{HttpObjectAggregator, HttpServerCodec, HttpServerKeepAliveHandler}
 import io.netty.handler.logging.{LoggingHandler, LogLevel}
 import io.netty.handler.timeout.{IdleStateHandler, ReadTimeoutHandler, WriteTimeoutHandler}
@@ -172,8 +172,9 @@ class NettyServerBuilder[F[_]: Async: Parallel] private (
       pathPrefix = pathPrefix.segments.map(_.encoded).toList,
     )
 
-    val bossGroup   = new NioEventLoopGroup(1)
-    val workerGroup = new NioEventLoopGroup(1)
+    val ioHandlerFactory = NioIoHandler.newFactory()
+    val bossGroup        = new MultiThreadIoEventLoopGroup(1, ioHandlerFactory)
+    val workerGroup      = new MultiThreadIoEventLoopGroup(1, ioHandlerFactory)
 
     val bootstrap = new ServerBootstrap()
       .group(bossGroup, workerGroup)
