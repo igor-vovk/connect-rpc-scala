@@ -13,7 +13,6 @@ import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
 import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectErrorHandler, ConnectHandler, ConnectRoutesProvider}
 import org.ivovk.connect_rpc_scala.http4s.transcoding.{TranscodingHandler, TranscodingRoutesProvider}
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
-import org.ivovk.connect_rpc_scala.{HeaderMapping, HeadersFilter}
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext

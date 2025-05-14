@@ -2,7 +2,7 @@ package org.ivovk.connect_rpc_scala.http4s
 
 import io.grpc.Metadata
 import org.http4s.{Header, Headers}
-import org.ivovk.connect_rpc_scala.{HeaderMapping, HeadersFilter}
+import org.ivovk.connect_rpc_scala.http.{HeaderMapping, HeadersFilter}
 import org.typelevel.ci.CIString
 
 class Http4sHeaderMapping(

@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala
+package org.ivovk.connect_rpc_scala.http
 
 import org.scalatest.funsuite.AnyFunSuiteLike
 

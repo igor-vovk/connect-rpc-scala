@@ -5,10 +5,9 @@ import cats.data.OptionT
 import cats.implicits.*
 import org.http4s.Status.UnsupportedMediaType
 import org.http4s.{Headers, HttpRoutes, MediaType, Method, Response}
-import org.ivovk.connect_rpc_scala.HeadersToMetadata
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
 import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
-import org.ivovk.connect_rpc_scala.http.{MediaTypes, Paths, RequestEntity}
+import org.ivovk.connect_rpc_scala.http.{HeadersToMetadata, MediaTypes, Paths, RequestEntity}
 import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
 
 class ConnectRoutesProvider[F[_]: MonadThrow](

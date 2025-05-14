@@ -24,7 +24,7 @@ import org.ivovk.connect_rpc_scala.http.codec.{
 import org.ivovk.connect_rpc_scala.netty.connect.{ConnectErrorHandler, ConnectHandler}
 import org.ivovk.connect_rpc_scala.netty.headers.NettyHeaderMapping
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
-import org.ivovk.connect_rpc_scala.{HeaderMapping, HeadersFilter}
+import org.ivovk.connect_rpc_scala.http.{HeaderMapping, HeadersFilter}
 import org.slf4j.LoggerFactory
 
 import java.net.InetSocketAddress

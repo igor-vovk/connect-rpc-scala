@@ -5,8 +5,9 @@ import cats.implicits.*
 import com.google.protobuf.ByteString
 import connectrpc.conformance.v1.*
 import io.grpc.internal.GrpcUtil
-import io.grpc.{Metadata, Status, StatusRuntimeException}
+import io.grpc.{Metadata, Status}
 import org.ivovk.connect_rpc_scala.syntax.all.{*, given}
+import scalapb.GeneratedMessage
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
@@ -22,7 +23,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
   ): F[(UnaryResponse, Metadata)] =
     for res <- handleUnaryRequest(
         request.getResponseDefinition,
-        Seq(request.toProtoAny),
+        Seq(request),
         ctx,
       )
     yield (
@@ -36,7 +37,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
   ): F[(IdempotentUnaryResponse, Metadata)] =
     for res <- handleUnaryRequest(
         request.getResponseDefinition,
-        Seq(request.toProtoAny),
+        Seq(request),
         ctx,
       )
     yield (
@@ -46,13 +47,13 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
 
   private def handleUnaryRequest(
     responseDefinition: UnaryResponseDefinition,
-    requests: Seq[com.google.protobuf.any.Any],
+    requests: Seq[GeneratedMessage],
     ctx: Metadata,
   ): F[UnaryHandlerResponse] = {
     val requestInfo = ConformancePayload.RequestInfo(
       requestHeaders = mkConformanceHeaders(ctx),
       timeoutMs = extractTimeoutMs(ctx),
-      requests = requests,
+      requests = requests.map(_.toProtoAny),
     )
 
     val trailers = mkMetadata(
@@ -63,14 +64,15 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     )
 
     val responseData = responseDefinition.response match {
-      case UnaryResponseDefinition.Response.ResponseData(bs) =>
-        bs.some
+      case UnaryResponseDefinition.Response.ResponseData(byteString) =>
+        byteString
       case UnaryResponseDefinition.Response.Empty =>
-        none
+        ByteString.EMPTY
       case UnaryResponseDefinition.Response.Error(Error(code, message, _)) =>
-        val status = Status.fromCodeValue(code.value).withDescription(message.orNull)
-
-        throw new StatusRuntimeException(status, trailers).withDetails(requestInfo)
+        throw Status.fromCodeValue(code.value)
+          .withDescription(message.orNull)
+          .asRuntimeException(trailers)
+          .withDetails(requestInfo)
     }
 
     val sleep = Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)
@@ -78,7 +80,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     Async[F].delayBy(
       UnaryHandlerResponse(
         ConformancePayload(
-          responseData.getOrElse(ByteString.EMPTY),
+          responseData,
           requestInfo.some,
         ),
         trailers,

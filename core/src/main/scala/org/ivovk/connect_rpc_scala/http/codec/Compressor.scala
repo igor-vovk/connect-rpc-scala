@@ -3,7 +3,7 @@ package org.ivovk.connect_rpc_scala.http.codec
 import cats.effect.Sync
 import fs2.Stream
 import fs2.compression.Compression
-import io.grpc.{Status, StatusException}
+import io.grpc.Status
 import org.http4s.ContentCoding
 import org.http4s.util.StringWriter
 import org.ivovk.connect_rpc_scala.http.ResponseEntity
@@ -21,7 +21,7 @@ class Compressor[F[_]: Sync] {
       case Some(ContentCoding.gzip) =>
         body.through(Compression[F].gunzip().andThen(_.flatMap(_.content)))
       case Some(other) =>
-        throw new StatusException(Status.INVALID_ARGUMENT.withDescription(s"Unsupported encoding: $other"))
+        throw Status.INVALID_ARGUMENT.withDescription(s"Unsupported encoding: $other").asException()
       case None =>
         body
     }
@@ -41,7 +41,7 @@ class Compressor[F[_]: Sync] {
           body = entity.body.through(Compression[F].gzip()),
         )
       case Some(other) =>
-        throw new StatusException(Status.INVALID_ARGUMENT.withDescription(s"Unsupported encoding: $other"))
+        throw Status.INVALID_ARGUMENT.withDescription(s"Unsupported encoding: $other").asException()
       case None =>
         entity
     }

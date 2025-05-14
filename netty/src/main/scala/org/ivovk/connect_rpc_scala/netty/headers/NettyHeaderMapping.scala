@@ -2,7 +2,7 @@ package org.ivovk.connect_rpc_scala.netty.headers
 
 import io.grpc.Metadata
 import io.netty.handler.codec.http.{DefaultHttpHeaders, EmptyHttpHeaders, HttpHeaders}
-import org.ivovk.connect_rpc_scala.{HeaderMapping, HeadersFilter}
+import org.ivovk.connect_rpc_scala.http.{HeaderMapping, HeadersFilter}
 
 class NettyHeaderMapping(
   headersFilter: HeadersFilter,

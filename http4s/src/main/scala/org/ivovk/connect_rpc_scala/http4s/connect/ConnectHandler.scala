@@ -6,9 +6,8 @@ import io.grpc.*
 import io.grpc.MethodDescriptor.MethodType
 import org.http4s.Status.Ok
 import org.http4s.{Headers, Response}
-import org.ivovk.connect_rpc_scala.MetadataToHeaders
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
-import org.ivovk.connect_rpc_scala.http.RequestEntity
+import org.ivovk.connect_rpc_scala.http.{MetadataToHeaders, RequestEntity}
 import org.ivovk.connect_rpc_scala.http.codec.{Compressor, EncodeOptions, MessageCodec}
 import org.ivovk.connect_rpc_scala.http4s.ErrorHandler
 import org.ivovk.connect_rpc_scala.http4s.ResponseExtensions.*
@@ -39,9 +38,7 @@ class ConnectHandler[F[_]: Async](
         handleUnary(req, method)
       case unsupported =>
         Async[F].raiseError(
-          new StatusException(
-            io.grpc.Status.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported")
-          )
+          Status.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported").asException()
         )
 
     f.handleErrorWith(errorHandler.handle)
