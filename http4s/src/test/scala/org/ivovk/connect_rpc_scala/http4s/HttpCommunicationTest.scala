@@ -16,7 +16,6 @@ import test.HttpCommunicationTest.*
 
 import java.net.URLEncoder
 import scala.concurrent.{ExecutionContext, Future}
-import scala.jdk.CollectionConverters.*
 
 class HttpCommunicationTest extends AnyFunSuite, Matchers {
 

@@ -7,7 +7,6 @@ import org.ivovk.connect_rpc_scala.syntax.metadata.{*, given}
 
 import java.nio.charset.Charset
 import scala.annotation.targetName
-import scala.jdk.CollectionConverters.*
 
 object GrpcHeaders {
 
