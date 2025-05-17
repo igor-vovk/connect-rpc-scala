@@ -267,6 +267,12 @@ The library is inspired and takes some ideas from the [grpc-json-bridge](https:/
 Which doesn't seem to be supported anymore, + also the library doesn't follow a Connect-RPC standard (while being very
 close to it).
 
+## Links
+
+* [Connect RPC website](https://connectrpc.com)
+* [Connect RPC Java library](https://github.com/igor-vovk/connect-rpc-java/)
+* [Connect RPC Scala library](https://github.com/igor-vovk/connect-rpc-scala)
+
 ---
 
 ### A word about Ukraine
