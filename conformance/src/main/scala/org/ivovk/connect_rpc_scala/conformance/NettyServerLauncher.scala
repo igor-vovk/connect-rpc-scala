@@ -1,8 +1,12 @@
 package org.ivovk.connect_rpc_scala.conformance
 
 import cats.effect.{IO, IOApp}
-import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatResponse}
-import org.ivovk.connect_rpc_scala.conformance.util.ServerCompatSerDeser
+import connectrpc.conformance.v1.{
+  ConformanceServiceFs2GrpcTrailers,
+  ServerCompatRequest,
+  ServerCompatResponse,
+}
+import org.ivovk.connect_rpc_scala.conformance.util.ProtoSerDeser
 import org.ivovk.connect_rpc_scala.netty.NettyServerBuilder
 import org.slf4j.LoggerFactory
 
@@ -26,7 +30,7 @@ object NettyServerLauncher extends IOApp.Simple {
 
   override def run: IO[Unit] = {
     val res = for
-      req <- ServerCompatSerDeser.readRequest[IO](System.in).toResource
+      req <- ProtoSerDeser.read[IO, ServerCompatRequest](System.in).toResource
 
       service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
         ConformanceServiceImpl[IO]()
@@ -45,7 +49,7 @@ object NettyServerLauncher extends IOApp.Simple {
 
       resp = ServerCompatResponse(server.host, server.port)
 
-      _ <- ServerCompatSerDeser.writeResponse[IO](System.out, resp).toResource
+      _ <- ProtoSerDeser.write[IO](System.out, resp).toResource
 
       _ = System.err.println(s"Server started on ${server.host}:${server.port}...")
       _ = logger.info(s"Netty-server started on ${server.host}:${server.port}...")

@@ -2,10 +2,14 @@ package org.ivovk.connect_rpc_scala.conformance
 
 import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.{host, port, Port}
-import connectrpc.conformance.v1.{ConformanceServiceFs2GrpcTrailers, ServerCompatResponse}
+import connectrpc.conformance.v1.{
+  ConformanceServiceFs2GrpcTrailers,
+  ServerCompatRequest,
+  ServerCompatResponse,
+}
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.Logger
-import org.ivovk.connect_rpc_scala.conformance.util.ServerCompatSerDeser
+import org.ivovk.connect_rpc_scala.conformance.util.ProtoSerDeser
 import org.ivovk.connect_rpc_scala.http4s.Http4sRouteBuilder
 import org.slf4j.LoggerFactory
 
@@ -29,7 +33,7 @@ object Http4sServerLauncher extends IOApp.Simple {
 
   override def run: IO[Unit] = {
     val res = for
-      req <- ServerCompatSerDeser.readRequest[IO](System.in).toResource
+      req <- ProtoSerDeser.read[IO, ServerCompatRequest](System.in).toResource
 
       service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
         ConformanceServiceImpl[IO]()
@@ -61,7 +65,7 @@ object Http4sServerLauncher extends IOApp.Simple {
       addr = server.address
       resp = ServerCompatResponse(addr.getHostString, addr.getPort)
 
-      _ <- ServerCompatSerDeser.writeResponse[IO](System.out, resp).toResource
+      _ <- ProtoSerDeser.write[IO](System.out, resp).toResource
 
       _ = System.err.println(s"Server started on $addr...")
     yield ()
