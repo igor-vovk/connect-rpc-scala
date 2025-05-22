@@ -23,16 +23,14 @@ object MethodRegistry {
       .map { smd =>
         val methodDescriptor = smd.getMethodDescriptor
 
-        val requestMarshaller = methodDescriptor.getRequestMarshaller match
-          case m: scalapb.grpc.Marshaller[_]               => m
-          case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => tm
-          case unsupported => throw new RuntimeException(s"Unsupported marshaller $unsupported")
+        val requestMarshaller = extractRequestMarshaller(methodDescriptor)
 
         val companionField = requestMarshaller.getClass.getDeclaredField("companion")
-        companionField.setAccessible(true)
+        if (!companionField.canAccess(requestMarshaller)) {
+          companionField.setAccessible(true)
+        }
 
-        val requestCompanion = companionField.get(requestMarshaller)
-          .asInstanceOf[Companion[Message]]
+        val requestCompanion = companionField.get(requestMarshaller).asInstanceOf[Companion[Message]]
 
         val httpRule = extractHttpRule(methodDescriptor)
 
@@ -48,6 +46,14 @@ object MethodRegistry {
   }
 
   private val HttpFieldNumber = 72295728
+
+  def extractRequestMarshaller(
+    methodDescriptor: MethodDescriptor[_, _]
+  ): MethodDescriptor.Marshaller[_] =
+    methodDescriptor.getRequestMarshaller match
+      case m: scalapb.grpc.Marshaller[_]               => m
+      case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => tm
+      case unsupported => throw new RuntimeException(s"Unsupported marshaller $unsupported")
 
   private def extractHttpRule(methodDescriptor: MethodDescriptor[_, _]): Option[HttpRule] =
     methodDescriptor.getSchemaDescriptor match {
