@@ -77,7 +77,7 @@ lazy val http4s = project
     ),
     libraryDependencies ++= Seq(
       "org.http4s" %% "http4s-dsl"    % Versions.http4s % Test,
-      "org.http4s" %% "http4s-client" % Versions.http4s % Test,
+      "org.http4s" %% "http4s-client" % Versions.http4s,
     ),
   )
   .settings(CommonDependencies)
@@ -87,9 +87,7 @@ lazy val netty = project
   .settings(
     name := "connect-rpc-scala-netty",
     libraryDependencies ++= Seq(
-      // TODO: not needed in this form. It is here to switch to grpc-netty-shaded at some point
-      "io.grpc"  % "grpc-netty" % Versions.grpc,
-      "io.netty" % "netty-all"  % Versions.netty,
+      "io.netty" % "netty-all" % Versions.netty
     ),
   )
   .settings(CommonDependencies)
