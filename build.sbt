@@ -34,13 +34,14 @@ lazy val Versions = new {
   val logback   = "1.5.18"
   val netty     = "4.2.1.Final"
   val scalapb   = _root_.scalapb.compiler.Version.scalapbVersion
+  val slf4j     = "2.0.17"
   val scalatest = "3.2.19"
 }
 
 lazy val CommonDependencies = Seq(
   libraryDependencies ++= Seq(
-    "ch.qos.logback" % "logback-classic" % Versions.logback   % Runtime,
-    "org.scalatest" %% "scalatest"       % Versions.scalatest % Test,
+    "org.slf4j"      % "slf4j-api" % Versions.slf4j,
+    "org.scalatest" %% "scalatest" % Versions.scalatest % Test,
   )
 )
 
@@ -87,9 +88,7 @@ lazy val netty = project
   .settings(
     name := "connect-rpc-scala-netty",
     libraryDependencies ++= Seq(
-      // TODO: not needed in this form. It is here to switch to grpc-netty-shaded at some point
-      "io.grpc"  % "grpc-netty" % Versions.grpc,
-      "io.netty" % "netty-all"  % Versions.netty,
+      "io.netty" % "netty-all" % Versions.netty
     ),
   )
   .settings(CommonDependencies)
@@ -100,7 +99,8 @@ lazy val conformance = project
   .settings(
     noPublish,
     libraryDependencies ++= Seq(
-      "org.http4s" %% "http4s-ember-server" % Versions.http4s
+      "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
+      "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
     ),
   )
   .settings(CommonDependencies)
