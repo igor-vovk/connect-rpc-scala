@@ -14,7 +14,6 @@ ThisBuild / developers := List(
     url("https://ivovk.me"),
   )
 )
-ThisBuild / sonatypeCredentialHost := xerial.sbt.Sonatype.sonatypeCentralHost
 
 ThisBuild / tpolecatExcludeOptions ++= Set(
   ScalacOptions.warnNonUnitStatement,
