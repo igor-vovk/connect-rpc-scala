@@ -33,6 +33,7 @@ RUN mkdir "/logs"
 
 ARG launcher
 ARG config="suite.yaml"
+ARG mode="server"
 ARG stable="true"
 
 # Run stable tests first
@@ -40,8 +41,7 @@ RUN echo ">>>>> Running stable tests <<<<<"
 RUN LOGS_PATH="/logs" \
     ./connectconformance \
     --conf $config \
-    --mode server \
-    --parallel 1 \
+    --mode $mode \
     -v -vv --trace \
     -- \
     /app/bin/conformance -main org.ivovk.connect_rpc_scala.conformance.$launcher; \

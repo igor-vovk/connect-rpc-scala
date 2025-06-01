@@ -6,6 +6,7 @@ import scalapb.grpc.ConcreteProtoMethodDescriptorSupplier
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 object MethodDescriptorExtensions {
+  // Field number for the 'http' extension in google.protobuf.MethodOptions (see google/api/annotations.proto)
   private val HttpFieldNumber = 72295728
 
   extension (md: MethodDescriptor[_, _]) {

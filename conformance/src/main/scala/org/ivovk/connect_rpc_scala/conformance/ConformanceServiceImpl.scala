@@ -6,12 +6,12 @@ import com.google.protobuf.ByteString
 import connectrpc.conformance.v1.*
 import io.grpc.internal.GrpcUtil
 import io.grpc.{Metadata, Status}
-import org.ivovk.connect_rpc_scala.syntax.all.{*, given}
+import org.ivovk.connect_rpc_scala.conformance.util.ConformanceHeadersConv
+import org.ivovk.connect_rpc_scala.syntax.all.*
 import scalapb.GeneratedMessage
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import scala.jdk.CollectionConverters.*
 
 case class UnaryHandlerResponse(payload: ConformancePayload, trailers: Metadata)
 
@@ -51,12 +51,12 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     ctx: Metadata,
   ): F[UnaryHandlerResponse] = {
     val requestInfo = ConformancePayload.RequestInfo(
-      requestHeaders = mkConformanceHeaders(ctx),
+      requestHeaders = ConformanceHeadersConv.toHeaderSeq(ctx),
       timeoutMs = extractTimeoutMs(ctx),
       requests = requests.map(_.toProtoAny),
     )
 
-    val trailers = mkMetadata(
+    val trailers = ConformanceHeadersConv.toMetadata(
       Seq.concat(
         responseDefinition.responseHeaders,
         responseDefinition.responseTrailers.map(h => h.copy(name = s"trailer-${h.name}")),
@@ -88,23 +88,6 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
       sleep,
     )
 
-  }
-
-  private def mkConformanceHeaders(metadata: Metadata): Seq[Header] =
-    metadata.keys().asScala.map { key =>
-      Header(key, metadata.getAll(asciiKey[String](key)).asScala.toSeq)
-    }.toSeq
-
-  private def mkMetadata(headers: Seq[Header]): Metadata = {
-    val metadata = new Metadata()
-    headers.foreach { h =>
-      val key = asciiKey[String](h.name)
-
-      h.value.foreach { v =>
-        metadata.put(key, v)
-      }
-    }
-    metadata
   }
 
   private def extractTimeoutMs(metadata: Metadata): Option[Long] =
