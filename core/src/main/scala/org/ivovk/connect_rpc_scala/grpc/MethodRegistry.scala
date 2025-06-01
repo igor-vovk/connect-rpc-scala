@@ -2,7 +2,7 @@ package org.ivovk.connect_rpc_scala.grpc
 
 import com.google.api.http.HttpRule
 import io.grpc.{MethodDescriptor, ServerMethodDefinition, ServerServiceDefinition}
-import scalapb.grpc.ConcreteProtoMethodDescriptorSupplier
+import org.ivovk.connect_rpc_scala.grpc.MethodDescriptorExtensions.*
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 import scala.jdk.CollectionConverters.*
@@ -20,19 +20,10 @@ object MethodRegistry {
     val entries = services
       .flatMap(_.getMethods.asScala)
       .map(_.asInstanceOf[ServerMethodDefinition[Message, Message]])
-      .map { smd =>
-        val methodDescriptor = smd.getMethodDescriptor
-
-        val requestMarshaller = extractRequestMarshaller(methodDescriptor)
-
-        val companionField = requestMarshaller.getClass.getDeclaredField("companion")
-        if (!companionField.canAccess(requestMarshaller)) {
-          companionField.setAccessible(true)
-        }
-
-        val requestCompanion = companionField.get(requestMarshaller).asInstanceOf[Companion[Message]]
-
-        val httpRule = extractHttpRule(methodDescriptor)
+      .map { methodDefinition =>
+        val methodDescriptor = methodDefinition.getMethodDescriptor
+        val requestCompanion = methodDescriptor.extractRequestMessageCompanionObj()
+        val httpRule         = methodDescriptor.extractHttpRule()
 
         Entry(
           name = MethodName.from(methodDescriptor),
@@ -44,28 +35,6 @@ object MethodRegistry {
 
     new MethodRegistry(entries)
   }
-
-  private val HttpFieldNumber = 72295728
-
-  def extractRequestMarshaller(
-    methodDescriptor: MethodDescriptor[_, _]
-  ): MethodDescriptor.Marshaller[_] =
-    methodDescriptor.getRequestMarshaller match
-      case m: scalapb.grpc.Marshaller[_]               => m
-      case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => tm
-      case unsupported => throw new RuntimeException(s"Unsupported marshaller $unsupported")
-
-  private def extractHttpRule(methodDescriptor: MethodDescriptor[_, _]): Option[HttpRule] =
-    methodDescriptor.getSchemaDescriptor match {
-      case sd: ConcreteProtoMethodDescriptorSupplier =>
-        val fields = sd.getMethodDescriptor.getOptions.getUnknownFields
-
-        if fields.hasField(HttpFieldNumber) then
-          Some(HttpRule.parseFrom(fields.getField(HttpFieldNumber).getLengthDelimitedList.get(0).toByteArray))
-        else None
-      case _ =>
-        None
-    }
 
 }
 
