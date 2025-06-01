@@ -9,7 +9,7 @@ import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeserBuilder, MessageCodecRegistry, ProtoMessageCodec}
 import org.ivovk.connect_rpc_scala.http4s.client.Http4sChannel
 
-class Http4sClientBuilder[F[_]: Async](client: Client[F]) {
+class ConnectHttp4sClientBuilder[F[_]: Async](client: Client[F]) {
 
   def build(baseUri: Uri): Resource[F, Channel] =
     for dispatcher <- Dispatcher.parallel[F](await = false)

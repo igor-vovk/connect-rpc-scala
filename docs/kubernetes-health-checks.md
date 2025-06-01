@@ -69,12 +69,12 @@ and implement all your underlying health-checks in the ready endpoint.
 
 ### Step 3: Expose the health check service as an HTTP route
 
-In this case list your health check service when instantiating `ConnectRouteBuilder`:
+In this case list your health check service when instantiating `ConnectHttp4sRouteBuilder`:
 
 ```scala
 val httpHealthGrpcServiceDef = ???
 
-ConnectRouteBuilder
+ConnectHttp4sRouteBuilder
   .forServices[IO](
     // other services
     httpHealthGrpcServiceDef,

@@ -12,17 +12,17 @@ object MethodDescriptorExtensions {
 
     def extractRequestMessageCompanionObj(): Companion[Message] =
       md.getRequestMarshaller match
-        case m: scalapb.grpc.Marshaller[_]               => getCompanionObj(m)
-        case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => getCompanionObj(tm)
+        case m: scalapb.grpc.Marshaller[_]               => extractCompanionObj(m)
+        case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => extractCompanionObj(tm)
         case unsupported => throw new RuntimeException(s"Unsupported marshaller $unsupported")
 
     def extractResponseMessageCompanionObj(): Companion[Message] =
       md.getResponseMarshaller match
-        case m: scalapb.grpc.Marshaller[_]               => getCompanionObj(m)
-        case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => getCompanionObj(tm)
+        case m: scalapb.grpc.Marshaller[_]               => extractCompanionObj(m)
+        case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => extractCompanionObj(tm)
         case unsupported => throw new RuntimeException(s"Unsupported marshaller $unsupported")
 
-    private def getCompanionObj(m: MethodDescriptor.Marshaller[_]): Companion[Message] = {
+    private def extractCompanionObj(m: MethodDescriptor.Marshaller[_]): Companion[Message] = {
       val companionField = m.getClass.getDeclaredField("companion")
       if (!companionField.canAccess(m)) {
         companionField.setAccessible(true)

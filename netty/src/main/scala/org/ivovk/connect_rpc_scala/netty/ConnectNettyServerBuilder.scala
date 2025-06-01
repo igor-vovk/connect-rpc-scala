@@ -39,13 +39,18 @@ case class Server(
   def port: Int    = address.getPort
 }
 
+/** Deprecated: Use [[ConnectNettyServerBuilder]] instead. */
 object NettyServerBuilder {
 
-  def forService[F[_]: Async: Parallel](service: ServerServiceDefinition): NettyServerBuilder[F] =
+  /** Please use [[ConnectNettyServerBuilder.forService]] instead. */
+  def forService[F[_]: Async: Parallel](service: ServerServiceDefinition): ConnectNettyServerBuilder[F] =
     forServices(Seq(service))
 
-  def forServices[F[_]: Async: Parallel](services: Seq[ServerServiceDefinition]): NettyServerBuilder[F] =
-    new NettyServerBuilder[F](
+    /** Please use [[ConnectNettyServerBuilder.forServices]] instead. */
+  def forServices[F[_]: Async: Parallel](
+    services: Seq[ServerServiceDefinition]
+  ): ConnectNettyServerBuilder[F] =
+    new ConnectNettyServerBuilder[F](
       services = services,
       serverConfigurator = identity,
       enableLogging = false,
@@ -63,7 +68,33 @@ object NettyServerBuilder {
 
 }
 
-class NettyServerBuilder[F[_]: Async: Parallel] private (
+object ConnectNettyServerBuilder {
+
+  def forService[F[_]: Async: Parallel](service: ServerServiceDefinition): ConnectNettyServerBuilder[F] =
+    forServices(Seq(service))
+
+  def forServices[F[_]: Async: Parallel](
+    services: Seq[ServerServiceDefinition]
+  ): ConnectNettyServerBuilder[F] =
+    new ConnectNettyServerBuilder[F](
+      services = services,
+      serverConfigurator = identity,
+      enableLogging = false,
+      channelConfigurator = identity,
+      customJsonSerDeser = None,
+      incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
+      outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
+      pathPrefix = Uri.Path.Root,
+      executor = ExecutionContext.global,
+      waitForShutdown = 5.seconds,
+      treatTrailersAsHeaders = true,
+      host = "0.0.0.0",
+      port = 0,
+    )
+
+}
+
+class ConnectNettyServerBuilder[F[_]: Async: Parallel] private[netty] (
   services: Seq[ServerServiceDefinition],
   serverConfigurator: Endo[ServerBuilder[_]],
   enableLogging: Boolean,
@@ -94,8 +125,8 @@ class NettyServerBuilder[F[_]: Async: Parallel] private (
     treatTrailersAsHeaders: Boolean = treatTrailersAsHeaders,
     host: String = host,
     port: Int = port,
-  ): NettyServerBuilder[F] =
-    new NettyServerBuilder(
+  ): ConnectNettyServerBuilder[F] =
+    new ConnectNettyServerBuilder(
       services = services,
       serverConfigurator = serverConfigurator,
       enableLogging = enableLogging,
@@ -111,19 +142,19 @@ class NettyServerBuilder[F[_]: Async: Parallel] private (
       port = port,
     )
 
-  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): NettyServerBuilder[F] =
+  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectNettyServerBuilder[F] =
     copy(channelConfigurator = method)
 
-  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): NettyServerBuilder[F] =
+  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): ConnectNettyServerBuilder[F] =
     copy(customJsonSerDeser = Some(method(JsonSerDeserBuilder[F]()).build))
 
-  def withPathPrefix(pathPrefix: Uri.Path): NettyServerBuilder[F] =
+  def withPathPrefix(pathPrefix: Uri.Path): ConnectNettyServerBuilder[F] =
     copy(pathPrefix = pathPrefix)
 
-  def withHost(host: String): NettyServerBuilder[F] =
+  def withHost(host: String): ConnectNettyServerBuilder[F] =
     copy(host = host)
 
-  def withPort(port: Int): NettyServerBuilder[F] =
+  def withPort(port: Int): ConnectNettyServerBuilder[F] =
     copy(port = port)
 
   def build(): Resource[F, Server] =

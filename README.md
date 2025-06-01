@@ -101,11 +101,13 @@ The library provides two frontends:
 
 * `connect-rpc-scala-http4s` — based on [http4s](https://http4s.org) server.
   More stable, was added first, but has some limitations, like inability to support streaming.
+  Use `ConnectHttp4sRouteBuilder` class to build routes that then can be attached to http4s server.
 * `connect-rpc-scala-netty` — based on [Netty](https://netty.io) server.
   Lower-level, not-ready-for-production *yet*, but has some advantages, making it a way to go with time:
     - Better performance
     - Support for streaming
     - Ability to reuse Netty from `grpc-netty-shaded` dependency, used by GRPC itself
+    - Use `ConnectNettyServerBuilder` to build a Netty server.
 
 Feature comparison:
 
@@ -154,7 +156,7 @@ E.g., it takes a list of GRPC services and returns a list of `http4s` routes bas
 This interface is implemented by `ConnectRouteBuilder`class:
 
 ```scala
-import org.ivovk.connect_rpc_scala.http4s.Http4sRouteBuilder
+import org.ivovk.connect_rpc_scala.http4s.ConnectHttp4sRouteBuilder
 
 // Your GRPC service(s)
 val grpcServices: Seq[io.grpc.ServiceDefinition] = ???
@@ -164,7 +166,7 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
 
   for {
     // Create httpApp with Connect-RPC routes, specifying your GRPC services
-    httpApp <- Http4sRouteBuilder.forServices[IO](grpcServices).build
+    httpApp <- ConnectHttp4sRouteBuilder.forServices[IO](grpcServices).build
 
     // Create http server
     httpServer <- EmberServerBuilder.default[IO]

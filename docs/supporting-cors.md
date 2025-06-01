@@ -19,7 +19,7 @@ val httpServer: Resource[IO, org.http4s.server.Server] = {
   import org.http4s.server.middleware.*
 
   for
-    routes <- ConnectRouteBuilder
+    routes <- ConnectHttp4sRouteBuilder
       .forServices[IO](
         // Add your services here
       )

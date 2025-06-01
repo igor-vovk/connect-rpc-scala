@@ -36,7 +36,7 @@ class Dependencies(allocator: Allocator) {
 
     for {
       // Create httpApp with Connect-RPC routes, specifying your GRPC services
-      app <- ConnectRouteBuilder
+      app <- ConnectHttp4sRouteBuilder
         .forServices[IO](
           // Inject your GRPC services
         )

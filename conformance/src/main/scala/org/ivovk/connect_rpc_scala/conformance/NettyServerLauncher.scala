@@ -7,7 +7,7 @@ import connectrpc.conformance.v1.{
   ServerCompatResponse,
 }
 import org.ivovk.connect_rpc_scala.conformance.util.ProtoSerDeser
-import org.ivovk.connect_rpc_scala.netty.NettyServerBuilder
+import org.ivovk.connect_rpc_scala.netty.ConnectNettyServerBuilder
 import org.slf4j.LoggerFactory
 
 /**
@@ -36,7 +36,7 @@ object NettyServerLauncher extends IOApp.Simple {
         ConformanceServiceImpl[IO]()
       )
 
-      server <- NettyServerBuilder
+      server <- ConnectNettyServerBuilder
         .forService[IO](service)
         .withJsonCodecConfigurator {
           // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any

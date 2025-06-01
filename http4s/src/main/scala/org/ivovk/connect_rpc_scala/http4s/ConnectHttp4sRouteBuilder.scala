@@ -18,19 +18,25 @@ import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 
+/**
+ * Deprecated: Http4sRouteBuilder will soon be deprecated in favor of ConnectHttp4sRouteBuilder.
+ */
 object Http4sRouteBuilder {
 
-  def forService[F[_]: Async](service: ServerServiceDefinition): Http4sRouteBuilder[F] =
+  /** Please use [[ConnectHttp4sRouteBuilder.forService]] instead. */
+  def forService[F[_]: Async](service: ServerServiceDefinition): ConnectHttp4sRouteBuilder[F] =
     forServices(Seq(service))
 
+  /** Please use [[ConnectHttp4sRouteBuilder.forServices]] instead. */
   def forServices[F[_]: Async](
     service: ServerServiceDefinition,
     other: ServerServiceDefinition*
-  ): Http4sRouteBuilder[F] =
+  ): ConnectHttp4sRouteBuilder[F] =
     forServices(service +: other)
 
-  def forServices[F[_]: Async](services: Seq[ServerServiceDefinition]): Http4sRouteBuilder[F] =
-    new Http4sRouteBuilder(
+  /** Please use [[ConnectHttp4sRouteBuilder.forServices]] instead. */
+  def forServices[F[_]: Async](services: Seq[ServerServiceDefinition]): ConnectHttp4sRouteBuilder[F] =
+    new ConnectHttp4sRouteBuilder(
       services = services,
       serverConfigurator = identity,
       channelConfigurator = identity,
@@ -46,7 +52,35 @@ object Http4sRouteBuilder {
 
 }
 
-final class Http4sRouteBuilder[F[_]: Async] private (
+object ConnectHttp4sRouteBuilder {
+
+  def forService[F[_]: Async](service: ServerServiceDefinition): ConnectHttp4sRouteBuilder[F] =
+    forServices(Seq(service))
+
+  def forServices[F[_]: Async](
+    service: ServerServiceDefinition,
+    other: ServerServiceDefinition*
+  ): ConnectHttp4sRouteBuilder[F] =
+    forServices(service +: other)
+
+  def forServices[F[_]: Async](services: Seq[ServerServiceDefinition]): ConnectHttp4sRouteBuilder[F] =
+    new ConnectHttp4sRouteBuilder(
+      services = services,
+      serverConfigurator = identity,
+      channelConfigurator = identity,
+      customJsonSerDeser = None,
+      incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
+      outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
+      pathPrefix = Uri.Path.Root,
+      executor = ExecutionContext.global,
+      waitForShutdown = 5.seconds,
+      treatTrailersAsHeaders = true,
+      transcodingErrorHandler = None,
+    )
+
+}
+
+final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
   services: Seq[ServerServiceDefinition],
   serverConfigurator: Endo[ServerBuilder[_]],
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
@@ -72,8 +106,8 @@ final class Http4sRouteBuilder[F[_]: Async] private (
     waitForShutdown: Duration = waitForShutdown,
     treatTrailersAsHeaders: Boolean = treatTrailersAsHeaders,
     transcodingErrorHandler: Option[ErrorHandler[F]] = transcodingErrorHandler,
-  ): Http4sRouteBuilder[F] =
-    new Http4sRouteBuilder(
+  ): ConnectHttp4sRouteBuilder[F] =
+    new ConnectHttp4sRouteBuilder(
       services,
       serverConfigurator,
       channelConfigurator,
@@ -87,13 +121,13 @@ final class Http4sRouteBuilder[F[_]: Async] private (
       transcodingErrorHandler,
     )
 
-  def withServerConfigurator(method: Endo[ServerBuilder[_]]): Http4sRouteBuilder[F] =
+  def withServerConfigurator(method: Endo[ServerBuilder[_]]): ConnectHttp4sRouteBuilder[F] =
     copy(serverConfigurator = method)
 
-  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): Http4sRouteBuilder[F] =
+  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectHttp4sRouteBuilder[F] =
     copy(channelConfigurator = method)
 
-  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): Http4sRouteBuilder[F] =
+  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): ConnectHttp4sRouteBuilder[F] =
     copy(customJsonSerDeser = Some(method(JsonSerDeserBuilder[F]()).build))
 
   /**
@@ -101,7 +135,7 @@ final class Http4sRouteBuilder[F[_]: Async] private (
    *
    * By default, headers with "connection" prefix are filtered out (GRPC requirement).
    */
-  def withIncomingHeadersFilter(filter: String => Boolean): Http4sRouteBuilder[F] =
+  def withIncomingHeadersFilter(filter: String => Boolean): ConnectHttp4sRouteBuilder[F] =
     copy(incomingHeadersFilter = filter)
 
   /**
@@ -109,7 +143,7 @@ final class Http4sRouteBuilder[F[_]: Async] private (
    *
    * By default, headers with "grpc-" prefix are filtered out.
    */
-  def withOutgoingHeadersFilter(filter: String => Boolean): Http4sRouteBuilder[F] =
+  def withOutgoingHeadersFilter(filter: String => Boolean): ConnectHttp4sRouteBuilder[F] =
     copy(outgoingHeadersFilter = filter)
 
   /**
@@ -117,16 +151,16 @@ final class Http4sRouteBuilder[F[_]: Async] private (
    *
    * "/" by default.
    */
-  def withPathPrefix(path: Uri.Path): Http4sRouteBuilder[F] =
+  def withPathPrefix(path: Uri.Path): ConnectHttp4sRouteBuilder[F] =
     copy(pathPrefix = path)
 
-  def withExecutor(executor: Executor): Http4sRouteBuilder[F] =
+  def withExecutor(executor: Executor): ConnectHttp4sRouteBuilder[F] =
     copy(executor = executor)
 
   /**
    * Amount of time to wait while GRPC server finishes processing requests that are in progress.
    */
-  def withWaitForShutdown(duration: Duration): Http4sRouteBuilder[F] =
+  def withWaitForShutdown(duration: Duration): ConnectHttp4sRouteBuilder[F] =
     copy(waitForShutdown = duration)
 
   /**
@@ -135,10 +169,10 @@ final class Http4sRouteBuilder[F[_]: Async] private (
    * Both `fs2-grpc` and `zio-grpc` support only trailing headers, so having this option enabled is a single
    * way to send headers from the server to a client.
    */
-  def disableTreatingTrailersAsHeaders: Http4sRouteBuilder[F] =
+  def disableTreatingTrailersAsHeaders: ConnectHttp4sRouteBuilder[F] =
     copy(treatTrailersAsHeaders = false)
 
-  def withTranscodingErrorHandler(handler: ErrorHandler[F]): Http4sRouteBuilder[F] =
+  def withTranscodingErrorHandler(handler: ErrorHandler[F]): ConnectHttp4sRouteBuilder[F] =
     copy(transcodingErrorHandler = Some(handler))
 
   /**
