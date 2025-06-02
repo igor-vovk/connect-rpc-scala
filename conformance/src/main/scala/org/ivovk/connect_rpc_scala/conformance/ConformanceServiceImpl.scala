@@ -3,6 +3,7 @@ package org.ivovk.connect_rpc_scala.conformance
 import cats.effect.Async
 import cats.implicits.*
 import com.google.protobuf.ByteString
+import com.google.protobuf.any.Any
 import connectrpc.conformance.v1.*
 import io.grpc.internal.GrpcUtil
 import io.grpc.{Metadata, Status}
@@ -53,7 +54,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     val requestInfo = ConformancePayload.RequestInfo(
       requestHeaders = ConformanceHeadersConv.toHeaderSeq(ctx),
       timeoutMs = extractTimeoutMs(ctx),
-      requests = requests.map(_.toProtoAny),
+      requests = requests.map(Any.pack),
     )
 
     val trailers = ConformanceHeadersConv.toMetadata(

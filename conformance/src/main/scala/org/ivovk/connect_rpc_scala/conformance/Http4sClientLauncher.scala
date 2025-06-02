@@ -1,8 +1,8 @@
 package org.ivovk.connect_rpc_scala.conformance
 
-import cats.syntax.all.*
 import cats.effect.std.Dispatcher
 import cats.effect.{IO, IOApp}
+import cats.syntax.all.*
 import connectrpc.conformance.v1 as conformance
 import connectrpc.conformance.v1.*
 import io.grpc.{Metadata, StatusRuntimeException}
@@ -45,10 +45,18 @@ object Http4sClientLauncher extends IOApp.Simple {
 
             baseUri <- IO.fromEither(Uri.fromString(s"http://${req.host}:${req.port}")).toResource
 
-            channel <- new ConnectHttp4sClientBuilder(httpClient).build(baseUri)
+            channel <- ConnectHttp4sClientBuilder(httpClient)
+              .withJsonCodecConfigurator(
+                // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
+                // JSON-serialization conformance tests
+                _
+                  .registerType[conformance.UnaryRequest]
+                  .registerType[conformance.IdempotentUnaryRequest]
+              )
+              .build(baseUri)
             stub = ConformanceServiceFs2GrpcTrailers.stub[IO](dispatcher, channel)
 
-            resp <- runTest(stub, req).toResource
+            resp <- runTestCase(stub, req).toResource
 
             _ <- ProtoSerDeser[IO].write(System.out, resp).toResource
           yield ()
@@ -64,7 +72,7 @@ object Http4sClientLauncher extends IOApp.Simple {
       }
   }
 
-  private def runTest(
+  private def runTestCase(
     stub: ConformanceServiceFs2GrpcTrailers[IO, Metadata],
     specReq: ClientCompatRequest,
   ): IO[ClientCompatResponse] = {
@@ -77,7 +85,7 @@ object Http4sClientLauncher extends IOApp.Simple {
 
     specReq.method match {
       case Some("Unary") =>
-        val req             = UnaryRequest.parseFrom(specReq.requestMessages.head.value.newCodedInput())
+        val req             = specReq.requestMessages.head.unpack[UnaryRequest]
         val requestMetadata = ConformanceHeadersConv.toMetadata(specReq.requestHeaders)
 
         logger.info("Decoded Request: {}", req)

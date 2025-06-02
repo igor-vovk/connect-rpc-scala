@@ -4,7 +4,7 @@ import io.grpc.{StatusException, StatusRuntimeException}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import scalapb.GeneratedMessage
 
-object all extends ExceptionSyntax, ProtoMappingsSyntax, MetadataSyntax
+object all extends ExceptionSyntax, MetadataSyntax
 
 trait ExceptionSyntax {
 
@@ -32,18 +32,6 @@ trait ExceptionSyntax {
       )
       e
     }
-  }
-
-}
-
-trait ProtoMappingsSyntax {
-
-  extension [T <: GeneratedMessage](t: T) {
-    def toProtoAny: com.google.protobuf.any.Any =
-      com.google.protobuf.any.Any(
-        typeUrl = "type.googleapis.com/" + t.companion.scalaDescriptor.fullName,
-        value = t.toByteString,
-      )
   }
 
 }

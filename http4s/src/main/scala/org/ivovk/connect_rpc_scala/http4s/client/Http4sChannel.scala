@@ -4,20 +4,22 @@ import cats.effect.Sync
 import cats.effect.std.Dispatcher
 import io.grpc.*
 import org.http4s.client.Client
-import org.http4s.{Headers, HttpVersion, Method, Request, Uri}
+import org.http4s.{Header, Headers, HttpVersion, Method, Request, Uri}
 import org.ivovk.connect_rpc_scala.grpc.MethodDescriptorExtensions.extractResponseMessageCompanionObj
 import org.ivovk.connect_rpc_scala.http.RequestEntity
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
+import org.ivovk.connect_rpc_scala.http4s.Http4sHeaderMapping
 import scalapb.GeneratedMessage as Message
 
 class Http4sChannel[F[_]: Sync](
   client: Client[F],
   dispatcher: Dispatcher[F],
   messageCodec: MessageCodec[F],
+  headerMapping: Http4sHeaderMapping,
   baseUri: Uri,
 ) extends Channel {
 
-  class ClientCallImpl[Req, Resp](md: MethodDescriptor[Req, Resp]) extends ClientCall[Req, Resp] {
+  private class ClientCallImpl[Req, Resp](md: MethodDescriptor[Req, Resp]) extends ClientCall[Req, Resp] {
     private var responseListener: ClientCall.Listener[Resp] = _
     private var headers: Metadata                           = _
 
@@ -41,25 +43,43 @@ class Http4sChannel[F[_]: Sync](
       }
 
     private def doSendMessage(message: Message): F[Unit] = {
+      val entity = messageCodec.encode(message, EncodeOptions.Default)
+
       val request = Request[F](
         method = Method.POST,
         uri = baseUri.addPath(md.getFullMethodName),
-        body = messageCodec.encode(message, EncodeOptions.Default).body,
+        headers = headerMapping.toHeaders(headers)
+          .put(entity.headers.toSeq.map(Header.ToRaw.keyValuesToRaw)*),
+        body = entity.body,
       )
 
       client.run(request).use { response =>
-        val metadata = new Metadata()
-
+        val metadata = headerMapping.toMetadata(response.headers)
         responseListener.onHeaders(metadata)
 
-        val responseCompanion = md.extractResponseMessageCompanionObj()
+        if (response.status.isSuccess) {
+          val responseCompanion = md.extractResponseMessageCompanionObj()
 
-        messageCodec
-          .decode(RequestEntity[F](response.body, metadata))(using responseCompanion)
-          .fold(
-            e => responseListener.onClose(Status.UNKNOWN.withCause(e), new Metadata()),
-            response => responseListener.onMessage(response.asInstanceOf[Resp]),
-          )
+          messageCodec
+            .decode(RequestEntity[F](response.body, metadata))(using responseCompanion)
+            .fold(
+              exc => responseListener.onClose(Status.UNKNOWN.withCause(exc), metadata),
+              response => {
+                responseListener.onMessage(response.asInstanceOf[Resp])
+                responseListener.onClose(Status.OK, metadata)
+              },
+            )
+        } else {
+          messageCodec.decode[connectrpc.Error](RequestEntity[F](response.body, metadata))
+            .fold(
+              exc => responseListener.onClose(Status.UNKNOWN.withCause(exc), metadata),
+              error =>
+                responseListener.onClose(
+                  Status.fromCodeValue(error.code.value).withDescription(error.getMessage),
+                  metadata,
+                ),
+            )
+        }
       }
     }
   }
