@@ -3,15 +3,20 @@ package org.ivovk.connect_rpc_scala.conformance
 import cats.effect.std.Dispatcher
 import cats.effect.{IO, IOApp}
 import cats.syntax.all.*
+import com.google.protobuf.any.Any
+import connectrpc.ErrorDetailsAny
 import connectrpc.conformance.v1 as conformance
 import connectrpc.conformance.v1.*
-import io.grpc.{Metadata, StatusRuntimeException}
+import io.grpc.Metadata
 import org.http4s.Uri
 import org.http4s.ember.client.EmberClientBuilder
 import org.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, ProtoSerDeser}
-import org.ivovk.connect_rpc_scala.connect.StatusCodeMappings.toConnectCode
+import org.ivovk.connect_rpc_scala.connect.ErrorHandling
 import org.ivovk.connect_rpc_scala.http4s.ConnectHttp4sClientBuilder
 import org.slf4j.LoggerFactory
+
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.Duration
 
 /**
  * Flow:
@@ -39,11 +44,11 @@ object Http4sClientLauncher extends IOApp.Simple {
         .unfoldEval(0) { _ =>
           ProtoSerDeser[IO].read[ClientCompatRequest](System.in).option.map(_.map(_ -> 0))
         }
-        .evalMap { req =>
+        .evalMap { (spec: ClientCompatRequest) =>
           val f = for
-            _ <- IO(logger.info(s"Received request: $req")).toResource
+            _ <- IO(logger.info(s"Received request: $spec")).toResource
 
-            baseUri <- IO.fromEither(Uri.fromString(s"http://${req.host}:${req.port}")).toResource
+            baseUri <- IO.fromEither(Uri.fromString(s"http://${spec.host}:${spec.port}")).toResource
 
             channel <- ConnectHttp4sClientBuilder(httpClient)
               .withJsonCodecConfigurator(
@@ -53,10 +58,12 @@ object Http4sClientLauncher extends IOApp.Simple {
                   .registerType[conformance.UnaryRequest]
                   .registerType[conformance.IdempotentUnaryRequest]
               )
+              .withRequestTimeout(spec.timeoutMs.map(Duration(_, TimeUnit.MILLISECONDS)))
               .build(baseUri)
+
             stub = ConformanceServiceFs2GrpcTrailers.stub[IO](dispatcher, channel)
 
-            resp <- runTestCase(stub, req).toResource
+            resp <- testClientCompat(stub, spec).toResource
 
             _ <- ProtoSerDeser[IO].write(System.out, resp).toResource
           yield ()
@@ -72,28 +79,28 @@ object Http4sClientLauncher extends IOApp.Simple {
       }
   }
 
-  private def runTestCase(
+  private def testClientCompat(
     stub: ConformanceServiceFs2GrpcTrailers[IO, Metadata],
-    specReq: ClientCompatRequest,
+    spec: ClientCompatRequest,
   ): IO[ClientCompatResponse] = {
-    logger.info(">>> Running conformance test: {}", specReq.testName)
+    logger.info(">>> Running conformance test: {}", spec.testName)
 
     require(
-      specReq.service.contains("connectrpc.conformance.v1.ConformanceService"),
-      s"Invalid service name: ${specReq.service}. Expected 'connectrpc.conformance.v1.ConformanceService'.",
+      spec.service.contains("connectrpc.conformance.v1.ConformanceService"),
+      s"Invalid service name: ${spec.service}. Expected 'connectrpc.conformance.v1.ConformanceService'.",
     )
 
-    specReq.method match {
+    spec.method match {
       case Some("Unary") =>
-        val req             = specReq.requestMessages.head.unpack[UnaryRequest]
-        val requestMetadata = ConformanceHeadersConv.toMetadata(specReq.requestHeaders)
+        val req             = spec.requestMessages.head.unpack[UnaryRequest]
+        val requestMetadata = ConformanceHeadersConv.toMetadata(spec.requestHeaders)
 
         logger.info("Decoded Request: {}", req)
         logger.info("Decoded Request metadata: {}", requestMetadata)
 
         stub.unary(req, requestMetadata)
           .map { (resp, trailers) =>
-            logger.info("<<< Conformance test completed: {}", specReq.testName)
+            logger.info("<<< Conformance test completed: {}", spec.testName)
 
             ClientCompatResponse.Result.Response(
               ClientResponseResult(
@@ -103,33 +110,29 @@ object Http4sClientLauncher extends IOApp.Simple {
               )
             )
           }
-          .handleError {
-            case e: StatusRuntimeException =>
-              logger.error("Error during conformance test: {}", specReq.testName, e)
+          .handleError { (t: Throwable) =>
+            val errorDetails = ErrorHandling.extractDetails(t)
+            logger.info(s"Error during the conformance test: ${spec.testName}. Error: $errorDetails")
 
-              ClientCompatResponse.Result.Response(
-                ClientResponseResult(
-                  responseHeaders = ConformanceHeadersConv.toHeaderSeq(e.getTrailers),
-                  error = Some(
-                    conformance.Error(
-                      code = conformance.Code.fromValue(e.getStatus.toConnectCode.value),
-                      message = Some(e.getMessage),
-                      details = Seq.empty,
-                    )
-                  ),
-                  responseTrailers = ConformanceHeadersConv.toTrailingHeaderSeq(e.getTrailers),
-                )
+            ClientCompatResponse.Result.Response(
+              ClientResponseResult(
+                error = Some(
+                  conformance.Error(
+                    code = conformance.Code.fromValue(errorDetails.error.code.value),
+                    message = errorDetails.error.message,
+                    details = errorDetails.error.details
+                      // TODO: simplify
+                      .map(d => Any("type.googleapis.com/" + d.`type`, d.value).unpack[ErrorDetailsAny])
+                      .map(d => Any(d.`type`, d.value)),
+                  )
+                ),
+                responseTrailers = ConformanceHeadersConv.toTrailingHeaderSeq(errorDetails.metadata),
               )
-            case e: Throwable =>
-              ClientCompatResponse.Result.Error(
-                ClientErrorResult(
-                  message = e.getMessage
-                )
-              )
+            )
           }
-          .map(result => ClientCompatResponse(specReq.testName, result))
+          .map(result => ClientCompatResponse(spec.testName, result))
       case Some(other) =>
-        ClientCompatResponse(specReq.testName)
+        ClientCompatResponse(spec.testName)
           .withError(
             ClientErrorResult(
               message = s"Unsupported method: $other. Only 'Unary' is supported in this client."
@@ -137,7 +140,7 @@ object Http4sClientLauncher extends IOApp.Simple {
           )
           .pure[IO]
       case None =>
-        ClientCompatResponse(specReq.testName)
+        ClientCompatResponse(spec.testName)
           .withError(
             ClientErrorResult(
               message = s"Method is not specified in the request."

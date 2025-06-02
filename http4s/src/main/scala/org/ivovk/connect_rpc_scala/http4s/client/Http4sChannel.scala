@@ -5,10 +5,14 @@ import cats.effect.std.Dispatcher
 import io.grpc.*
 import org.http4s.client.Client
 import org.http4s.{Header, Headers, HttpVersion, Method, Request, Uri}
+import org.ivovk.connect_rpc_scala.connect.StatusCodeMappings
 import org.ivovk.connect_rpc_scala.grpc.MethodDescriptorExtensions.extractResponseMessageCompanionObj
 import org.ivovk.connect_rpc_scala.http.RequestEntity
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import org.ivovk.connect_rpc_scala.http4s.Http4sHeaderMapping
+import org.ivovk.connect_rpc_scala.syntax.all.*
+import org.slf4j.LoggerFactory
+import org.typelevel.ci.CIStringSyntax
 import scalapb.GeneratedMessage as Message
 
 class Http4sChannel[F[_]: Sync](
@@ -17,7 +21,9 @@ class Http4sChannel[F[_]: Sync](
   messageCodec: MessageCodec[F],
   headerMapping: Http4sHeaderMapping,
   baseUri: Uri,
+  timeoutMs: Option[Long] = None,
 ) extends Channel {
+  private val logger = LoggerFactory.getLogger(getClass)
 
   private class ClientCallImpl[Req, Resp](md: MethodDescriptor[Req, Resp]) extends ClientCall[Req, Resp] {
     private var responseListener: ClientCall.Listener[Resp] = _
@@ -49,7 +55,8 @@ class Http4sChannel[F[_]: Sync](
         method = Method.POST,
         uri = baseUri.addPath(md.getFullMethodName),
         headers = headerMapping.toHeaders(headers)
-          .put(entity.headers.toSeq.map(Header.ToRaw.keyValuesToRaw)*),
+          .put(entity.headers.toSeq)
+          .put(timeoutMs.map(t => Header.Raw(ci"connectrpc-timeout-ms", t.toString))),
         body = entity.body,
       )
 
@@ -70,14 +77,28 @@ class Http4sChannel[F[_]: Sync](
               },
             )
         } else {
+          val grpcStatusByHttpStatus = StatusCodeMappings.GrpcStatusCodesByHttpStatusCode
+            .get(response.status.code)
+            .fold(Status.UNKNOWN)(Status.fromCode)
+
           messageCodec.decode[connectrpc.Error](RequestEntity[F](response.body, metadata))
             .fold(
-              exc => responseListener.onClose(Status.UNKNOWN.withCause(exc), metadata),
-              error =>
+              exc => responseListener.onClose(grpcStatusByHttpStatus.withCause(exc), metadata),
+              error => {
+                if (logger.isTraceEnabled()) {
+                  logger.trace("<<< Received error response: {}", error)
+                }
+                error.details.foreach(packDetails(metadata, _))
+
+                val status =
+                  if error.code.isUnspecified then grpcStatusByHttpStatus
+                  else Status.fromCodeValue(error.code.value)
+
                 responseListener.onClose(
-                  Status.fromCodeValue(error.code.value).withDescription(error.getMessage),
+                  status.withDescription(error.getMessage),
                   metadata,
-                ),
+                )
+              },
             )
         }
       }

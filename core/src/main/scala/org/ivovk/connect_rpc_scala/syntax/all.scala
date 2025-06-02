@@ -1,6 +1,6 @@
 package org.ivovk.connect_rpc_scala.syntax
 
-import io.grpc.{StatusException, StatusRuntimeException}
+import io.grpc.{Metadata, StatusException, StatusRuntimeException}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import scalapb.GeneratedMessage
 
@@ -10,28 +10,25 @@ trait ExceptionSyntax {
 
   extension (e: StatusRuntimeException) {
     def withDetails[T <: GeneratedMessage](t: T): StatusRuntimeException = {
-      e.getTrailers.put(
-        GrpcHeaders.ErrorDetailsKey,
-        connectrpc.ErrorDetailsAny(
-          `type` = t.companion.scalaDescriptor.fullName,
-          value = t.toByteString,
-        ),
-      )
+      packDetails(e.getTrailers, t)
       e
     }
   }
 
   extension (e: StatusException) {
     def withDetails[T <: GeneratedMessage](t: T): StatusException = {
-      e.getTrailers.put(
-        GrpcHeaders.ErrorDetailsKey,
-        connectrpc.ErrorDetailsAny(
-          `type` = t.companion.scalaDescriptor.fullName,
-          value = t.toByteString,
-        ),
-      )
+      packDetails(e.getTrailers, t);
       e
     }
   }
+
+  def packDetails[T <: GeneratedMessage](metadata: Metadata, details: T): Unit =
+    metadata.put(
+      GrpcHeaders.ErrorDetailsKey,
+      connectrpc.ErrorDetailsAny(
+        `type` = details.companion.scalaDescriptor.fullName,
+        value = details.toByteString,
+      ),
+    )
 
 }
