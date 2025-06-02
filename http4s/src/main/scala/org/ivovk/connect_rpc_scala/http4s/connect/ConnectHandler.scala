@@ -51,9 +51,8 @@ class ConnectHandler[F[_]: Async](
     if (logger.isTraceEnabled) {
       // Used in conformance tests
       Option(req.headers.get(GrpcHeaders.XTestCaseNameKey)) match {
-        case Some(header) =>
-          logger.trace(s">>> Test Case: ${header.value}")
-        case None => // ignore
+        case Some(testCase) => logger.trace(s">>> Test Case: $testCase")
+        case None           => // ignore
       }
     }
 
@@ -64,8 +63,8 @@ class ConnectHandler[F[_]: Async](
         }
 
         val callOptions = CallOptions.DEFAULT
-          .pipeIfDefined(Option(req.headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, header) =>
-            options.withDeadlineAfter(header.value, MILLISECONDS)
+          .pipeIfDefined(Option(req.headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, timeout) =>
+            options.withDeadlineAfter(timeout, MILLISECONDS)
           }
 
         ClientCalls.asyncUnaryCall(

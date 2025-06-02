@@ -6,7 +6,6 @@ import io.grpc.Metadata.{AsciiMarshaller, Key}
 import org.ivovk.connect_rpc_scala.syntax.metadata.{*, given}
 
 import java.nio.charset.Charset
-import scala.annotation.targetName
 
 object GrpcHeaders {
 
@@ -33,19 +32,10 @@ object GrpcHeaders {
 
   private[connect_rpc_scala] val ContentEncodingKey: Key[String] = asciiKey("content-encoding")
 
-  @targetName("XTestCaseName")
-  case class `X-Test-Case-Name`(value: String)
+  private[connect_rpc_scala] val XTestCaseNameKey: Key[String] = asciiKey("x-test-case-name")
 
-  private[connect_rpc_scala] val XTestCaseNameKey: Key[`X-Test-Case-Name`] =
-    asciiKey("x-test-case-name")(using asciiMarshaller(`X-Test-Case-Name`.apply)(_.value))
-
-  @targetName("ConnectTimeoutMs")
-  case class `Connect-Timeout-Ms`(value: Long)
-
-  private[connect_rpc_scala] val ConnectTimeoutMsKey: Key[`Connect-Timeout-Ms`] =
-    asciiKey("connect-timeout-ms")(
-      using asciiMarshaller(s => `Connect-Timeout-Ms`(s.toLong))(_.value.toString)
-    )
+  private[connect_rpc_scala] val ConnectTimeoutMsKey: Key[Long] =
+    asciiKey("connect-timeout-ms")(using asciiMarshaller(_.toLong)(_.toString))
 
   private[connect_rpc_scala] val CookieKey: Key[String] = asciiKey("cookie")
 

@@ -56,7 +56,7 @@ class Http4sChannel[F[_]: Sync](
         uri = baseUri.addPath(md.getFullMethodName),
         headers = headerMapping.toHeaders(headers)
           .put(entity.headers.toSeq)
-          .put(timeoutMs.map(t => Header.Raw(ci"connectrpc-timeout-ms", t.toString))),
+          .put(timeoutMs.map(t => Header.Raw(ci"connect-timeout-ms", t.toString))),
         body = entity.body,
       )
 

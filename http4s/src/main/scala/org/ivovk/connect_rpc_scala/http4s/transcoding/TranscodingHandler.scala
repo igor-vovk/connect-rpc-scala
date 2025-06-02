@@ -31,9 +31,8 @@ class TranscodingHandler[F[_]: Async](
     if (logger.isTraceEnabled) {
       // Used in conformance tests
       Option(headers.get(GrpcHeaders.XTestCaseNameKey)) match {
-        case Some(header) =>
-          logger.trace(s">>> Test Case: ${header.value}")
-        case None => // ignore
+        case Some(testCase) => logger.trace(s">>> Test Case: $testCase")
+        case None           => // ignore
       }
     }
 
@@ -43,7 +42,7 @@ class TranscodingHandler[F[_]: Async](
 
     val callOptions = CallOptions.DEFAULT
       .pipeIfDefined(Option(headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, timeout) =>
-        options.withDeadlineAfter(timeout.value, MILLISECONDS)
+        options.withDeadlineAfter(timeout, MILLISECONDS)
       }
 
     ClientCalls
