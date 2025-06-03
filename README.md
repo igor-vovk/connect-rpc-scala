@@ -111,26 +111,26 @@ The library provides two frontends:
 
 Features comparison:
 
-|                       | __http4s frontend__                                | __Netty frontend__      |
-|-----------------------|----------------------------------------------------|-------------------------|
-| __Status__            | 🧡 production ready                                | alpha                   |
-|                       |                                                    |                         |
-| __ConnectRPC server__ | ✅                                                  | ✅                       |
-| - JSON encoding       | ✅ (fully conformant)                               | ✅ (fully conformant)    |
-| - Protobuf encoding   | ⌛ Working /<br/> 13/85 conformance<br/> tests pass | ⌛ Working / 12/85 tests |
-| - Unary requests      | ✅                                                  | ✅                       |
-| - Streaming requests  | ➖ / not planned                                    | planned                 |
-| - GET-requests        | ✅                                                  | ✅                       |
-| - Compression         | identity/gzip                                      | identity/gzip           |
-|                       |                                                    |                         |
-| __ConnectRPC client__ | ✅                                                  | planned                 |
-| - JSON encoding       | ✅ (fully conformant)                               |                         |
-| - Protobuf encoding   | alpha                                              |                         |
-| - Unary requests      | ✅                                                  |                         |
-| - Streaming requests  | ➖ / not planned                                    | planned                 |
-| - Compression         | identity                                           |                         |
-|                       |                                                    |                         |
-| __gRPC Transcoding__  | ✅ (see table below)                                | planned                 |
+|                       | __http4s frontend__                 | __Netty frontend__                  |
+|-----------------------|-------------------------------------|-------------------------------------|
+| __Status__            | 🧡 production ready                 | alpha                               |
+|                       |                                     |                                     |
+| __ConnectRPC server__ | ✅                                   | ✅                                   |
+| - JSON encoding       | ✅ (fully conformant)                | ✅ (fully conformant)                |
+| - Protobuf encoding   | ⌛ partially /<br/> 13/85 tests pass | ⌛ partially /<br/> 12/85 tests pass |
+| - Unary requests      | ✅                                   | ✅                                   |
+| - Streaming requests  | ➖ / not planned                     | planned                             |
+| - GET-requests        | ✅                                   | ✅                                   |
+| - Compression         | identity/gzip                       | identity/gzip                       |
+|                       |                                     |                                     |
+| __ConnectRPC client__ | ✅                                   | planned                             |
+| - JSON encoding       | ✅ (fully conformant)                |                                     |
+| - Protobuf encoding   | ⌛ partially /<br/> 26/56 tests pass |                                     |
+| - Unary requests      | ✅                                   |                                     |
+| - Streaming requests  | ➖ / not planned                     | planned                             |
+| - Compression         | identity                            |                                     |
+|                       |                                     |                                     |
+| __gRPC Transcoding__  | ✅ (see table below)                 | planned                             |
 
 Built-in [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) support:
 

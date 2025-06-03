@@ -68,6 +68,7 @@ object Http4sClientLauncher extends IOApp.Simple {
                 .registerType[conformance.UnaryRequest]
                 .registerType[conformance.IdempotentUnaryRequest]
             )
+            .pipeIf(spec.codec.isProto)(_.enableBinaryFormat())
             .build(baseUri)
 
           resp <- runTestCase(channel, spec).toResource
