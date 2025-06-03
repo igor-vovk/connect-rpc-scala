@@ -109,28 +109,40 @@ The library provides two frontends:
     - Ability to reuse Netty from `grpc-netty-shaded` dependency, used by GRPC itself
     - Use `ConnectNettyServerBuilder` to build a Netty server.
 
-Feature comparison:
+Features comparison:
 
-|                          | __Netty__               | __http4s__                                         |
-|--------------------------|-------------------------|----------------------------------------------------|
-| __Connect protocol__     | ✅                       | ✅                                                  |
-| - JSON Codec             | ✅                       | ✅                                                  |
-| - Protocol Buffers codec | ⌛ Working / 12/85 tests | ⌛ Working /<br/> 13/85 conformance<br/> tests pass |
-| - Unary requests         | ✅                       | ✅                                                  |
-| - Streaming              | planned                 | ➖ / not planned                                    |
-| - GET-requests           | ✅                       | ✅                                                  |
-| - Encoding               | identity/gzip           | identity/gzip                                      |
-| - gRPC-Web protocol      | ➖ / considered          | ➖ / not planned                                    |
+|                       | __http4s frontend__                                | __Netty frontend__      |
+|-----------------------|----------------------------------------------------|-------------------------|
+| __Status__            | 🧡 production ready                                | alpha                   |
+|                       |                                                    |                         |
+| __ConnectRPC server__ | ✅                                                  | ✅                       |
+| - JSON encoding       | ✅ (fully conformant)                               | ✅ (fully conformant)    |
+| - Protobuf encoding   | ⌛ Working /<br/> 13/85 conformance<br/> tests pass | ⌛ Working / 12/85 tests |
+| - Unary requests      | ✅                                                  | ✅                       |
+| - Streaming requests  | ➖ / not planned                                    | planned                 |
+| - GET-requests        | ✅                                                  | ✅                       |
+| - Compression         | identity/gzip                                      | identity/gzip           |
+|                       |                                                    |                         |
+| __ConnectRPC client__ | ✅                                                  | planned                 |
+| - JSON encoding       | ✅ (fully conformant)                               |                         |
+| - Protobuf encoding   | alpha                                              |                         |
+| - Unary requests      | ✅                                                  |                         |
+| - Streaming requests  | ➖ / not planned                                    | planned                 |
+| - Compression         | identity                                           |                         |
+|                       |                                                    |                         |
+| __gRPC Transcoding__  | ✅ (see table below)                                | planned                 |
 
-|                                                                                 | __Netty__ | __http4s__ |
-|---------------------------------------------------------------------------------|-----------|------------|
-| __gRPC Transcoding<br/>(`google.api.http` annotations)__                        | planned   | ✅          |
-| - GET, POST, PUT, DELETE, PATCH methods                                         | ➖         | ✅          |
-| - Path parameters, e.g., `/v1/countries/{name}`                                 | ➖         | ✅          |
-| - Query parameters, repeating query parameters<br/>(e.g., `?a=1&a=2`) as arrays | ➖         | ✅          |
-| - Request body (JSON)                                                           | ➖         | ✅          |
-| - Request body field mapping, e.g. <br/>`body: "request"`, `body: "*"`          | ➖         | ✅          |
-| - Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets`             | ➖         | ➖          |
+Built-in [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) support:
+
+|                                                                                 | __http4s server__ | __Netty server__ |
+|---------------------------------------------------------------------------------|-------------------|------------------|
+| __gRPC Transcoding<br/>(`google.api.http` annotations)__                        | ✅                 | planned          |
+| - GET, POST, PUT, DELETE, PATCH methods                                         | ✅                 | ➖                |
+| - Path parameters, e.g., `/v1/countries/{name}`                                 | ✅                 | ➖                |
+| - Query parameters, repeating query parameters<br/>(e.g., `?a=1&a=2`) as arrays | ✅                 | ➖                |
+| - Request body (JSON)                                                           | ✅                 | ➖                |
+| - Request body field mapping, e.g. <br/>`body: "request"`, `body: "*"`          | ✅                 | ➖                |
+| - Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets`             | ➖                 | ➖                |
 
 ## Usage
 
