@@ -7,7 +7,6 @@ import io.grpc.Channel
 import org.http4s.Uri
 import org.http4s.client.Client
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, JsonSerDeserBuilder, ProtoMessageCodec}
-import org.ivovk.connect_rpc_scala.http.{HeaderMapping, HeadersFilter}
 import org.ivovk.connect_rpc_scala.http4s.client.ConnectHttp4sChannel
 
 object ConnectHttp4sChannelBuilder {
@@ -16,8 +15,6 @@ object ConnectHttp4sChannelBuilder {
     new ConnectHttp4sChannelBuilder(
       client = client,
       customJsonSerDeser = None,
-      incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
-      outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       useBinaryFormat = false,
     )
 }
@@ -25,43 +22,21 @@ object ConnectHttp4sChannelBuilder {
 class ConnectHttp4sChannelBuilder[F[_]: Async] private (
   client: Client[F],
   customJsonSerDeser: Option[JsonSerDeser[F]],
-  incomingHeadersFilter: HeadersFilter,
-  outgoingHeadersFilter: HeadersFilter,
   useBinaryFormat: Boolean,
 ) {
 
   private def copy(
     customJsonSerDeser: Option[JsonSerDeser[F]] = customJsonSerDeser,
-    incomingHeadersFilter: HeadersFilter = incomingHeadersFilter,
-    outgoingHeadersFilter: HeadersFilter = outgoingHeadersFilter,
     useBinaryFormat: Boolean = useBinaryFormat,
   ): ConnectHttp4sChannelBuilder[F] =
     new ConnectHttp4sChannelBuilder(
       client,
       customJsonSerDeser,
-      incomingHeadersFilter,
-      outgoingHeadersFilter,
       useBinaryFormat,
     )
 
   def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): ConnectHttp4sChannelBuilder[F] =
     copy(customJsonSerDeser = Some(method(JsonSerDeserBuilder[F]()).build))
-
-  /**
-   * Filter for incoming headers.
-   *
-   * By default, headers with "connection" prefix are filtered out (GRPC requirement).
-   */
-  def withIncomingHeadersFilter(filter: String => Boolean): ConnectHttp4sChannelBuilder[F] =
-    copy(incomingHeadersFilter = filter)
-
-  /**
-   * Filter for outgoing headers.
-   *
-   * By default, headers with "grpc-" prefix are filtered out.
-   */
-  def withOutgoingHeadersFilter(filter: String => Boolean): ConnectHttp4sChannelBuilder[F] =
-    copy(outgoingHeadersFilter = filter)
 
   /**
    * Use protobuf binary format for messages.
@@ -79,11 +54,7 @@ class ConnectHttp4sChannelBuilder[F[_]: Async] private (
         if useBinaryFormat then ProtoMessageCodec[F]()
         else customJsonSerDeser.getOrElse(JsonSerDeserBuilder[F]().build).codec
 
-      val headerMapping = Http4sHeaderMapping(
-        incomingHeadersFilter,
-        outgoingHeadersFilter,
-        treatTrailersAsHeaders = true,
-      )
+      val headerMapping = Http4sHeaderMapping(_ => true, _ => true, treatTrailersAsHeaders = true)
 
       new ConnectHttp4sChannel(
         httpClient = client,
