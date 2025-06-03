@@ -57,4 +57,28 @@ object GrpcHeaders {
     headers2
   }
 
+  def splitIntoHeadersAndTrailers(
+    headers: Metadata
+  ): (Metadata, Metadata) = {
+    val headers2 = new Metadata()
+    val trailers = new Metadata()
+
+    headers.keys().forEach { name =>
+      val key = asciiKey(name)
+
+      if name.startsWith("trailer-") then
+        val trailerKey = asciiKey(name.stripPrefix("trailer-"))
+
+        headers.getAll(key).forEach { value =>
+          trailers.put(trailerKey, value)
+        }
+      else
+        headers.getAll(key).forEach { value =>
+          headers2.put(key, value)
+        }
+    }
+
+    (headers2, trailers)
+  }
+
 }

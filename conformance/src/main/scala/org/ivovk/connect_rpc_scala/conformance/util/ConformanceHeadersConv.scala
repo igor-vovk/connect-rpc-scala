@@ -7,28 +7,17 @@ import org.ivovk.connect_rpc_scala.syntax.all.{asciiKey, given}
 import scala.jdk.CollectionConverters.given
 
 object ConformanceHeadersConv {
-  private val TrailingHeaderPrefix = "trailer-"
 
   def toHeaderSeq(metadata: Metadata): Seq[Header] =
     metadata.keys().asScala
-      .flatMap { key =>
-        if key.startsWith(TrailingHeaderPrefix) then None // Skip trailing headers
-        else Some(Header(key, metadata.getAll(asciiKey[String](key)).asScala.toSeq))
-      }
-      .toSeq
-
-  def toTrailingHeaderSeq(metadata: Metadata): Seq[Header] =
-    metadata.keys().asScala
-      .flatMap { key =>
-        if key.startsWith(TrailingHeaderPrefix) then
-          val trailerKey = key.stripPrefix(TrailingHeaderPrefix)
-          Some(Header(trailerKey, metadata.getAll(asciiKey[String](key)).asScala.toSeq))
-        else None
+      .map { key =>
+        Header(key, metadata.getAll(asciiKey[String](key)).asScala.toSeq)
       }
       .toSeq
 
   def toMetadata(headers: Seq[Header]): Metadata = {
     val metadata = new Metadata()
+
     headers.foreach { h =>
       val key = asciiKey[String](h.name)
 
@@ -36,6 +25,7 @@ object ConformanceHeadersConv {
         metadata.put(key, v)
       }
     }
+
     metadata
   }
 }

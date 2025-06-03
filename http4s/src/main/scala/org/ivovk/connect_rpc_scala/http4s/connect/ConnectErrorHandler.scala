@@ -17,7 +17,7 @@ class ConnectErrorHandler[F[_]: Applicative](
 
   override def handle(e: Throwable)(using MessageCodec[F]): F[Response[F]] = {
     val details = ErrorHandling.extractDetails(e)
-    val headers = headerMapping.trailersToHeaders(details.metadata)
+    val headers = headerMapping.trailersToHeaders(details.trailers)
 
     if (logger.isTraceEnabled) {
       logger.trace(

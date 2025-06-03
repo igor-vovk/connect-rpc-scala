@@ -35,12 +35,14 @@ jobs:
     strategy:
       matrix:
         config:
-          - name: Netty
+          - name: Netty Server
             args: --build-arg launcher=NettyServerLauncher --build-arg config=suite-netty.yaml
-          - name: Http4s
+          - name: Http4s Server
             args: --build-arg launcher=Http4sServerLauncher --build-arg config=suite-http4s.yaml
-          - name: Http4s non-stable
+          - name: Http4s Server (non-stable)
             args: --build-arg launcher=Http4sServerLauncher --build-arg config=suite-http4s-nonstable.yaml --build-arg stable=false
+          - name: Http4s Client
+            args: --build-arg launcher=Http4sClientLauncher --build-arg config=suite-http4s-client.yaml --build-arg mode=client
 
     steps:
       - name: Checkout repository

@@ -6,21 +6,25 @@ import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Compan
 import java.io.{InputStream, OutputStream}
 
 object ProtoSerDeser {
-  def apply[F[_]: Sync]: ProtoSerDeser[F] = new ProtoSerDeser[F]() {}
+  def systemInOut[F[_]: Sync]: ProtoSerDeser[F] =
+    new ProtoSerDeser[F](System.in, System.out)
+}
 
-  trait ProtoSerDeser[F[_]: Sync] {
-    def read[T <: Message](in: InputStream)(using comp: Companion[T]): F[T] =
-      Sync[F].delay {
-        val size = IntSerDeser.read(in)
-        comp.parseFrom(in.readNBytes(size))
-      }
+class ProtoSerDeser[F[_]: Sync](
+  in: InputStream,
+  out: OutputStream,
+) {
+  def read[T <: Message](using comp: Companion[T]): F[T] =
+    Sync[F].delay {
+      val size = IntSerDeser.read(in)
+      comp.parseFrom(in.readNBytes(size))
+    }
 
-    def write(out: OutputStream, msg: Message): F[Unit] =
-      Sync[F].delay {
-        IntSerDeser.write(out, msg.serializedSize)
-        out.flush()
-        out.write(msg.toByteArray)
-        out.flush()
-      }
-  }
+  def write(msg: Message): F[Unit] =
+    Sync[F].delay {
+      IntSerDeser.write(out, msg.serializedSize)
+      out.flush()
+      out.write(msg.toByteArray)
+      out.flush()
+    }
 }

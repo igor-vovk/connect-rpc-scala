@@ -3,7 +3,7 @@ package org.ivovk.connect_rpc_scala.connect
 import io.grpc
 import org.http4s
 import org.ivovk.connect_rpc_scala.connect.StatusCodeMappings.*
-import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
+import org.ivovk.connect_rpc_scala.grpc.{GrpcHeaders, StatusExceptionWithHeaders}
 
 import scala.jdk.CollectionConverters.*
 
@@ -11,8 +11,9 @@ object ErrorHandling {
 
   case class ErrorDetails(
     httpStatusCode: Int,
-    metadata: grpc.Metadata,
     error: connectrpc.Error,
+    headers: grpc.Metadata,
+    trailers: grpc.Metadata,
   )
 
   def extractDetails(e: Throwable): ErrorDetails = {
@@ -32,26 +33,29 @@ object ErrorHandling {
         grpc.Status.INTERNAL
     }
 
-    val (message, metadata) = e match {
-      case e: grpc.StatusRuntimeException =>
-        (Option(e.getStatus.getDescription), e.getTrailers)
+    val (message, headers, trailers) = e match {
+      case e: StatusExceptionWithHeaders =>
+        (Option(e.getStatus.getDescription), e.getHeaders, e.getTrailers)
       case e: grpc.StatusException =>
-        (Option(e.getStatus.getDescription), e.getTrailers)
+        (Option(e.getStatus.getDescription), new grpc.Metadata(), e.getTrailers)
+      case e: grpc.StatusRuntimeException =>
+        (Option(e.getStatus.getDescription), new grpc.Metadata(), e.getTrailers)
       case e =>
-        (Option(e.getMessage), new grpc.Metadata())
+        (Option(e.getMessage), new grpc.Metadata(), new grpc.Metadata())
     }
 
-    val details = Option(metadata.removeAll(GrpcHeaders.ErrorDetailsKey))
+    val details = Option(trailers.removeAll(GrpcHeaders.ErrorDetailsKey))
       .fold(Seq.empty)(_.asScala.toSeq)
 
     ErrorDetails(
       httpStatusCode = grpcStatus.toHttpStatusCode,
-      metadata = metadata,
       error = connectrpc.Error(
         code = grpcStatus.toConnectCode,
         message = message,
         details = details,
       ),
+      headers = headers,
+      trailers = trailers,
     )
   }
 

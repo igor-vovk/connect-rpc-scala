@@ -9,8 +9,8 @@ import io.netty.channel.{ChannelFutureListener, ChannelHandlerContext, ChannelIn
 import io.netty.handler.codec.http.*
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
 import org.ivovk.connect_rpc_scala.http.Paths.extractPathSegments
-import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
-import org.ivovk.connect_rpc_scala.http.{HeaderMapping, MediaTypes, RequestEntity}
+import org.ivovk.connect_rpc_scala.http.codec.{EntityToDecode, MessageCodec, MessageCodecRegistry}
+import org.ivovk.connect_rpc_scala.http.{HeaderMapping, MediaTypes}
 import org.ivovk.connect_rpc_scala.netty.ByteBufConversions.byteBufToChunk
 import org.ivovk.connect_rpc_scala.netty.connect.ConnectHandler
 import org.slf4j.LoggerFactory
@@ -96,7 +96,7 @@ class HttpServerHandler[F[_]: Async](
               if aGetMethod then decodedUri.queryParam("message").getOrElse("")
               else Stream.chunk(byteBufToChunk(req.content()))
 
-            val entity = RequestEntity[F](message, headerMapping.toMetadata(req.headers()))
+            val entity = EntityToDecode[F](message, headerMapping.toMetadata(req.headers()))
 
             connectHandler.handle(entity, methodEntry)
           case None =>

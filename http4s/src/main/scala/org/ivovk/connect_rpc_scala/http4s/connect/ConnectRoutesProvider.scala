@@ -6,8 +6,8 @@ import cats.implicits.*
 import org.http4s.Status.UnsupportedMediaType
 import org.http4s.{Headers, HttpRoutes, MediaType, Method, Response}
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
-import org.ivovk.connect_rpc_scala.http.codec.{MessageCodec, MessageCodecRegistry}
-import org.ivovk.connect_rpc_scala.http.{HeadersToMetadata, MediaTypes, Paths, RequestEntity}
+import org.ivovk.connect_rpc_scala.http.codec.{EntityToDecode, MessageCodec, MessageCodecRegistry}
+import org.ivovk.connect_rpc_scala.http.{HeadersToMetadata, MediaTypes, Paths}
 import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
 
 class ConnectRoutesProvider[F[_]: MonadThrow](
@@ -48,7 +48,7 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
             if aGetMethod then req.multiParams.get("message").flatMap(_.headOption).getOrElse("")
             else req.body
 
-          val entity = RequestEntity[F](message, headerMapping.toMetadata(req.headers))
+          val entity = EntityToDecode[F](message, headerMapping.toMetadata(req.headers))
 
           withCodec(codecRegistry, mediaType) { codec =>
             handler.handle(entity, methodEntry)(using codec)

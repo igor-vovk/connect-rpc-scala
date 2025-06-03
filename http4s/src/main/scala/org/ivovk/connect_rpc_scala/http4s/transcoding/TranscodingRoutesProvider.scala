@@ -5,8 +5,8 @@ import cats.data.OptionT
 import cats.implicits.*
 import org.http4s.{Headers, HttpRoutes}
 import org.ivovk.connect_rpc_scala.grpc.MergingBuilder.*
-import org.ivovk.connect_rpc_scala.http.{HeadersToMetadata, RequestEntity}
-import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, MessageCodec}
+import org.ivovk.connect_rpc_scala.http.{HeadersToMetadata}
+import org.ivovk.connect_rpc_scala.http.codec.{EntityToDecode, JsonSerDeser, MessageCodec}
 import org.ivovk.connect_rpc_scala.http4s.Conversions
 import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
@@ -36,7 +36,7 @@ class TranscodingRoutesProvider[F[_]: MonadThrow](
 
         val headers = headerMapping.toMetadata(req.headers)
 
-        RequestEntity(req.body, headers).as[Message]
+        EntityToDecode(req.body, headers).as[Message]
           .flatMap { bodyMessage =>
             val pathMessage  = serDeser.parser.fromJson[Message](pathJson)
             val queryMessage = serDeser.parser.fromJson[Message](queryJson)

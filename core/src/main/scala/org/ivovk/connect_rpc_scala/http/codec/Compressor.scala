@@ -6,7 +6,6 @@ import fs2.compression.Compression
 import io.grpc.Status
 import org.http4s.ContentCoding
 import org.http4s.util.StringWriter
-import org.ivovk.connect_rpc_scala.http.ResponseEntity
 
 object Compressor {
   val supportedEncodings: Set[ContentCoding] = Set(ContentCoding.gzip)
@@ -26,14 +25,14 @@ class Compressor[F[_]: Sync] {
         body
     }
 
-  def compressed(encoding: Option[ContentCoding], entity: ResponseEntity[F]): ResponseEntity[F] =
+  def compressed(encoding: Option[ContentCoding], entity: EncodedEntity[F]): EncodedEntity[F] =
     encoding match {
       case Some(ContentCoding.gzip) =>
         val coding = ContentCoding.gzip
         val writer = new StringWriter()
         coding.render(writer)
 
-        ResponseEntity(
+        EncodedEntity(
           headers = entity.headers.updated(
             "Content-Encoding",
             writer.result,

@@ -8,30 +8,26 @@ import org.http4s.Uri
 import org.http4s.client.Client
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, JsonSerDeserBuilder, ProtoMessageCodec}
 import org.ivovk.connect_rpc_scala.http.{HeaderMapping, HeadersFilter}
-import org.ivovk.connect_rpc_scala.http4s.client.Http4sChannel
+import org.ivovk.connect_rpc_scala.http4s.client.ConnectHttp4sChannel
 
-import scala.concurrent.duration.Duration
+object ConnectHttp4sChannelBuilder {
 
-object ConnectHttp4sClientBuilder {
-
-  def apply[F[_]: Async](client: Client[F]): ConnectHttp4sClientBuilder[F] =
-    new ConnectHttp4sClientBuilder(
+  def apply[F[_]: Async](client: Client[F]): ConnectHttp4sChannelBuilder[F] =
+    new ConnectHttp4sChannelBuilder(
       client = client,
       customJsonSerDeser = None,
       incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
       outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       useBinaryFormat = false,
-      requestTimeoutMs = None,
     )
 }
 
-class ConnectHttp4sClientBuilder[F[_]: Async] private (
+class ConnectHttp4sChannelBuilder[F[_]: Async] private (
   client: Client[F],
   customJsonSerDeser: Option[JsonSerDeser[F]],
   incomingHeadersFilter: HeadersFilter,
   outgoingHeadersFilter: HeadersFilter,
   useBinaryFormat: Boolean,
-  requestTimeoutMs: Option[Long],
 ) {
 
   private def copy(
@@ -39,18 +35,16 @@ class ConnectHttp4sClientBuilder[F[_]: Async] private (
     incomingHeadersFilter: HeadersFilter = incomingHeadersFilter,
     outgoingHeadersFilter: HeadersFilter = outgoingHeadersFilter,
     useBinaryFormat: Boolean = useBinaryFormat,
-    requestTimeoutMs: Option[Long] = requestTimeoutMs,
-  ): ConnectHttp4sClientBuilder[F] =
-    new ConnectHttp4sClientBuilder(
+  ): ConnectHttp4sChannelBuilder[F] =
+    new ConnectHttp4sChannelBuilder(
       client,
       customJsonSerDeser,
       incomingHeadersFilter,
       outgoingHeadersFilter,
       useBinaryFormat,
-      requestTimeoutMs,
     )
 
-  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): ConnectHttp4sClientBuilder[F] =
+  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): ConnectHttp4sChannelBuilder[F] =
     copy(customJsonSerDeser = Some(method(JsonSerDeserBuilder[F]()).build))
 
   /**
@@ -58,7 +52,7 @@ class ConnectHttp4sClientBuilder[F[_]: Async] private (
    *
    * By default, headers with "connection" prefix are filtered out (GRPC requirement).
    */
-  def withIncomingHeadersFilter(filter: String => Boolean): ConnectHttp4sClientBuilder[F] =
+  def withIncomingHeadersFilter(filter: String => Boolean): ConnectHttp4sChannelBuilder[F] =
     copy(incomingHeadersFilter = filter)
 
   /**
@@ -66,25 +60,23 @@ class ConnectHttp4sClientBuilder[F[_]: Async] private (
    *
    * By default, headers with "grpc-" prefix are filtered out.
    */
-  def withOutgoingHeadersFilter(filter: String => Boolean): ConnectHttp4sClientBuilder[F] =
+  def withOutgoingHeadersFilter(filter: String => Boolean): ConnectHttp4sChannelBuilder[F] =
     copy(outgoingHeadersFilter = filter)
 
   /**
    * Use protobuf binary format for messages.
    *
-   * By default, JSON format is used.
+   * By default, JSON format is used. It is marked as experimental, so use it with caution. Only JSON format
+   * is guaranteed to be stable for now.
    */
-  def withUseBinaryFormat(useBinaryFormat: Boolean): ConnectHttp4sClientBuilder[F] =
-    copy(useBinaryFormat = useBinaryFormat)
-
-  def withRequestTimeout(timeout: Option[Duration]): ConnectHttp4sClientBuilder[F] =
-    copy(requestTimeoutMs = timeout.map(_.toMillis).filter(_ > 0))
+  def enableBinaryFormat(): ConnectHttp4sChannelBuilder[F] =
+    copy(useBinaryFormat = true)
 
   def build(baseUri: Uri): Resource[F, Channel] =
     for dispatcher <- Dispatcher.parallel[F](await = false)
     yield {
       val codec =
-        if useBinaryFormat then new ProtoMessageCodec[F]()
+        if useBinaryFormat then ProtoMessageCodec[F]()
         else customJsonSerDeser.getOrElse(JsonSerDeserBuilder[F]().build).codec
 
       val headerMapping = Http4sHeaderMapping(
@@ -93,13 +85,12 @@ class ConnectHttp4sClientBuilder[F[_]: Async] private (
         treatTrailersAsHeaders = true,
       )
 
-      new Http4sChannel(
-        client = client,
+      new ConnectHttp4sChannel(
+        httpClient = client,
         dispatcher = dispatcher,
         messageCodec = codec,
         headerMapping = headerMapping,
         baseUri = baseUri,
-        timeoutMs = requestTimeoutMs,
       )
     }
 

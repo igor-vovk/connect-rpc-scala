@@ -32,8 +32,10 @@ object Http4sServerLauncher extends IOApp.Simple {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def run: IO[Unit] = {
+    val protoSerDeser = ProtoSerDeser.systemInOut[IO]
+
     val res = for
-      req <- ProtoSerDeser[IO].read[ServerCompatRequest](System.in).toResource
+      req <- protoSerDeser.read[ServerCompatRequest].toResource
 
       service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
         ConformanceServiceImpl[IO]()
@@ -65,7 +67,7 @@ object Http4sServerLauncher extends IOApp.Simple {
       addr = server.address
       resp = ServerCompatResponse(addr.getHostString, addr.getPort)
 
-      _ <- ProtoSerDeser[IO].write(System.out, resp).toResource
+      _ <- protoSerDeser.write(resp).toResource
 
       _ = System.err.println(s"Server started on $addr...")
     yield ()

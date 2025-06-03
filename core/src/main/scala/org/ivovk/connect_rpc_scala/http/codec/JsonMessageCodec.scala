@@ -5,7 +5,7 @@ import cats.implicits.*
 import fs2.text.decodeWithCharset
 import fs2.{Chunk, Stream}
 import org.http4s.{DecodeResult, InvalidMessageBodyFailure, MediaType}
-import org.ivovk.connect_rpc_scala.http.{MediaTypes, RequestEntity, ResponseEntity}
+import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.json4s.jackson.JsonMethods
 import org.slf4j.LoggerFactory
 import scalapb.json4s.{Parser, Printer}
@@ -24,7 +24,7 @@ class JsonMessageCodec[F[_]: Sync](
 
   override val mediaType: MediaType = MediaTypes.`application/json`
 
-  override def decode[A <: Message](entity: RequestEntity[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
+  override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
     val charset = entity.charset
     val string  = entity.message match {
       case str: String =>
@@ -55,7 +55,7 @@ class JsonMessageCodec[F[_]: Sync](
       .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  override def encode[A <: Message](message: A, options: EncodeOptions): ResponseEntity[F] = {
+  override def encode[A <: Message](message: A, options: EncodeOptions): EncodedEntity[F] = {
     val string = printer.print(message)
 
     if (logger.isTraceEnabled) {
@@ -64,7 +64,7 @@ class JsonMessageCodec[F[_]: Sync](
 
     val bytes = string.getBytes()
 
-    val entity = ResponseEntity[F](
+    val entity = EncodedEntity[F](
       headers = Map("Content-Type" -> mediaType.show),
       body = Stream.chunk(Chunk.array(bytes)),
       length = Some(bytes.length.toLong),

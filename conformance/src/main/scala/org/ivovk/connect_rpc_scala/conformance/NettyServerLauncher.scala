@@ -29,8 +29,10 @@ object NettyServerLauncher extends IOApp.Simple {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def run: IO[Unit] = {
+    val protoSerDeser = ProtoSerDeser.systemInOut[IO]
+
     val res = for
-      req <- ProtoSerDeser[IO].read[ServerCompatRequest](System.in).toResource
+      req <- protoSerDeser.read[ServerCompatRequest].toResource
 
       service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
         ConformanceServiceImpl[IO]()
@@ -49,7 +51,7 @@ object NettyServerLauncher extends IOApp.Simple {
 
       resp = ServerCompatResponse(server.host, server.port)
 
-      _ <- ProtoSerDeser[IO].write(System.out, resp).toResource
+      _ <- protoSerDeser.write(resp).toResource
 
       _ = System.err.println(s"Server started on ${server.host}:${server.port}...")
       _ = logger.info(s"Netty-server started on ${server.host}:${server.port}...")
