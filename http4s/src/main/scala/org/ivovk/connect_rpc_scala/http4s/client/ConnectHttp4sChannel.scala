@@ -83,9 +83,6 @@ class ConnectHttp4sChannel[F[_]: Sync](
 
       httpClient.run(request)
         .use { response =>
-          if (logger.isTraceEnabled) {
-            logger.trace("<<< Response headers: {}", response.headers)
-          }
           val metadata            = headerMapping.toMetadata(response.headers)
           val (headers, trailers) = GrpcHeaders.splitIntoHeadersAndTrailers(metadata)
           if (logger.isTraceEnabled) {

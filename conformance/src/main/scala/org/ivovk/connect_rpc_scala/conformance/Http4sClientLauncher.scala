@@ -70,9 +70,6 @@ object Http4sClientLauncher extends IOApp.Simple {
             )
             .build(baseUri)
 
-          // not sure if it is really necessary
-//          _ <- IO.sleep(spec.requestDelayMs.millis).toResource
-
           resp <- runTestCase(channel, spec).toResource
 
           _ <- protoSerDeser.write(resp).toResource
