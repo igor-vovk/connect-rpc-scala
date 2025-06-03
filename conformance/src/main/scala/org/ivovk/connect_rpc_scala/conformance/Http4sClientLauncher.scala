@@ -16,7 +16,7 @@ import org.ivovk.connect_rpc_scala.grpc.ClientCalls
 import org.ivovk.connect_rpc_scala.http4s.ConnectHttp4sChannelBuilder
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
+import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.*
@@ -94,12 +94,10 @@ object Http4sClientLauncher extends IOApp.Simple {
       s"Invalid service name: ${spec.service}.",
     )
 
-    def doRun[Req <: GeneratedMessage, Resp](
+    def doRun[Req <: Message: Companion, Resp](
       methodDescriptor: MethodDescriptor[Req, Resp]
     )(
       extractPayloads: Resp => Seq[conformance.ConformancePayload]
-    )(
-      using comp: GeneratedMessageCompanion[Req]
     ): IO[ClientCompatResponse] = {
       val request  = spec.requestMessages.head.unpack[Req]
       val metadata = ConformanceHeadersConv.toMetadata(spec.requestHeaders)
