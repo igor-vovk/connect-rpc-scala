@@ -24,7 +24,9 @@ class JsonMessageCodec[F[_]: Sync](
 
   override val mediaType: MediaType = MediaTypes.`application/json`
 
-  override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
+  override def decode[A <: Message](
+    entity: EntityToDecode[F]
+  )(using cmp: Companion[A]): DecodeResult[F, A] = {
     val charset = entity.charset
     val string  = entity.message match {
       case str: String =>

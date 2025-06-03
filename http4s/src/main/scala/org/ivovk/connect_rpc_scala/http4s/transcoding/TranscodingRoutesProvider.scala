@@ -5,7 +5,7 @@ import cats.data.OptionT
 import cats.implicits.*
 import org.http4s.{Headers, HttpRoutes}
 import org.ivovk.connect_rpc_scala.grpc.MergingBuilder.*
-import org.ivovk.connect_rpc_scala.http.{HeadersToMetadata}
+import org.ivovk.connect_rpc_scala.http.HeadersToMetadata
 import org.ivovk.connect_rpc_scala.http.codec.{EntityToDecode, JsonSerDeser, MessageCodec}
 import org.ivovk.connect_rpc_scala.http4s.Conversions
 import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath

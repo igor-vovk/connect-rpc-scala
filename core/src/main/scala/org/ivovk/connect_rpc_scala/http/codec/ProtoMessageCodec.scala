@@ -21,7 +21,9 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
 
   override val mediaType: MediaType = MediaTypes.`application/proto`
 
-  override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): DecodeResult[F, A] = {
+  override def decode[A <: Message](
+    entity: EntityToDecode[F]
+  )(using cmp: Companion[A]): DecodeResult[F, A] = {
     val msg = entity.message match {
       case str: String =>
         Async[F].delay(cmp.parseFrom(base64dec.decode(str.getBytes(entity.charset))))
