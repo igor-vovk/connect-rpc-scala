@@ -1,20 +1,6 @@
-FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.10.7_3.3.4 AS sbt_image
+FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.11.1_3.3.6 AS sbt_image
 
-FROM alpine AS conformance
-RUN apk add --no-cache bash curl tar
-
-RUN mkdir /conformance
-WORKDIR /conformance
-RUN <<EOF
-    CONFORMANCE_VERSION="v1.0.4"
-    UNAME_OS=$(uname -s)
-    UNAME_ARCH=$(uname -m)
-    CONFORMANCE_URL="https://github.com/connectrpc/conformance/releases/download/${CONFORMANCE_VERSION}/connectconformance-${CONFORMANCE_VERSION}-${UNAME_OS}-${UNAME_ARCH}.tar.gz"
-    echo "Downloading conformance from ${CONFORMANCE_URL}"
-    curl -sSL "${CONFORMANCE_URL}" -o conformance.tgz
-    tar -xvzf conformance.tgz
-    chmod +x connectconformance
-EOF
+FROM ghcr.io/igor-vovk/connect-conformance-dockerimage:1.0.4-1 AS conformance
 
 FROM sbt_image AS build
 
