@@ -1,4 +1,4 @@
-FROM sbtscala/scala-sbt:eclipse-temurin-23.0.1_11_1.11.1_3.3.6 AS sbt_image
+FROM sbtscala/scala-sbt:eclipse-temurin-24.0.1_9_1.11.1_3.3.6 AS sbt_image
 
 FROM ghcr.io/igor-vovk/connect-conformance-dockerimage:1.0.4-1 AS conformance
 
