@@ -5,14 +5,14 @@ import cats.implicits.*
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.Any
 import connectrpc.conformance.v1.*
+import connectrpc.conformance.v1.UnaryResponseDefinition.Response
 import io.grpc.internal.GrpcUtil
-import io.grpc.{Metadata, Status}
+import io.grpc.{Metadata, Status, StatusRuntimeException}
 import org.ivovk.connect_rpc_scala.conformance.util.ConformanceHeadersConv
 import org.ivovk.connect_rpc_scala.syntax.all.*
 import scalapb.GeneratedMessage
 
-import java.util.concurrent.TimeUnit
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.*
 
 case class UnaryHandlerResponse(payload: ConformancePayload, trailers: Metadata)
 
@@ -65,30 +65,23 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     )
 
     val responseData = responseDefinition.response match {
-      case UnaryResponseDefinition.Response.ResponseData(byteString) =>
-        byteString
-      case UnaryResponseDefinition.Response.Empty =>
-        ByteString.EMPTY
-      case UnaryResponseDefinition.Response.Error(Error(code, message, _)) =>
-        throw Status.fromCodeValue(code.value)
-          .withDescription(message.orNull)
-          .asRuntimeException(trailers)
-          .withDetails(requestInfo)
+      case Response.ResponseData(byteString) => byteString
+      case Response.Empty                    => ByteString.EMPTY
+      case Response.Error(error)             =>
+        val status = Status.fromCodeValue(error.code.value)
+          .withDescription(error.message.orNull)
+
+        throw new StatusRuntimeException(status, trailers).withDetails(requestInfo)
     }
 
-    val sleep = Duration(responseDefinition.responseDelayMs, TimeUnit.MILLISECONDS)
-
-    Async[F].delayBy(
+    Async[F].sleep(responseDefinition.responseDelayMs.millis) *>
       UnaryHandlerResponse(
         ConformancePayload(
           responseData,
           requestInfo.some,
         ),
         trailers,
-      ).pure[F],
-      sleep,
-    )
-
+      ).pure[F]
   }
 
   private def extractTimeoutMs(metadata: Metadata): Option[Long] =
