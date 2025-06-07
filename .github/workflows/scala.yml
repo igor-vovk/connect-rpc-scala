@@ -36,6 +36,7 @@ jobs:
 
     strategy:
       matrix:
+        config:
           - name: Netty Server
             args: --build-arg launcher=NettyServerLauncher --build-arg config=suite-netty.yaml
           - name: Http4s Server
