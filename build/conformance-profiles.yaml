@@ -1,0 +1,75 @@
+# https://github.com/connectrpc/conformance/blob/main/docs/configuring_and_running_tests.md#configuration-files
+
+profiles:
+  # All supported features by http4s server
+  - name: http4s
+    mode: server
+    launcher_class: Http4sServerLauncher
+    conformance_spec:
+      features:
+        versions: [ HTTP_VERSION_1, HTTP_VERSION_2 ]
+        protocols: [ PROTOCOL_CONNECT ]
+        codecs: [ CODEC_JSON ]
+        stream_types: [ STREAM_TYPE_UNARY ]
+        supports_tls: false
+        supports_trailers: false
+        supports_connect_get: true
+
+  # Test proto codec with http4s server
+  - name: http4s-nonstable
+    mode: server
+    launcher_class: Http4sServerLauncher
+    conformance_spec:
+      features:
+        versions: [ HTTP_VERSION_1 ]
+        protocols: [ PROTOCOL_CONNECT ]
+        codecs: [ CODEC_PROTO ]
+        stream_types: [ STREAM_TYPE_UNARY ]
+        supports_tls: false
+        supports_trailers: false
+        supports_connect_get: true
+        supports_message_receive_limit: false
+
+  # All supported features by http4s client
+  - name: http4s-client
+    mode: client
+    launcher_class: Http4sClientLauncher
+    conformance_spec:
+      features:
+        versions: [ HTTP_VERSION_1, HTTP_VERSION_2 ]
+        protocols: [ PROTOCOL_CONNECT ]
+        codecs: [ CODEC_JSON ]
+        stream_types: [ STREAM_TYPE_UNARY ]
+        supports_tls: false
+        supports_trailers: false
+        supports_connect_get: true
+
+  - name: netty
+    mode: server
+    launcher_class: NettyServerLauncher
+    conformance_spec:
+      features:
+        versions: [ HTTP_VERSION_1 ]
+        protocols: [ PROTOCOL_CONNECT ]
+        codecs: [ CODEC_JSON ]
+        stream_types: [ STREAM_TYPE_UNARY ]
+        compressions: [ COMPRESSION_IDENTITY, COMPRESSION_GZIP ]
+        supports_tls: false
+        supports_trailers: false
+        supports_connect_get: true
+        supports_message_receive_limit: false
+
+  - name: netty-nonstable
+    mode: server
+    launcher_class: NettyServerLauncher
+    conformance_spec:
+      features:
+        versions: [ HTTP_VERSION_1 ]
+        protocols: [ PROTOCOL_CONNECT ]
+        codecs: [ CODEC_PROTO ]
+        stream_types: [ STREAM_TYPE_UNARY ]
+        compressions: [ COMPRESSION_IDENTITY, COMPRESSION_GZIP ]
+        supports_tls: false
+        supports_trailers: false
+        supports_connect_get: true
+        supports_message_receive_limit: false
