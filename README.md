@@ -261,15 +261,13 @@ Run the following command to run Connect-RPC conformance tests:
 For the Netty server:
 
 ```shell
-docker build -f build/conformance/Dockerfile . --progress=plain --output "out" \
-  --build-arg launcher=NettyServerLauncher --build-arg config=suite-netty.yaml
+make test-conformance PROFILE=netty-server
 ```
 
 For the Http4s server:
 
 ```shell
-docker build -f build/conformance/Dockerfile . --progress=plain --output "out" \
-  --build-arg launcher=Http4sServerLauncher --build-arg config=suite-http4s.yaml
+make test-conformance PROFILE=http4s-server
 ```
 
 Execution results are output to STDOUT.

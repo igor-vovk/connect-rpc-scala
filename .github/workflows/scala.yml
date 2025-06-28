@@ -40,20 +40,20 @@ jobs:
       matrix:
         config:
           - name: Netty Server
-            args: --build-arg launcher=NettyServerLauncher --build-arg config=suite-netty.yaml
+            profile: netty-server
           - name: Http4s Server
-            args: --build-arg launcher=Http4sServerLauncher --build-arg config=suite-http4s.yaml
+            profile: http4s-server
           - name: Http4s Server (non-stable)
-            args: --build-arg launcher=Http4sServerLauncher --build-arg config=suite-http4s-nonstable.yaml --build-arg stable=false
+            profile: http4s-server-nonstable
           - name: Http4s Client
-            args: --build-arg launcher=Http4sClientLauncher --build-arg config=suite-http4s-client.yaml --build-arg mode=client
+            profile: http4s-client
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Run conformance tests for ${{ matrix.config.name }}
-        run: docker build -f build/conformance/Dockerfile . --progress=plain ${{ matrix.config.args }}
+        run: make test-conformance PROFILE=${{ matrix.config.profile }}
 
   dependency-graph:
     name: Update Dependency Graph
