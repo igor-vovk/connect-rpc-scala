@@ -334,6 +334,10 @@ close to it).
 * [Connect RPC Java library](https://github.com/igor-vovk/connect-rpc-java/)
 * [Connect RPC Scala library](https://github.com/igor-vovk/connect-rpc-scala)
 
+## Other projects of the author
+
+* [cedi](https://github.com/igor-vovk/cedi) – library for dependency injection in Scala
+
 ---
 
 ### A word about Ukraine

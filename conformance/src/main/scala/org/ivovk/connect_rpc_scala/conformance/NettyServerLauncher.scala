@@ -6,7 +6,7 @@ import connectrpc.conformance.v1.{
   ServerCompatRequest,
   ServerCompatResponse,
 }
-import org.ivovk.connect_rpc_scala.conformance.util.ProtoSerDeser
+import org.ivovk.connect_rpc_scala.conformance.util.LengthPrefixedProtoSerde
 import org.ivovk.connect_rpc_scala.netty.ConnectNettyServerBuilder
 import org.slf4j.LoggerFactory
 
@@ -29,7 +29,7 @@ object NettyServerLauncher extends IOApp.Simple {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def run: IO[Unit] = {
-    val protoSerDeser = ProtoSerDeser.systemInOut[IO]
+    val protoSerDeser = LengthPrefixedProtoSerde.systemInOut[IO]
 
     val res = for
       req <- protoSerDeser.read[ServerCompatRequest].toResource

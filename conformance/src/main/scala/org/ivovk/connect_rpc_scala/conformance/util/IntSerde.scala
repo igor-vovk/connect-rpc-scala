@@ -3,7 +3,7 @@ package org.ivovk.connect_rpc_scala.conformance.util
 import java.io.InputStream
 import java.nio.ByteBuffer
 
-object IntSerDeser {
+object IntSerde {
   private val IntSize = 4
 
   def read(in: InputStream): Int =

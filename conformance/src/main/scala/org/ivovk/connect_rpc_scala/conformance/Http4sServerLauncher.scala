@@ -9,7 +9,7 @@ import connectrpc.conformance.v1.{
 }
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.Logger
-import org.ivovk.connect_rpc_scala.conformance.util.ProtoSerDeser
+import org.ivovk.connect_rpc_scala.conformance.util.LengthPrefixedProtoSerde
 import org.ivovk.connect_rpc_scala.http4s.ConnectHttp4sRouteBuilder
 import org.slf4j.LoggerFactory
 
@@ -32,10 +32,10 @@ object Http4sServerLauncher extends IOApp.Simple {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def run: IO[Unit] = {
-    val protoSerDeser = ProtoSerDeser.systemInOut[IO]
+    val protoSerde = LengthPrefixedProtoSerde.systemInOut[IO]
 
     val res = for
-      req <- protoSerDeser.read[ServerCompatRequest].toResource
+      req <- protoSerde.read[ServerCompatRequest].toResource
 
       service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
         ConformanceServiceImpl[IO]()
@@ -67,7 +67,7 @@ object Http4sServerLauncher extends IOApp.Simple {
       addr = server.address
       resp = ServerCompatResponse(addr.getHostString, addr.getPort)
 
-      _ <- protoSerDeser.write(resp).toResource
+      _ <- protoSerde.write(resp).toResource
 
       _ = System.err.println(s"Server started on $addr...")
     yield ()

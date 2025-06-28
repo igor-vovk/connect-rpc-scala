@@ -10,7 +10,7 @@ import fs2.Stream
 import io.grpc.{CallOptions, Channel, MethodDescriptor}
 import org.http4s.Uri
 import org.http4s.ember.client.EmberClientBuilder
-import org.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, ProtoSerDeser}
+import org.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, LengthPrefixedProtoSerde}
 import org.ivovk.connect_rpc_scala.connect.ErrorHandling
 import org.ivovk.connect_rpc_scala.grpc.ClientCalls
 import org.ivovk.connect_rpc_scala.http4s.ConnectHttp4sChannelBuilder
@@ -44,7 +44,7 @@ object Http4sClientLauncher extends IOApp.Simple {
   override def run: IO[Unit] = {
     logger.info("Starting conformance client tests...")
 
-    val protoSerDeser = ProtoSerDeser.systemInOut[IO]
+    val protoSerDeser = LengthPrefixedProtoSerde.systemInOut[IO]
 
     def readNextSpecFromStdIn: Stream[IO, ClientCompatRequest] =
       Stream
@@ -109,7 +109,7 @@ object Http4sClientLauncher extends IOApp.Simple {
       val callOptions = CallOptions.DEFAULT
         .pipeIfDefined(spec.timeoutMs)((co, t) => co.withDeadlineAfter(t, TimeUnit.MILLISECONDS))
 
-      val (clientCall, respF) = ClientCalls.asyncUnaryCall2[IO, Req, Resp](
+      val (clientCall, respF) = ClientCalls.unaryCall2[IO, Req, Resp](
         channel,
         methodDescriptor,
         callOptions,
