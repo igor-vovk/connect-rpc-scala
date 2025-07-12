@@ -3,11 +3,10 @@ package org.ivovk.connect_rpc_scala.http4s
 import cats.Endo
 import cats.effect.std.Dispatcher
 import cats.effect.{Async, Resource}
-import io.grpc.Channel
 import org.http4s.Uri
 import org.http4s.client.Client
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, JsonSerDeserBuilder, ProtoMessageCodec}
-import org.ivovk.connect_rpc_scala.http4s.client.ConnectHttp4sChannel
+import org.ivovk.connect_rpc_scala.http4s.client.{ConnectHttp4sChannel, ConnectHttp4sChannelImpl}
 
 object ConnectHttp4sChannelBuilder {
 
@@ -47,7 +46,7 @@ class ConnectHttp4sChannelBuilder[F[_]: Async] private (
   def enableBinaryFormat(): ConnectHttp4sChannelBuilder[F] =
     copy(useBinaryFormat = true)
 
-  def build(baseUri: Uri): Resource[F, Channel] =
+  def build(baseUri: Uri): Resource[F, ConnectHttp4sChannel] =
     for dispatcher <- Dispatcher.parallel[F](await = false)
     yield {
       val codec =
@@ -60,7 +59,7 @@ class ConnectHttp4sChannelBuilder[F[_]: Async] private (
         treatTrailersAsHeaders = true,
       )
 
-      new ConnectHttp4sChannel(
+      new ConnectHttp4sChannelImpl(
         httpClient = client,
         dispatcher = dispatcher,
         messageCodec = codec,

@@ -3,7 +3,7 @@ package examples.client_server
 import cats.effect.{IO, Resource}
 import com.comcast.ip4s.*
 import examples.v1.eliza.ElizaServiceFs2Grpc
-import io.grpc.{Channel, Metadata, ServerServiceDefinition}
+import io.grpc.{Metadata, ServerServiceDefinition}
 import me.ivovk.cedi.Allocator
 import me.ivovk.cedi.syntax.*
 import org.http4s.HttpApp
@@ -12,6 +12,7 @@ import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.implicits.uri
 import org.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sChannelBuilder, ConnectHttp4sRouteBuilder}
+
 import scala.concurrent.duration.*
 
 object Dependencies {

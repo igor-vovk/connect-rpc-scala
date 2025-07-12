@@ -148,7 +148,7 @@ Built-in [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transco
 
 ![Maven Central](https://img.shields.io/maven-central/v/me.ivovk/connect-rpc-scala-core_3?style=flat-square&color=green)
 
-Check [examples](https://github.com/igor-vovk/connect-rpc-scala/tree/main/example) directory for some examples of using
+Check [examples](https://github.com/igor-vovk/connect-rpc-scala/tree/main/examples) directory for some examples of using
 the library.
 
 In case of http4s frontend, you will also need one of `http4s` server implementations, Ember in this case:
@@ -249,7 +249,6 @@ How-tos that go beyond the basic usage:
 
 * [How to support CORS-requests](docs/supporting-cors.md)
 * [How to integrate with OpenTelemetry](docs/integrating-with-otel.md)
-* [How to work with ZIO](docs/integrating-with-zio.md)
 * [How to implement Kubernetes health checks](docs/kubernetes-health-checks.md)
 
 ## Development

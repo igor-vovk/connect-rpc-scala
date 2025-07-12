@@ -110,6 +110,7 @@ lazy val examples = project.in(file("examples"))
   .aggregate(
     example_connectrpc_grpc_servers,
     example_client_server,
+    example_zio_client_server,
   )
   .settings(noPublish)
 
@@ -125,7 +126,6 @@ lazy val example_connectrpc_grpc_servers = project.in(file("examples/connectrpc_
       "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
       "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
     ),
-    Compile / mainClass := Some("examples.connectrpc_grpc_servers.Main"),
   )
 
 lazy val example_client_server = project.in(file("examples/client_server"))
@@ -140,7 +140,24 @@ lazy val example_client_server = project.in(file("examples/client_server"))
       "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
       "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
     ),
-    Compile / mainClass := Some("examples.client_server.Main"),
+  )
+
+lazy val example_zio_client_server = project.in(file("examples/zio_client_server"))
+  .dependsOn(http4s)
+  .settings(
+    noPublish,
+    commonDeps,
+    Compile / PB.targets := Seq(
+      scalapb.gen()                     -> (Compile / sourceManaged).value / "scalapb",
+      scalapb.zio_grpc.ZioCodeGenerator -> (Compile / sourceManaged).value / "scalapb",
+    ),
+    libraryDependencies ++= Seq(
+      "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
+      "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
+      "dev.zio"       %% "zio"                 % "2.1.19",
+      "dev.zio"       %% "zio-interop-cats"    % "23.1.0.5",
+      "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
+    ),
   )
 
 lazy val root = (project in file("."))
