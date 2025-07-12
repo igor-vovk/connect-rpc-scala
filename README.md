@@ -250,6 +250,8 @@ How-tos that go beyond the basic usage:
 * [How to work with ZIO](docs/integrating-with-zio.md)
 * [How to implement Kubernetes health checks](docs/kubernetes-health-checks.md)
 
+Also, check `examples/` directory for more examples of how to use the library.
+
 ## Development
 
 ### Connect RPC
