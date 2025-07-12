@@ -108,7 +108,8 @@ lazy val conformance = project
 
 lazy val examples = project.in(file("examples"))
   .aggregate(
-    example_connectrpc_grpc_servers
+    example_connectrpc_grpc_servers,
+    example_client_server,
   )
   .settings(noPublish)
 
@@ -125,6 +126,21 @@ lazy val example_connectrpc_grpc_servers = project.in(file("examples/connectrpc_
       "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
     ),
     Compile / mainClass := Some("examples.connectrpc_grpc_servers.Main"),
+  )
+
+lazy val example_client_server = project.in(file("examples/client_server"))
+  .dependsOn(http4s, netty)
+  .enablePlugins(Fs2Grpc, JavaAppPackaging)
+  .settings(
+    noPublish,
+    commonDeps,
+    libraryDependencies ++= Seq(
+      "me.ivovk"      %% "cedi"                % Versions.cedi,
+      "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
+      "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
+      "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
+    ),
+    Compile / mainClass := Some("examples.client_server.Main"),
   )
 
 lazy val root = (project in file("."))

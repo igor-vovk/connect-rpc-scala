@@ -54,7 +54,11 @@ class ConnectHttp4sChannelBuilder[F[_]: Async] private (
         if useBinaryFormat then ProtoMessageCodec[F]()
         else customJsonSerDeser.getOrElse(JsonSerDeserBuilder[F]().build).codec
 
-      val headerMapping = Http4sHeaderMapping(_ => true, _ => true, treatTrailersAsHeaders = true)
+      val headerMapping = Http4sHeaderMapping(
+        h => !"Connection".equalsIgnoreCase(h),
+        _ => true,
+        treatTrailersAsHeaders = true,
+      )
 
       new ConnectHttp4sChannel(
         httpClient = client,
