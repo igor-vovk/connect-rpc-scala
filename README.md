@@ -151,7 +151,7 @@ Built-in [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transco
 Check [examples](https://github.com/igor-vovk/connect-rpc-scala/tree/main/example) directory for some examples of using
 the library.
 
-Install `http4s` frontend, you will also need one of `http4s` server implementations, Ember in this case:
+In case of http4s frontend, you will also need one of `http4s` server implementations, Ember in this case:
 
 ```scala
 libraryDependencies ++= Seq(
