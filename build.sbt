@@ -28,6 +28,7 @@ lazy val noPublish = List(
 )
 
 lazy val Versions = new {
+  val cedi      = "0.2.1"
   val grpc      = "1.73.0"
   val http4s    = "0.23.30"
   val logback   = "1.5.18"
@@ -37,7 +38,7 @@ lazy val Versions = new {
   val scalatest = "3.2.19"
 }
 
-lazy val CommonDependencies = Seq(
+lazy val commonDeps = Seq(
   libraryDependencies ++= Seq(
     "org.slf4j"      % "slf4j-api" % Versions.slf4j,
     "org.scalatest" %% "scalatest" % Versions.scalatest % Test,
@@ -53,6 +54,7 @@ lazy val core = project
     Test / PB.targets := Seq(
       scalapb.gen() -> (Test / sourceManaged).value
     ),
+    commonDeps,
     libraryDependencies ++= Seq(
       "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0" % "protobuf",
       "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0",
@@ -66,7 +68,6 @@ lazy val core = project
       "org.http4s" %% "http4s-core" % Versions.http4s,
     ),
   )
-  .settings(CommonDependencies)
 
 lazy val http4s = project
   .dependsOn(core)
@@ -75,35 +76,56 @@ lazy val http4s = project
     Test / PB.targets := Seq(
       scalapb.gen() -> (Test / sourceManaged).value
     ),
+    commonDeps,
     libraryDependencies ++= Seq(
       "org.http4s" %% "http4s-dsl"    % Versions.http4s % Test,
       "org.http4s" %% "http4s-client" % Versions.http4s,
     ),
   )
-  .settings(CommonDependencies)
 
 lazy val netty = project
   .dependsOn(core)
   .settings(
     name := "connect-rpc-scala-netty",
+    commonDeps,
     libraryDependencies ++= Seq(
       "io.netty" % "netty-all" % Versions.netty
     ),
   )
-  .settings(CommonDependencies)
 
 lazy val conformance = project
   .dependsOn(http4s, netty)
   .enablePlugins(Fs2Grpc, JavaAppPackaging)
   .settings(
     noPublish,
+    commonDeps,
     libraryDependencies ++= Seq(
       "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
       "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
       "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
     ),
   )
-  .settings(CommonDependencies)
+
+lazy val examples = project.in(file("examples"))
+  .aggregate(
+    example_connectrpc_grpc_servers
+  )
+  .settings(noPublish)
+
+lazy val example_connectrpc_grpc_servers = project.in(file("examples/connectrpc_grpc_servers"))
+  .dependsOn(http4s)
+  .enablePlugins(Fs2Grpc)
+  .settings(
+    noPublish,
+    commonDeps,
+    libraryDependencies ++= Seq(
+      "me.ivovk"      %% "cedi"                % Versions.cedi,
+      "io.grpc"        % "grpc-netty"          % Versions.grpc,
+      "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
+      "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
+    ),
+    Compile / mainClass := Some("examples.connectrpc_grpc_servers.Main"),
+  )
 
 lazy val root = (project in file("."))
   .aggregate(
@@ -111,6 +133,7 @@ lazy val root = (project in file("."))
     http4s,
     netty,
     conformance,
+    examples,
   )
   .settings(
     name := "connect-rpc-scala",

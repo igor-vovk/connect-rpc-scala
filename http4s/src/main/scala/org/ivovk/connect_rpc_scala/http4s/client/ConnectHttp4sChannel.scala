@@ -71,6 +71,9 @@ class ConnectHttp4sChannel[F[_]: Sync](
         headers = headerMapping.toHeaders(headers)
           .put(entity.headers.toSeq)
           .put(
+            GrpcHeaders.XUserAgentKey.name -> "connect-rpc-scala-http4s"
+          )
+          .put(
             Option(callOptions.getDeadline).map { d =>
               Header.Raw(
                 CIString(GrpcHeaders.ConnectTimeoutMsKey.name),
