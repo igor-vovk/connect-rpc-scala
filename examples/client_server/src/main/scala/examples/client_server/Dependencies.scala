@@ -33,10 +33,6 @@ class Dependencies(using AllocatorIO) {
     ElizaServiceFs2Grpc.bindServiceResource[IO](elizaServiceImpl)
   }
 
-  lazy val httpClient: org.http4s.client.Client[IO] = allocate {
-    EmberClientBuilder.default[IO].build
-  }
-
   lazy val httpServerApp: org.http4s.HttpApp[IO] = allocate {
     ConnectHttp4sRouteBuilder.forService[IO](elizaServiceGrpcServerDefinition).build
   }
@@ -50,6 +46,10 @@ class Dependencies(using AllocatorIO) {
       .build
 
   // CLIENT DEPENDENCIES -------------------------------------------
+
+  lazy val httpClient: org.http4s.client.Client[IO] = allocate {
+    EmberClientBuilder.default[IO].build
+  }
 
   // `Channel` is a gRPC term describing a connection to a server.
   // Both fs2-grpc and ZIO-gRPC accept Channels in their clients to communicate with a server.
