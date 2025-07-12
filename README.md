@@ -113,7 +113,7 @@ Features comparison:
 
 |                       | __http4s frontend__                 | __Netty frontend__                  |
 |-----------------------|-------------------------------------|-------------------------------------|
-| __Status__            | 🧡 production ready                 | alpha                               |
+| __Status__            | production ready                    | alpha                               |
 |                       |                                     |                                     |
 | __ConnectRPC server__ | ✅                                   | ✅                                   |
 | - JSON encoding       | ✅ (fully conformant)                | ✅ (fully conformant)                |
