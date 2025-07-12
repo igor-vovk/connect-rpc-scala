@@ -148,8 +148,10 @@ Built-in [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transco
 
 ![Maven Central](https://img.shields.io/maven-central/v/me.ivovk/connect-rpc-scala-core_3?style=flat-square&color=green)
 
-Installing http4s frontend (supports server, client) with SBT, you also need to install one of `http4s` server
-implementations:
+Check [examples](https://github.com/igor-vovk/connect-rpc-scala/tree/main/example) directory for some examples of using
+the library.
+
+Install `http4s` frontend, you will also need one of `http4s` server implementations, Ember in this case:
 
 ```scala
 libraryDependencies ++= Seq(
@@ -161,7 +163,7 @@ libraryDependencies ++= Seq(
 )
 ```
 
-Netty frontend (server only, no client support yet) can be installed with SBT:
+Netty frontend (server only, no client support yet) can be installed by adding the following dependency:
 
 ```scala
 libraryDependencies ++= Seq(
@@ -249,8 +251,6 @@ How-tos that go beyond the basic usage:
 * [How to integrate with OpenTelemetry](docs/integrating-with-otel.md)
 * [How to work with ZIO](docs/integrating-with-zio.md)
 * [How to implement Kubernetes health checks](docs/kubernetes-health-checks.md)
-
-Check `examples/` directory for more examples of using the library.
 
 ## Development
 
