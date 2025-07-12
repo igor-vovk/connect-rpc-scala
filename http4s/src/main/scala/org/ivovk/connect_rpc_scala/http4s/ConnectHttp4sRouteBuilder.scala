@@ -18,9 +18,7 @@ import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 
-/**
- * Deprecated: Http4sRouteBuilder will soon be deprecated in favor of ConnectHttp4sRouteBuilder.
- */
+@deprecated("Use ConnectHttp4sRouteBuilder", "0.4.1")
 object Http4sRouteBuilder {
 
   /** Please use [[ConnectHttp4sRouteBuilder.forService]] instead. */

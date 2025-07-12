@@ -39,7 +39,7 @@ case class Server(
   def port: Int    = address.getPort
 }
 
-/** Deprecated: Use [[ConnectNettyServerBuilder]] instead. */
+@deprecated("Use ConnectNettyServerBuilder", "0.4.1")
 object NettyServerBuilder {
 
   /** Please use [[ConnectNettyServerBuilder.forService]] instead. */
