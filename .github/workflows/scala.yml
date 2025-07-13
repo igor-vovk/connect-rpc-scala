@@ -43,8 +43,6 @@ jobs:
             profile: netty-server
           - name: Http4s Server
             profile: http4s-server
-          - name: Http4s Server (non-stable)
-            profile: http4s-server-nonstable
           - name: Http4s Client
             profile: http4s-client
 
