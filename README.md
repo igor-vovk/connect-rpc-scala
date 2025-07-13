@@ -262,13 +262,13 @@ Run the following command to run Connect-RPC conformance tests:
 For the Netty server:
 
 ```shell
-make test-conformance PROFILE=netty-server
+make test-conformance profile=netty-server
 ```
 
 For the Http4s server:
 
 ```shell
-make test-conformance PROFILE=http4s-server
+make test-conformance profile=http4s-server
 ```
 
 Execution results are output to STDOUT.

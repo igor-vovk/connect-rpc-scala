@@ -2,5 +2,3 @@
 .github/
 .idea/
 out/
-target/
-**/target/
