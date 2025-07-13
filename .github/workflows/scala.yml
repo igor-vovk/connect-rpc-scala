@@ -52,6 +52,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '24'
+          distribution: 'temurin'
+          cache: 'sbt'
+
+      - uses: sbt/setup-sbt@v1
+
       - name: Run conformance tests for ${{ matrix.config.name }}
         run: make test-conformance profile=${{ matrix.config.profile }}
 
