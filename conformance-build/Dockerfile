@@ -23,7 +23,7 @@ RUN LOGS_PATH="/out" \
     $parallel_args \
     -v -vv --trace \
     -- \
-    /app/bin/conformance -main org.ivovk.connect_rpc_scala.conformance.$launcher; \
+    /app/bin/conformance -main org.ivovk.connect_rpc_scala.conformance.$launcher -Dcats.effect.warnOnNonMainThreadDetected=false; \
     echo $? > /out/exit_code
 
 FROM scratch AS export
