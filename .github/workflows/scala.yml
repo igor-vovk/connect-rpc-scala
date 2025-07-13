@@ -31,36 +31,14 @@ jobs:
       - name: Run tests
         run: sbt test
 
-  conformance:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+      - name: Run conformance tests for http4s-server
+        run: make test-conformance profile=http4s-server
 
-    strategy:
-      matrix:
-        config:
-          - name: Netty Server
-            profile: netty-server
-          - name: Http4s Server
-            profile: http4s-server
-          - name: Http4s Client
-            profile: http4s-client
+      - name: Run conformance tests for http4s-client
+        run: make test-conformance profile=http4s-client
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '24'
-          distribution: 'temurin'
-          cache: 'sbt'
-
-      - uses: sbt/setup-sbt@v1
-
-      - name: Run conformance tests for ${{ matrix.config.name }}
-        run: make test-conformance profile=${{ matrix.config.profile }}
+      - name: Run conformance tests for netty-server
+        run: make test-conformance profile=netty-server
 
   dependency-graph:
     name: Update Dependency Graph
