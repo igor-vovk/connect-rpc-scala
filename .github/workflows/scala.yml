@@ -31,14 +31,8 @@ jobs:
       - name: Run tests
         run: sbt test
 
-      - name: Run conformance tests for http4s-server
-        run: make test-conformance profile=http4s-server
-
-      - name: Run conformance tests for http4s-client
-        run: make test-conformance profile=http4s-client
-
-      - name: Run conformance tests for netty-server
-        run: make test-conformance profile=netty-server
+      - name: Run conformance tests
+        run: make test-conformance-stable
 
   dependency-graph:
     name: Update Dependency Graph

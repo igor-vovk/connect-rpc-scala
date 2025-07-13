@@ -16,7 +16,6 @@ ARG mode="server"
 ARG launcher
 ARG parallel_args=""
 
-# Run stable tests first
 RUN LOGS_PATH="/out" \
     ./connectconformance \
     --conf $config \
