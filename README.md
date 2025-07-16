@@ -95,21 +95,32 @@ The library works with all ScalaPB-based GRPC code-generators:
 
 At the moment, only unary (non-streaming) methods are supported.
 
-## Frontends
+## Architecture
+
+![Layered architecture](docs/layered-architecture.svg)
+
+The diagram above shows the high level architecture:
+
+* Code generation libraries generate code from protobuf definitions. The code is used by the application layer to
+  communicate with other services / implement the logic.
+* Under the hood generated code uses gRPC abstractions, such as `Channel`, `ServiceDefinition`, `Stub`, etc.
+* The `connect-rpc-scala` library implements those gRPC abstractions, unblocking use of the ConnectRPC protocol
+  to communicate with other services / expose ConnectRPC servers.
+* Under the hood the library uses `http4s` or `netty` clients/servers to expose protobuf-based services as REST APIs.
 
 The library provides two frontends:
 
-* `connect-rpc-scala-http4s` — based on [http4s](https://http4s.org) server.
-  More stable, was added first, but has some limitations, like inability to support streaming.
-  Use `ConnectHttp4sRouteBuilder` class to build routes that then can be attached to http4s server.
+* (preferred) `connect-rpc-scala-http4s` — based on [http4s](https://http4s.org) server.
+  Stable, was added first. Use `ConnectHttp4sRouteBuilder` class to build routes that then can be attached to http4s
+  server.
 * `connect-rpc-scala-netty` — based on [Netty](https://netty.io) server.
-  Lower-level, not-ready-for-production *yet*, but has some advantages, making it a way to go with time:
+  Lower-level, not-ready-for-production *yet*, but has some advantages, making it a candidate to go to production in the
+  future:
     - Better performance
-    - Support for streaming
     - Ability to reuse Netty from `grpc-netty-shaded` dependency, used by GRPC itself
     - Use `ConnectNettyServerBuilder` to build a Netty server.
 
-Features comparison:
+Feature comparison:
 
 |                       | __http4s frontend__                 | __Netty frontend__                  |
 |-----------------------|-------------------------------------|-------------------------------------|
@@ -119,7 +130,7 @@ Features comparison:
 | - JSON encoding       | ✅ (fully conformant)                | ✅ (fully conformant)                |
 | - Protobuf encoding   | ⌛ partially /<br/> 13/85 tests pass | ⌛ partially /<br/> 12/85 tests pass |
 | - Unary requests      | ✅                                   | ✅                                   |
-| - Streaming requests  | ➖ / not planned                     | planned                             |
+| - Streaming requests  | planned                             | planned                             |
 | - GET-requests        | ✅                                   | ✅                                   |
 | - Compression         | identity/gzip                       | identity/gzip                       |
 |                       |                                     |                                     |
@@ -127,7 +138,7 @@ Features comparison:
 | - JSON encoding       | ✅ (fully conformant)                |                                     |
 | - Protobuf encoding   | ⌛ partially /<br/> 26/56 tests pass |                                     |
 | - Unary requests      | ✅                                   |                                     |
-| - Streaming requests  | ➖ / not planned                     | planned                             |
+| - Streaming requests  | planned                             | planned                             |
 | - Compression         | identity                            |                                     |
 |                       |                                     |                                     |
 | __gRPC Transcoding__  | ✅ (see table below)                 | planned                             |

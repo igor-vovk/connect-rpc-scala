@@ -61,8 +61,6 @@ lazy val core = project
       "com.thesamet.scalapb" %% "scalapb-runtime"      % Versions.scalapb % "protobuf",
       "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % Versions.scalapb,
       "com.thesamet.scalapb" %% "scalapb-json4s"       % "0.12.2",
-      "io.grpc"               % "grpc-core"            % Versions.grpc,
-      "io.grpc"               % "grpc-protobuf"        % Versions.grpc,
       "io.grpc"               % "grpc-inprocess"       % Versions.grpc,
       // TODO: stop using http4s-core and remove the dependency from the module
       "org.http4s" %% "http4s-core" % Versions.http4s,
