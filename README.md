@@ -85,27 +85,25 @@ HTTP/1.1 200 OK
 }
 ```
 
----
+## Use cases
 
-The library works with all ScalaPB-based GRPC code-generators:
-
-* [ScalaPB](https://scalapb.github.io) services with `Future` monad
-* [fs2-grpc](https://github.com/typelevel/fs2-grpc), built on top of `cats-effect` and `fs2`
-* [ZIO gRPC](https://scalapb.github.io/zio-grpc/), built on top of `ZIO`
-
-At the moment, only unary (non-streaming) methods are supported.
+* Expose existing gRPC-services as REST APIs without modifying the original application code, alongside gRPC. gRPC
+  services are used for inter-service communication, while ConnectRPC REST APIs are exposed for external clients who
+  speak traditional HTTP with JSON instead of binary protobuf (browsers, for example).
+* Use ConnectRPC protocol for both inter-service and external traffic (fully ditch gRPC as communication protocol),
+  while keeping the original gRPC service interfaces (easy switch to ConnectRPC with no changes into application code).
 
 ## Architecture
 
 ![Layered architecture](docs/layered-architecture.svg)
 
-The diagram above shows the high level architecture:
+The diagram above shows how `connect-rpc-scala` fits into the overall architecture:
 
 * Code generation libraries generate code from protobuf definitions. The code is used by the application layer to
   communicate with other services / implement the logic.
 * Under the hood generated code uses gRPC abstractions, such as `Channel`, `ServiceDefinition`, `Stub`, etc.
-* The `connect-rpc-scala` library implements those gRPC abstractions, unblocking use of the ConnectRPC protocol
-  to communicate with other services / expose ConnectRPC servers.
+* The `connect-rpc-scala` library implements those gRPC abstractions, unblocking reuse of the same
+  application code for both gRPC & ConnectRPC protocol servers (see the Use Cases section).
 * Under the hood the library uses `http4s` or `netty` clients/servers to expose protobuf-based services as REST APIs.
 
 The library provides two frontends:
@@ -154,6 +152,12 @@ Built-in [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transco
 | - Request body (JSON)                                                           | ✅                 | ➖                |
 | - Request body field mapping, e.g. <br/>`body: "request"`, `body: "*"`          | ✅                 | ➖                |
 | - Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets`             | ➖                 | ➖                |
+
+The library works with all ScalaPB code-generators:
+
+* [ScalaPB](https://scalapb.github.io) services with `Future` monad
+* [fs2-grpc](https://github.com/typelevel/fs2-grpc) for `cats-effect`/`fs2`
+* [zio-grpc](https://scalapb.github.io/zio-grpc/) for `ZIO`
 
 ## Usage
 
