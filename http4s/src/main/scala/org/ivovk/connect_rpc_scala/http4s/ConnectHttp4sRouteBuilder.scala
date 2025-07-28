@@ -13,6 +13,7 @@ import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
 import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectErrorHandler, ConnectHandler, ConnectRoutesProvider}
 import org.ivovk.connect_rpc_scala.http4s.transcoding.{TranscodingHandler, TranscodingRoutesProvider}
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
+import org.ivovk.connect_rpc_scala.util.PipeSyntax.pipe
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
@@ -46,6 +47,7 @@ object Http4sRouteBuilder {
       waitForShutdown = 5.seconds,
       treatTrailersAsHeaders = true,
       transcodingErrorHandler = None,
+      additionalRoutes = None,
     )
 
 }
@@ -74,6 +76,7 @@ object ConnectHttp4sRouteBuilder {
       waitForShutdown = 5.seconds,
       treatTrailersAsHeaders = true,
       transcodingErrorHandler = None,
+      additionalRoutes = None,
     )
 
 }
@@ -90,6 +93,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
   waitForShutdown: Duration,
   treatTrailersAsHeaders: Boolean,
   transcodingErrorHandler: Option[ErrorHandler[F]],
+  additionalRoutes: Option[HttpRoutes[F]],
 ) {
 
   private def copy(
@@ -104,6 +108,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     waitForShutdown: Duration = waitForShutdown,
     treatTrailersAsHeaders: Boolean = treatTrailersAsHeaders,
     transcodingErrorHandler: Option[ErrorHandler[F]] = transcodingErrorHandler,
+    additionalRoutes: Option[HttpRoutes[F]] = additionalRoutes,
   ): ConnectHttp4sRouteBuilder[F] =
     new ConnectHttp4sRouteBuilder(
       services,
@@ -117,6 +122,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
       waitForShutdown,
       treatTrailersAsHeaders,
       transcodingErrorHandler,
+      additionalRoutes,
     )
 
   def withServerConfigurator(method: Endo[ServerBuilder[_]]): ConnectHttp4sRouteBuilder[F] =
@@ -174,10 +180,19 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     copy(transcodingErrorHandler = Some(handler))
 
   /**
+   * Add your own additional routes to the Connect HTTP app.
+   */
+  def withAdditionalRoutes(routes: HttpRoutes[F]): ConnectHttp4sRouteBuilder[F] =
+    copy(additionalRoutes = Some(routes))
+
+  /**
    * Builds a complete HTTP app with all routes.
    */
   def build: Resource[F, HttpApp[F]] =
-    buildRoutes.map(_.all.orNotFound)
+    for routes <- buildRoutes
+    yield routes.all
+      .pipe(ar => additionalRoutes.fold(ar)(ar <+> _))
+      .orNotFound
 
   /**
    * Use this method if you want to add additional routes and/or http4s middleware.
