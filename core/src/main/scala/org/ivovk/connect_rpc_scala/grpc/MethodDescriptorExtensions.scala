@@ -1,13 +1,12 @@
 package org.ivovk.connect_rpc_scala.grpc
 
+import com.google.api.AnnotationsProto
 import com.google.api.http.HttpRule
 import io.grpc.MethodDescriptor
 import scalapb.grpc.ConcreteProtoMethodDescriptorSupplier
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 object MethodDescriptorExtensions {
-  // Field number for the 'http' extension in google.protobuf.MethodOptions (see google/api/annotations.proto)
-  private val HttpFieldNumber = 72295728
 
   extension (md: MethodDescriptor[_, _]) {
 
@@ -35,15 +34,17 @@ object MethodDescriptorExtensions {
     def extractHttpRule(): Option[HttpRule] =
       md.getSchemaDescriptor match
         case sd: ConcreteProtoMethodDescriptorSupplier =>
-          val fields = sd.getMethodDescriptor.getOptions.getUnknownFields
+          val options       = sd.getMethodDescriptor.getOptions
+          val unknownFields = options.getUnknownFields
 
-          if fields.hasField(HttpFieldNumber) then
-            Some(
-              HttpRule.parseFrom(fields.getField(HttpFieldNumber).getLengthDelimitedList.get(0).toByteArray)
-            )
+          if unknownFields.hasField(AnnotationsProto.HTTP_FIELD_NUMBER) then
+            val is = unknownFields.getField(AnnotationsProto.HTTP_FIELD_NUMBER)
+              .getLengthDelimitedList.get(0)
+              .newCodedInput()
+
+            Some(HttpRule.parseFrom(is))
           else None
-        case _ =>
-          None
+        case _ => None
 
   }
 
