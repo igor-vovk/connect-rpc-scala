@@ -133,7 +133,7 @@ class HttpServerHandler[F[_]: Async](
   private def sendError(
     ctx: ChannelHandlerContext,
     message: String,
-    status: HttpResponseStatus = HttpResponseStatus.INTERNAL_SERVER_ERROR,
+    status: HttpResponseStatus,
   ): Unit = {
     val response = errorResponse(message, status)
     ctx.writeAndFlush(response)

@@ -1,7 +1,7 @@
 package org.ivovk.connect_rpc_scala.conformance
 
 import cats.effect.{IO, IOApp}
-import com.comcast.ip4s.{host, port, Port}
+import com.comcast.ip4s.{host, port}
 import connectrpc.conformance.v1.{
   ConformanceServiceFs2GrpcTrailers,
   ServerCompatRequest,

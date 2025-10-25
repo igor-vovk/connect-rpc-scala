@@ -6,7 +6,6 @@ import org.ivovk.connect_rpc_scala.connect.ErrorHandling
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import org.ivovk.connect_rpc_scala.netty.headers.NettyHeaderMapping
 import org.ivovk.connect_rpc_scala.netty.{ErrorHandler, Response}
-import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
 
 class ConnectErrorHandler[F[_]: Async](

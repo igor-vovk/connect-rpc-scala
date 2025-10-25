@@ -14,7 +14,7 @@ object ErrorDetailsAnyFormat {
   private val base64enc = Base64.getEncoder.withoutPadding()
   private val base64dec = Base64.getDecoder
 
-  val writer: (Printer, ErrorDetailsAny) => JValue = { (printer, any) =>
+  val writer: (Printer, ErrorDetailsAny) => JValue = { (_, any) =>
     JObject(
       "type"  -> JString(any.`type`),
       "value" -> JString(base64enc.encodeToString(any.value.toByteArray)),

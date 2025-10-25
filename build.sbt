@@ -1,6 +1,6 @@
 import org.typelevel.scalacoptions.ScalacOptions
 
-ThisBuild / scalaVersion := "3.3.6"
+ThisBuild / scalaVersion := "3.3.7"
 
 ThisBuild / organization := "me.ivovk"
 
