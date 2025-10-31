@@ -1,5 +1,6 @@
 # Enable native access for JNA to avoid warnings
 --enable-native-access=ALL-UNNAMED
+--sun-misc-unsafe-memory-access=allow
 
 # Increase memory for sbt
 -Xmx2G
