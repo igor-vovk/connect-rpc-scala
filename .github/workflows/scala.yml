@@ -16,14 +16,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          java-version: '24'
-          distribution: 'temurin'
-          cache: 'sbt'
-
-      - uses: sbt/setup-sbt@v1
+      - uses: ./.github/actions/setup-scala
 
       - name: Check Formatting
         run: sbt scalafmtCheckAll
@@ -46,13 +39,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          java-version: '24'
-          distribution: 'temurin'
-          cache: 'sbt'
-
-      - uses: sbt/setup-sbt@v1
+      - uses: ./.github/actions/setup-scala
 
       - uses: scalacenter/sbt-dependency-submission@v3

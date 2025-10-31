@@ -1,0 +1,14 @@
+name: 'Setup Scala Environment'
+description: 'Setup Java and SBT for Scala projects'
+runs:
+  using: "composite"
+  steps:
+    - name: Set up JDK
+      uses: actions/setup-java@v5
+      with:
+        java-version: '24'
+        distribution: 'temurin'
+        cache: 'sbt'
+    
+    - name: Setup SBT
+      uses: sbt/setup-sbt@v1
