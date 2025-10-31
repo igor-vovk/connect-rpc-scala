@@ -1,0 +1,11 @@
+# Enable native access for JNA to avoid warnings
+--enable-native-access=ALL-UNNAMED
+
+# Increase memory for sbt
+-Xmx2G
+-Xss4M
+
+# Improve compilation performance
+-XX:+UseG1GC
+-XX:ReservedCodeCacheSize=256m
+
