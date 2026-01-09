@@ -29,10 +29,10 @@ lazy val noPublish = List(
 
 lazy val Versions = new {
   val cedi      = "0.2.3"
-  val grpc      = "1.76.0"
+  val grpc      = "1.78.0"
   val http4s    = "0.23.33"
-  val logback   = "1.5.20"
-  val netty     = "4.2.7.Final"
+  val logback   = "1.5.24"
+  val netty     = "4.2.9.Final"
   val scalapb   = _root_.scalapb.compiler.Version.scalapbVersion
   val slf4j     = "2.0.17"
   val scalatest = "3.2.19"
@@ -152,8 +152,8 @@ lazy val example_zio_client_server = project.in(file("examples/zio_client_server
     libraryDependencies ++= Seq(
       "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
       "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
-      "dev.zio"       %% "zio"                 % "2.1.22",
-      "dev.zio"       %% "zio-interop-cats"    % "23.1.0.5",
+      "dev.zio"       %% "zio"                 % "2.1.24",
+      "dev.zio"       %% "zio-interop-cats"    % "23.1.0.13",
       "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
     ),
   )
