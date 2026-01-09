@@ -1,6 +1,6 @@
 FROM eclipse-temurin:24-jre AS base
 
-FROM ghcr.io/igor-vovk/connect-conformance-dockerimage:1.0.4-1 AS conformance
+FROM ghcr.io/igor-vovk/connect-conformance-dockerimage:1.0.5-1 AS conformance
 
 FROM base AS runner
 
