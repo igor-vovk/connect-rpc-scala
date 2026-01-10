@@ -131,7 +131,7 @@ lazy val example_connectrpc_grpc_servers = project.in(file("examples/connectrpc_
   )
 
 lazy val example_client_server = project.in(file("examples/client_server"))
-  .dependsOn(http4s, netty)
+  .dependsOn(http4s)
   .enablePlugins(Fs2Grpc, JavaAppPackaging)
   .settings(
     noPublish,
