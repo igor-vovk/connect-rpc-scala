@@ -29,6 +29,7 @@ lazy val noPublish = List(
 
 lazy val Versions = new {
   val cedi      = "0.2.3"
+  val fs2       = "3.12.2"
   val grpc      = "1.78.0"
   val http4s    = "0.23.33"
   val logback   = "1.5.24"
@@ -61,6 +62,9 @@ lazy val core = project
       "com.thesamet.scalapb" %% "scalapb-runtime"      % Versions.scalapb % "protobuf",
       "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % Versions.scalapb,
       "com.thesamet.scalapb" %% "scalapb-json4s"       % "0.12.2",
+      "co.fs2"               %% "fs2-core"             % Versions.fs2,
+      "co.fs2"               %% "fs2-scodec"           % Versions.fs2,
+      "co.fs2"               %% "fs2-io"               % Versions.fs2,
       "io.grpc"               % "grpc-inprocess"       % Versions.grpc,
       // TODO: stop using http4s-core and remove the dependency from the module
       "org.http4s" %% "http4s-core" % Versions.http4s,

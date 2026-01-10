@@ -6,7 +6,10 @@ import connectrpc.conformance.v1.{
   ServerCompatRequest,
   ServerCompatResponse,
 }
-import org.ivovk.connect_rpc_scala.conformance.util.LengthPrefixedProtoSerde
+import fs2.Stream
+import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
+import fs2.io.{stdin, stdout}
+import org.ivovk.connect_rpc_scala.conformance.util.ProtoCodecs
 import org.ivovk.connect_rpc_scala.netty.ConnectNettyServerBuilder
 import org.slf4j.LoggerFactory
 
@@ -29,10 +32,10 @@ object NettyServerLauncher extends IOApp.Simple {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def run: IO[Unit] = {
-    val protoSerDeser = LengthPrefixedProtoSerde.systemInOut[IO]
-
     val res = for
-      req <- protoSerDeser.read[ServerCompatRequest].toResource
+      req <- stdin[IO](2048)
+        .through(StreamDecoder.once(ProtoCodecs.decoderFor[ServerCompatRequest]).toPipeByte)
+        .compile.onlyOrError.toResource
 
       service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
         ConformanceServiceImpl[IO]()
@@ -51,7 +54,10 @@ object NettyServerLauncher extends IOApp.Simple {
 
       resp = ServerCompatResponse(server.host, server.port)
 
-      _ <- protoSerDeser.write(resp).toResource
+      _ <- Stream.emit(resp)
+        .through(StreamEncoder.once(ProtoCodecs.encoder).toPipeByte[IO])
+        .through(stdout)
+        .compile.drain.toResource
 
       _ = System.err.println(s"Server started on ${server.host}:${server.port}...")
       _ = logger.info(s"Netty-server started on ${server.host}:${server.port}...")

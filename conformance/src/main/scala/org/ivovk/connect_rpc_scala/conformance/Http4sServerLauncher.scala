@@ -7,9 +7,12 @@ import connectrpc.conformance.v1.{
   ServerCompatRequest,
   ServerCompatResponse,
 }
+import fs2.Stream
+import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
+import fs2.io.{stdin, stdout}
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.Logger
-import org.ivovk.connect_rpc_scala.conformance.util.LengthPrefixedProtoSerde
+import org.ivovk.connect_rpc_scala.conformance.util.ProtoCodecs
 import org.ivovk.connect_rpc_scala.http4s.ConnectHttp4sRouteBuilder
 import org.slf4j.LoggerFactory
 
@@ -32,10 +35,10 @@ object Http4sServerLauncher extends IOApp.Simple {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def run: IO[Unit] = {
-    val protoSerde = LengthPrefixedProtoSerde.systemInOut[IO]
-
     val res = for
-      req <- protoSerde.read[ServerCompatRequest].toResource
+      req <- stdin[IO](2048)
+        .through(StreamDecoder.once(ProtoCodecs.decoderFor[ServerCompatRequest]).toPipeByte)
+        .compile.onlyOrError.toResource
 
       service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
         ConformanceServiceImpl[IO]()
@@ -67,7 +70,10 @@ object Http4sServerLauncher extends IOApp.Simple {
       addr = server.address
       resp = ServerCompatResponse(addr.getHostString, addr.getPort)
 
-      _ <- protoSerde.write(resp).toResource
+      _ <- Stream.emit(resp)
+        .through(StreamEncoder.once(ProtoCodecs.encoder).toPipeByte[IO])
+        .through(stdout)
+        .compile.drain.toResource
 
       _ = System.err.println(s"Server started on $addr...")
     yield ()
