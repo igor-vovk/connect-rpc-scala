@@ -50,17 +50,20 @@ class JsonMessageCodec[F[_]: Sync](
           .through(compressor.decompress(entity.encoding))
           .chunkAll
           .evalMap { chunk =>
-            Sync[F].delay {
-              if (logger.isTraceEnabled) {
-                val str = Source.fromBytes(chunk.toArray, entity.charset.name).mkString
-                logger.trace(s">>> JSON: $str")
+            if !chunk.isEmpty then
+              Sync[F].delay {
+                if (logger.isTraceEnabled) {
+                  val str = Source.fromBytes(chunk.toArray, entity.charset.name).mkString
+                  logger.trace(s">>> JSON: $str")
+                }
+
+                val reader =
+                  InputStreamReader(ByteBufferBackedInputStream(chunk.toByteBuffer), entity.charset)
+                val json = jsonReader.readValue[JValue](reader)
+
+                parser.fromJson(decodingTransform(json))
               }
-
-              val reader = InputStreamReader(ByteBufferBackedInputStream(chunk.toByteBuffer), entity.charset)
-              val json   = jsonReader.readValue[JValue](reader)
-
-              parser.fromJson(decodingTransform(json))
-            }
+            else Sync[F].pure(cmp.defaultInstance)
           }
     }
 
