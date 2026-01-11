@@ -7,7 +7,7 @@ import fs2.Stream
 import org.http4s.{Response, Status}
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
-import org.ivovk.connect_rpc_scala.http4s.ResponseExtensions.*
+import org.ivovk.connect_rpc_scala.http4s.ResponseBuilder.*
 import org.ivovk.connect_rpc_scala.http4s.{ErrorHandler, Http4sHeaderMapping}
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.{Logger, LoggerFactory}

@@ -4,6 +4,9 @@ import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.*
 
+/**
+ * Message envelope used in streaming RPCs
+ */
 case class EnvelopedMessage(
   reserved: Int,         // 6 bits (MSB)
   isEndStream: Boolean,  // 2nd LSB (Bit 1)

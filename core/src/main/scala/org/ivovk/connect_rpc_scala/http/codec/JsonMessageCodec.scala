@@ -72,10 +72,10 @@ class JsonMessageCodec[F[_]: Sync](
       .evalMap { m =>
         Sync[F].delay {
           val bytes = {
-            val json = printer.toJson(m)
-            val baos = ByteArrayOutputStream(128)
-            val osw  = OutputStreamWriter(baos, options.charset)
-            JsonMethods.mapper.writeValue(osw, json)
+            val json   = printer.toJson(m)
+            val baos   = ByteArrayOutputStream(128)
+            val writer = OutputStreamWriter(baos, options.charset)
+            JsonMethods.mapper.writeValue(writer, json)
 
             baos.toByteArray
           }

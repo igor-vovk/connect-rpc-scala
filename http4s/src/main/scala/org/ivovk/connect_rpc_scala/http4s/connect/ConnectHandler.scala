@@ -9,7 +9,7 @@ import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistr
 import org.ivovk.connect_rpc_scala.http.MetadataToHeaders
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, EntityToDecode, MessageCodec}
 import org.ivovk.connect_rpc_scala.http4s.ErrorHandler
-import org.ivovk.connect_rpc_scala.http4s.ResponseExtensions.*
+import org.ivovk.connect_rpc_scala.http4s.ResponseBuilder.*
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.{Logger, LoggerFactory}
 import scalapb.GeneratedMessage
@@ -116,7 +116,13 @@ class ConnectHandler[F[_]: Async](
           logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
         }
 
-        mkUnaryResponse(Status.Ok, headers, response.value)
+        mkStreamingResponse(
+          headers,
+          fs2.Stream(
+            response.value,
+            connectrpc.Error(),
+          ),
+        )
       }
   }
 

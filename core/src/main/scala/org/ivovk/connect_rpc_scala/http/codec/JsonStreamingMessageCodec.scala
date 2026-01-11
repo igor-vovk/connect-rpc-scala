@@ -68,13 +68,13 @@ class JsonStreamingMessageCodec[F[_]: Sync](
 
   override def encode[A <: Message](messages: Stream[F, A], options: EncodeOptions): EncodedEntity[F] = {
     val body = messages
-      .evalMap { m =>
+      .evalMap { message =>
         Sync[F].delay {
           val bytes = {
-            val json = printer.toJson(m)
-            val baos = ByteArrayOutputStream(128)
-            val osw  = OutputStreamWriter(baos, options.charset)
-            JsonMethods.mapper.writeValue(osw, json)
+            val json   = printer.toJson(message)
+            val baos   = ByteArrayOutputStream(128)
+            val writer = OutputStreamWriter(baos, options.charset)
+            JsonMethods.mapper.writeValue(writer, json)
 
             baos.toByteArray
           }
