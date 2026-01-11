@@ -83,7 +83,8 @@ class JsonStreamingMessageCodec[F[_]: Sync](
             logger.trace(s"<<< JSON: ${Source.fromBytes(bytes, options.charset.name).mkString}")
           }
 
-          EnvelopedMessage(ByteVector.view(bytes), false)
+          EnvelopedMessage(ByteVector.view(bytes))
+            .withEndStream(message.isInstanceOf[connectrpc.EndStreamMessage])
         }
       }
       .through(StreamEncoder.many(EnvelopedMessage.codec).toPipeByte)

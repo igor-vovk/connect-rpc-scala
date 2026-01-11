@@ -2,9 +2,9 @@ package org.ivovk.connect_rpc_scala.http.json
 
 import com.google.protobuf.UnsafeByteOperations.unsafeWrap
 import connectrpc.ErrorDetailsAny
-import org.json4s.JsonAST.{JObject, JString, JValue}
+import org.json4s.JsonAST.{JObject, JString}
 import org.json4s.MonadicJValue.*
-import scalapb.json4s.{JsonFormatException, Parser, Printer}
+import scalapb.json4s.JsonFormatException
 
 import java.util.Base64
 import scala.language.existentials
@@ -14,14 +14,14 @@ object ErrorDetailsAnyFormat {
   private val base64enc = Base64.getEncoder.withoutPadding()
   private val base64dec = Base64.getDecoder
 
-  val writer: (Printer, ErrorDetailsAny) => JValue = { (_, any) =>
+  val writer: Writer[ErrorDetailsAny] = { (_, any) =>
     JObject(
       "type"  -> JString(any.`type`),
       "value" -> JString(base64enc.encodeToString(any.value.toByteArray)),
     )
   }
 
-  val parser: (Parser, JValue) => ErrorDetailsAny = {
+  val parser: Reader[ErrorDetailsAny] = {
     case (parser, obj @ JObject(fields)) =>
       (obj \ "type", obj \ "value") match {
         case (JString(t), JString(v)) =>

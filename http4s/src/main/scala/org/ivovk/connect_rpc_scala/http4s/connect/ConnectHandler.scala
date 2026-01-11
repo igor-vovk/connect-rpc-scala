@@ -2,19 +2,22 @@ package org.ivovk.connect_rpc_scala.http4s.connect
 
 import cats.effect.Async
 import cats.implicits.*
-import io.grpc.{Status as GrpcStatus, *}
 import io.grpc.MethodDescriptor.MethodType
-import org.http4s.{Headers, Response, Status}
+import io.grpc.{Status as GrpcStatus, *}
+import org.http4s.{Header, Headers, Response, Status}
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
+import org.ivovk.connect_rpc_scala.http.HeaderMapping.cachedAsciiKey
 import org.ivovk.connect_rpc_scala.http.MetadataToHeaders
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, EntityToDecode, MessageCodec}
 import org.ivovk.connect_rpc_scala.http4s.ErrorHandler
 import org.ivovk.connect_rpc_scala.http4s.ResponseBuilder.*
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.{Logger, LoggerFactory}
+import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
 
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 
 class ConnectHandler[F[_]: Async](
   channel: Channel,
@@ -109,18 +112,36 @@ class ConnectHandler[F[_]: Async](
         req.as[GeneratedMessage](using method.requestMessageCompanion),
       )
       .map { response =>
-        val headers = headerMapping.toHeaders(response.headers) ++
-          headerMapping.trailersToHeaders(response.trailers)
+        val headers = headerMapping.toHeaders(response.headers)
 
         if (logger.isTraceEnabled) {
           logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
         }
 
+        val responseMetadata = Seq.newBuilder[connectrpc.MetadataEntry]
+        val headersToAdd     = Seq.newBuilder[Header.Raw]
+
+        // TODO: move trailers without "trailer-" prefix to headers
+        response.trailers.keys.forEach { key =>
+          if key.startsWith("trailer-") then
+            responseMetadata += connectrpc.MetadataEntry(
+              key = key.substring("trailer-".length),
+              value = response.trailers.getAll(cachedAsciiKey(key)).asScala.toSeq,
+            )
+          else
+            headersToAdd += Header.Raw(
+              CIString(key),
+              response.trailers.getAll(cachedAsciiKey(key)).asScala.mkString(","),
+            )
+        }
+
         mkStreamingResponse(
-          headers,
+          headers ++ Headers(headersToAdd.result()),
           fs2.Stream(
             response.value,
-            connectrpc.Error(),
+            connectrpc.EndStreamMessage(
+              metadata = responseMetadata.result()
+            ),
           ),
         )
       }

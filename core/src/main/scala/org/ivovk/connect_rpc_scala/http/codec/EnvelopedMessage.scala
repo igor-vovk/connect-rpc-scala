@@ -12,12 +12,16 @@ case class EnvelopedMessage(
   isEndStream: Boolean,  // 2nd LSB (Bit 1)
   isCompressed: Boolean, // LSB (Bit 0)
   data: ByteVector,
-)
+) {
+  def withEndStream(endStream: Boolean): EnvelopedMessage =
+    if endStream == isEndStream then this
+    else copy(isEndStream = endStream)
+}
 
 object EnvelopedMessage {
 
-  def apply(data: ByteVector, isCompressed: Boolean): EnvelopedMessage =
-    EnvelopedMessage(0, false, isCompressed, data)
+  def apply(data: ByteVector): EnvelopedMessage =
+    EnvelopedMessage(0, false, false, data)
 
   val codec: Codec[EnvelopedMessage] = {
     ("reserved" | uint(6)) ::

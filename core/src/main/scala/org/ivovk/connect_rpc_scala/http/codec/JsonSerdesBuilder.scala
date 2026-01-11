@@ -1,7 +1,11 @@
 package org.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
-import org.ivovk.connect_rpc_scala.http.json.{ConnectErrorFormat, ErrorDetailsAnyFormat}
+import org.ivovk.connect_rpc_scala.http.json.{
+  ConnectErrorFormat,
+  EndStreamMessageFormat,
+  ErrorDetailsAnyFormat,
+}
 import scalapb.json4s.{FormatRegistry, JsonFormat, TypeRegistry}
 import scalapb.{json4s, GeneratedMessage, GeneratedMessageCompanion}
 
@@ -38,6 +42,10 @@ case class JsonSerdesBuilder[F[_]: Sync] private (
       .registerMessageFormatter[connectrpc.Error](
         ConnectErrorFormat.writer,
         ConnectErrorFormat.parser,
+      )
+      .registerMessageFormatter[connectrpc.EndStreamMessage](
+        EndStreamMessageFormat.writer,
+        EndStreamMessageFormat.parser,
       )
 
     val parser = new json4s.Parser()
