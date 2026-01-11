@@ -38,7 +38,7 @@ object Http4sRouteBuilder {
       services = services,
       serverConfigurator = identity,
       channelConfigurator = identity,
-      customJsonSerDeser = None,
+      customJsonSerdes = None,
       incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
       outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       pathPrefix = Uri.Path.Root,
@@ -67,7 +67,7 @@ object ConnectHttp4sRouteBuilder {
       services = services,
       serverConfigurator = identity,
       channelConfigurator = identity,
-      customJsonSerDeser = None,
+      customJsonSerdes = None,
       incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
       outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       pathPrefix = Uri.Path.Root,
@@ -84,7 +84,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
   services: Seq[ServerServiceDefinition],
   serverConfigurator: Endo[ServerBuilder[_]],
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
-  customJsonSerDeser: Option[JsonSerdes[F]],
+  customJsonSerdes: Option[JsonSerdes[F]],
   incomingHeadersFilter: HeadersFilter,
   outgoingHeadersFilter: HeadersFilter,
   pathPrefix: Uri.Path,
@@ -99,7 +99,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     services: Seq[ServerServiceDefinition] = services,
     serverConfigurator: Endo[ServerBuilder[_]] = serverConfigurator,
     channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
-    customJsonSerDeser: Option[JsonSerdes[F]] = customJsonSerDeser,
+    customJsonSerdes: Option[JsonSerdes[F]] = customJsonSerdes,
     incomingHeadersFilter: HeadersFilter = incomingHeadersFilter,
     outgoingHeadersFilter: HeadersFilter = outgoingHeadersFilter,
     pathPrefix: Uri.Path = pathPrefix,
@@ -113,7 +113,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
       services,
       serverConfigurator,
       channelConfigurator,
-      customJsonSerDeser,
+      customJsonSerdes,
       incomingHeadersFilter,
       outgoingHeadersFilter,
       pathPrefix,
@@ -131,7 +131,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     copy(channelConfigurator = method)
 
   def withJsonCodecConfigurator(method: Endo[JsonSerdesBuilder[F]]): ConnectHttp4sRouteBuilder[F] =
-    copy(customJsonSerDeser = Some(method(JsonSerdesBuilder[F]()).build))
+    copy(customJsonSerdes = Some(method(JsonSerdesBuilder[F]()).build))
 
   /**
    * Filter for incoming headers.
@@ -211,7 +211,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
         treatTrailersAsHeaders,
       )
 
-      val jsonSerDeser  = customJsonSerDeser.getOrElse(JsonSerdesBuilder[F]().build)
+      val jsonSerDeser  = customJsonSerdes.getOrElse(JsonSerdesBuilder[F]().build)
       val codecRegistry = MessageCodecRegistry[F](
         jsonSerDeser.codec,
         jsonSerDeser.streamingCodec,

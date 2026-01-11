@@ -55,7 +55,7 @@ object NettyServerBuilder {
       serverConfigurator = identity,
       enableLogging = false,
       channelConfigurator = identity,
-      customJsonSerDeser = None,
+      customJsonSerdes = None,
       incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
       outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       pathPrefix = Uri.Path.Root,
@@ -81,7 +81,7 @@ object ConnectNettyServerBuilder {
       serverConfigurator = identity,
       enableLogging = false,
       channelConfigurator = identity,
-      customJsonSerDeser = None,
+      customJsonSerdes = None,
       incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
       outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       pathPrefix = Uri.Path.Root,
@@ -99,7 +99,7 @@ class ConnectNettyServerBuilder[F[_]: Async: Parallel] private[netty] (
   serverConfigurator: Endo[ServerBuilder[_]],
   enableLogging: Boolean,
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
-  customJsonSerDeser: Option[JsonSerdes[F]],
+  customJsonSerdes: Option[JsonSerdes[F]],
   incomingHeadersFilter: HeadersFilter,
   outgoingHeadersFilter: HeadersFilter,
   pathPrefix: Uri.Path,
@@ -116,7 +116,7 @@ class ConnectNettyServerBuilder[F[_]: Async: Parallel] private[netty] (
     services: Seq[ServerServiceDefinition] = services,
     enableLogging: Boolean = enableLogging,
     channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
-    customJsonSerDeser: Option[JsonSerdes[F]] = customJsonSerDeser,
+    customJsonSerdes: Option[JsonSerdes[F]] = customJsonSerdes,
     incomingHeadersFilter: HeadersFilter = incomingHeadersFilter,
     outgoingHeadersFilter: HeadersFilter = outgoingHeadersFilter,
     pathPrefix: Uri.Path = pathPrefix,
@@ -131,7 +131,7 @@ class ConnectNettyServerBuilder[F[_]: Async: Parallel] private[netty] (
       serverConfigurator = serverConfigurator,
       enableLogging = enableLogging,
       channelConfigurator = channelConfigurator,
-      customJsonSerDeser = customJsonSerDeser,
+      customJsonSerdes = customJsonSerdes,
       incomingHeadersFilter = incomingHeadersFilter,
       outgoingHeadersFilter = outgoingHeadersFilter,
       pathPrefix = pathPrefix,
@@ -146,7 +146,7 @@ class ConnectNettyServerBuilder[F[_]: Async: Parallel] private[netty] (
     copy(channelConfigurator = method)
 
   def withJsonCodecConfigurator(method: Endo[JsonSerdesBuilder[F]]): ConnectNettyServerBuilder[F] =
-    copy(customJsonSerDeser = Some(method(JsonSerdesBuilder[F]()).build))
+    copy(customJsonSerdes = Some(method(JsonSerdesBuilder[F]()).build))
 
   def withPathPrefix(pathPrefix: Uri.Path): ConnectNettyServerBuilder[F] =
     copy(pathPrefix = pathPrefix)
@@ -178,7 +178,7 @@ class ConnectNettyServerBuilder[F[_]: Async: Parallel] private[netty] (
       treatTrailersAsHeaders = treatTrailersAsHeaders,
     )
 
-    val jsonSerDeser  = customJsonSerDeser.getOrElse(JsonSerdesBuilder[F]().build)
+    val jsonSerDeser  = customJsonSerdes.getOrElse(JsonSerdesBuilder[F]().build)
     val codecRegistry = MessageCodecRegistry[F](
       jsonSerDeser.codec,
       ProtoMessageCodec[F](),

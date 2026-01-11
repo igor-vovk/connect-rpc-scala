@@ -13,29 +13,29 @@ object ConnectHttp4sChannelBuilder {
   def apply[F[_]: Async](client: Client[F]): ConnectHttp4sChannelBuilder[F] =
     new ConnectHttp4sChannelBuilder(
       client = client,
-      customJsonSerDeser = None,
+      customJsonSerdes = None,
       useBinaryFormat = false,
     )
 }
 
 class ConnectHttp4sChannelBuilder[F[_]: Async] private (
   client: Client[F],
-  customJsonSerDeser: Option[JsonSerdes[F]],
+  customJsonSerdes: Option[JsonSerdes[F]],
   useBinaryFormat: Boolean,
 ) {
 
   private def copy(
-    customJsonSerDeser: Option[JsonSerdes[F]] = customJsonSerDeser,
+    customJsonSerdes: Option[JsonSerdes[F]] = customJsonSerdes,
     useBinaryFormat: Boolean = useBinaryFormat,
   ): ConnectHttp4sChannelBuilder[F] =
     new ConnectHttp4sChannelBuilder(
       client,
-      customJsonSerDeser,
+      customJsonSerdes,
       useBinaryFormat,
     )
 
   def withJsonCodecConfigurator(method: Endo[JsonSerdesBuilder[F]]): ConnectHttp4sChannelBuilder[F] =
-    copy(customJsonSerDeser = Some(method(JsonSerdesBuilder[F]()).build))
+    copy(customJsonSerdes = Some(method(JsonSerdesBuilder[F]()).build))
 
   /**
    * Use protobuf binary format for messages.
@@ -51,7 +51,7 @@ class ConnectHttp4sChannelBuilder[F[_]: Async] private (
     yield {
       val codec: MessageCodec[F] =
         if useBinaryFormat then ProtoMessageCodec[F]()
-        else customJsonSerDeser.getOrElse(JsonSerdesBuilder[F]().build).codec
+        else customJsonSerdes.getOrElse(JsonSerdesBuilder[F]().build).codec
 
       val headerMapping = Http4sHeaderMapping(
         h => !"Connection".equalsIgnoreCase(h),
