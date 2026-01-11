@@ -1,7 +1,6 @@
 package org.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
-import cats.effect.kernel.Async
 import cats.implicits.*
 import fs2.{Chunk, Stream}
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
@@ -17,7 +16,7 @@ import java.io.{InputStreamReader, StringReader}
 import java.net.URLDecoder
 import scala.io.Source
 
-class JsonMessageCodec[F[_]: Async](
+class JsonMessageCodec[F[_]: Sync](
   parser: Parser,
   printer: Printer,
   decodingTransform: JsonTransform = AsIsJsonTransform,

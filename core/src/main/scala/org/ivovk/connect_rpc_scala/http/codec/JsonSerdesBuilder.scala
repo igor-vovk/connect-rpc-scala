@@ -1,6 +1,6 @@
 package org.ivovk.connect_rpc_scala.http.codec
 
-import cats.effect.Async
+import cats.effect.Sync
 import org.ivovk.connect_rpc_scala.http.json.{ConnectErrorFormat, ErrorDetailsAnyFormat}
 import scalapb.json4s.{FormatRegistry, JsonFormat, TypeRegistry}
 import scalapb.{json4s, GeneratedMessage, GeneratedMessageCompanion}
@@ -12,14 +12,14 @@ case class JsonSerdes[F[_]](
 )
 
 object JsonSerdesBuilder {
-  def apply[F[_]: Async](): JsonSerdesBuilder[F] =
+  def apply[F[_]: Sync](): JsonSerdesBuilder[F] =
     new JsonSerdesBuilder(
       typeRegistry = TypeRegistry.default,
       formatRegistry = JsonFormat.DefaultRegistry,
     )
 }
 
-case class JsonSerdesBuilder[F[_]: Async] private (
+case class JsonSerdesBuilder[F[_]: Sync] private (
   typeRegistry: TypeRegistry,
   formatRegistry: FormatRegistry,
 ) {
