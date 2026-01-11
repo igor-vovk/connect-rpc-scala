@@ -6,9 +6,11 @@ import scodec.codecs.*
 
 /**
  * Message envelope used in streaming RPCs
+ *
+ * @see
+ *   [[https://connectrpc.com/docs/protocol/#streaming-request Connect Protocol - Streaming]]
  */
 case class EnvelopedMessage(
-  reserved: Int,         // 6 bits (MSB)
   isEndStream: Boolean,  // 2nd LSB (Bit 1)
   isCompressed: Boolean, // LSB (Bit 0)
   data: ByteVector,
@@ -21,12 +23,13 @@ case class EnvelopedMessage(
 object EnvelopedMessage {
 
   def apply(data: ByteVector): EnvelopedMessage =
-    EnvelopedMessage(0, false, false, data)
+    EnvelopedMessage(false, false, data)
 
-  val codec: Codec[EnvelopedMessage] = {
-    ("reserved" | uint(6)) ::
-      ("isEndStream" | bool) ::
-      ("isCompressed" | bool) ::
-      ("data" | variableSizeBytesLong(uint32, bytes))
-  }.as[EnvelopedMessage]
+  val codec: Codec[EnvelopedMessage] =
+    ("reserved" | ignore(6)) ~>
+      (
+        ("isEndStream" | bool) ::
+          ("isCompressed" | bool) ::
+          ("data" | variableSizeBytesLong(uint32, bytes))
+      ).as[EnvelopedMessage]
 }
