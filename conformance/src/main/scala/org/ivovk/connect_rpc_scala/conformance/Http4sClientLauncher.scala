@@ -6,11 +6,12 @@ import com.google.protobuf.any.Any
 import connectrpc.ErrorDetailsAny
 import connectrpc.conformance.v1 as conformance
 import connectrpc.conformance.v1.*
-import fs2.Stream
+import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
+import fs2.io.{stdin, stdout}
 import io.grpc.{CallOptions, Channel, MethodDescriptor}
 import org.http4s.Uri
 import org.http4s.ember.client.EmberClientBuilder
-import org.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, LengthPrefixedProtoSerde}
+import org.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, ProtoCodecs}
 import org.ivovk.connect_rpc_scala.connect.ErrorHandling
 import org.ivovk.connect_rpc_scala.grpc.ClientCalls
 import org.ivovk.connect_rpc_scala.http4s.ConnectHttp4sChannelBuilder
@@ -44,16 +45,10 @@ object Http4sClientLauncher extends IOApp.Simple {
   override def run: IO[Unit] = {
     logger.info("Starting conformance client tests...")
 
-    val protoSerDeser = LengthPrefixedProtoSerde.systemInOut[IO]
-
-    def readNextSpecFromStdIn: Stream[IO, ClientCompatRequest] =
-      Stream
-        .eval(protoSerDeser.read[ClientCompatRequest])
-        .redeemWith(_ => Stream.empty, v => Stream.emit(v) ++ readNextSpecFromStdIn)
-
-    readNextSpecFromStdIn
+    stdin[IO](2048)
+      .through(StreamDecoder.many(ProtoCodecs.decoderFor[ClientCompatRequest]).toPipeByte)
       .evalMap { (spec: ClientCompatRequest) =>
-        (for
+        val channel = for
           baseUri <- IO.fromEither(Uri.fromString(s"http://${spec.host}:${spec.port}")).toResource
 
           httpClient <- EmberClientBuilder.default[IO]
@@ -70,12 +65,12 @@ object Http4sClientLauncher extends IOApp.Simple {
             )
             .pipeIf(spec.codec.isProto)(_.enableBinaryFormat())
             .build(baseUri)
+        yield channel
 
-          resp <- runTestCase(channel, spec).toResource
-
-          _ <- protoSerDeser.write(resp).toResource
-        yield ()).use_
+        channel.use(ch => runTestCase(ch, spec))
       }
+      .through(StreamEncoder.many(ProtoCodecs.encoder).toPipeByte[IO])
+      .through(stdout)
       .compile.drain
       .redeem(
         err => logger.error("An error occurred during conformance client tests.", err),
