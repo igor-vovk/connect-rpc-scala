@@ -49,9 +49,10 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
     val chunkSize  = CodedOutputStream.DEFAULT_BUFFER_SIZE min dataLength
 
     val entity = EncodedEntity(
-      headers = Map("Content-Type" -> mediaType.show),
+      headers = Map(
+        "Content-Type" -> mediaType.show
+      ),
       body = readOutputStream(chunkSize)(os => Async[F].delay(message.writeTo(os))),
-      length = Some(dataLength.toLong),
     )
 
     entity.pipe(compressor.compress(options.encoding))

@@ -34,10 +34,9 @@ class Compressor[F[_]: Sync] {
         coding.render(writer)
 
         EncodedEntity(
-          headers = entity.headers.updated(
-            "Content-Encoding",
-            writer.result,
-          ),
+          headers = entity.headers
+            .updated("Content-Encoding", writer.result)
+            .removed("Content-Length"), // Length is unknown after compression
           body = entity.body.through(Compression[F].gzip()),
         )
       case ContentCoding.identity =>

@@ -2,6 +2,7 @@ package org.ivovk.connect_rpc_scala.conformance
 
 import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.{host, port}
+import connectrpc.conformance.v1 as conformance
 import connectrpc.conformance.v1.{
   ConformanceServiceFs2GrpcTrailers,
   ServerCompatRequest,
@@ -49,8 +50,9 @@ object Http4sServerLauncher extends IOApp.Simple {
           // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
           // JSON-serialization conformance tests
           _
-            .registerType[connectrpc.conformance.v1.UnaryRequest]
-            .registerType[connectrpc.conformance.v1.IdempotentUnaryRequest]
+            .registerType[conformance.UnaryRequest]
+            .registerType[conformance.IdempotentUnaryRequest]
+            .registerType[conformance.ClientStreamRequest]
         }
         .build
 

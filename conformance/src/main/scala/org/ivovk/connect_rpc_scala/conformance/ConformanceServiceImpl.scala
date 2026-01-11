@@ -95,7 +95,20 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
   override def clientStream(
     request: fs2.Stream[F, ClientStreamRequest],
     ctx: Metadata,
-  ): F[(ClientStreamResponse, Metadata)] = ???
+  ): F[(ClientStreamResponse, Metadata)] =
+    for
+      requests <- request.compile.toList
+      responseDefinition = requests.flatMap(_.responseDefinition).head
+
+      resp <- handleUnaryRequest(
+        responseDefinition,
+        requests,
+        ctx,
+      )
+    yield (
+      ClientStreamResponse(resp.payload.some),
+      resp.trailers,
+    )
 
   override def bidiStream(
     request: fs2.Stream[F, BidiStreamRequest],

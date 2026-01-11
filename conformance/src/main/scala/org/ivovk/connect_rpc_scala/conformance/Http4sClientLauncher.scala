@@ -62,6 +62,7 @@ object Http4sClientLauncher extends IOApp.Simple {
               _
                 .registerType[conformance.UnaryRequest]
                 .registerType[conformance.IdempotentUnaryRequest]
+                .registerType[conformance.ClientStreamRequest]
             )
             .pipeIf(spec.codec.isProto)(_.enableBinaryFormat())
             .build(baseUri)
@@ -109,7 +110,7 @@ object Http4sClientLauncher extends IOApp.Simple {
         methodDescriptor,
         callOptions,
         metadata,
-        request,
+        fs2.Stream.emit(request),
       )
 
       val cancelF = if (spec.getCancel.getAfterCloseSendMs > 0) {

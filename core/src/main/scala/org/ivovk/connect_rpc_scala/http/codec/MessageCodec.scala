@@ -54,7 +54,6 @@ case class EntityToDecode[F[_]](
 case class EncodedEntity[F[_]](
   headers: Map[String, String],
   body: Stream[F, Byte],
-  length: Option[Long] = None,
 )
 
 trait MessageCodec[F[_]] {

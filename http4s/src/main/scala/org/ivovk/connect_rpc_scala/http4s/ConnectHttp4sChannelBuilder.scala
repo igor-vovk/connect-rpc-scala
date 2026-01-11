@@ -5,12 +5,7 @@ import cats.effect.std.Dispatcher
 import cats.effect.{Async, Resource}
 import org.http4s.Uri
 import org.http4s.client.Client
-import org.ivovk.connect_rpc_scala.http.codec.{
-  JsonSerdes,
-  JsonSerdesBuilder,
-  MessageCodec,
-  ProtoMessageCodec,
-}
+import org.ivovk.connect_rpc_scala.http.codec.{JsonSerdes, JsonSerdesBuilder, MessageCodec, ProtoMessageCodec}
 import org.ivovk.connect_rpc_scala.http4s.client.{ConnectHttp4sChannel, ConnectHttp4sChannelImpl}
 
 object ConnectHttp4sChannelBuilder {

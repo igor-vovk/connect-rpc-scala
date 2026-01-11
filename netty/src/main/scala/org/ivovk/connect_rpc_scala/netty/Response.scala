@@ -29,7 +29,6 @@ object Response {
 
         response.headers().add(headers)
         responseEntity.headers.foreach((name, value) => response.headers().set(name, value))
-        responseEntity.length.foreach(response.headers().set(HttpHeaderNames.CONTENT_LENGTH, _))
 
         if (logger.isTraceEnabled) {
           logger.trace(s"<<< Headers: ${response.headers()}")

@@ -71,7 +71,7 @@ class ConnectHandler[F[_]: Async](
           method.descriptor,
           callOptions,
           req.headers,
-          message,
+          fs2.Stream.emit[F, GeneratedMessage](message),
         )
       }
       .flatMap { response =>

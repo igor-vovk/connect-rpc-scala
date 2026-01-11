@@ -75,9 +75,10 @@ class JsonStreamingMessageCodec[F[_]: Sync](
     val bytes = JsonMethods.mapper.writeValueAsBytes(json)
 
     val entity = EncodedEntity[F](
-      headers = Map("Content-Type" -> mediaType.show),
+      headers = Map(
+        "Content-Type" -> mediaType.show
+      ),
       body = Stream.chunk(Chunk.array(bytes)),
-      length = Some(bytes.length.toLong),
     )
 
     entity.pipe(compressor.compress(options.encoding))

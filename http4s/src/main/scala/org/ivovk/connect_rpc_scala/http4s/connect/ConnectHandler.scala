@@ -2,11 +2,9 @@ package org.ivovk.connect_rpc_scala.http4s.connect
 
 import cats.effect.Async
 import cats.implicits.*
-import fs2.Stream
-import io.grpc.*
+import io.grpc.{Status as GrpcStatus, *}
 import io.grpc.MethodDescriptor.MethodType
-import org.http4s.Status.Ok
-import org.http4s.{Headers, Response}
+import org.http4s.{Headers, Response, Status}
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.MetadataToHeaders
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, EntityToDecode, MessageCodec}
@@ -49,7 +47,7 @@ class ConnectHandler[F[_]: Async](
         handleClientStreaming(req, method)
       case unsupported =>
         Async[F].raiseError(
-          Status.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported").asException()
+          GrpcStatus.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported").asException()
         )
 
     f.handleErrorWith(errorHandler.handle)
@@ -58,28 +56,24 @@ class ConnectHandler[F[_]: Async](
   private def handleUnary(
     req: EntityToDecode[F],
     method: MethodRegistry.Entry,
-  )(using MessageCodec[F], EncodeOptions): F[Response[F]] =
-    req.as[GeneratedMessage](using method.requestMessageCompanion)
-      .compile
-      .onlyOrError
-      .flatMap { message =>
-        if (logger.isTraceEnabled) {
-          logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}")
-        }
+  )(using MessageCodec[F], EncodeOptions): F[Response[F]] = {
+    if (logger.isTraceEnabled) {
+      logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}")
+    }
 
-        val callOptions = CallOptions.DEFAULT
-          .pipeIfDefined(Option(req.headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, timeout) =>
-            options.withDeadlineAfter(timeout, MILLISECONDS)
-          }
-
-        ClientCalls.asyncUnaryCall(
-          channel,
-          method.descriptor,
-          callOptions,
-          req.headers,
-          message,
-        )
+    val callOptions = CallOptions.DEFAULT
+      .pipeIfDefined(Option(req.headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, timeout) =>
+        options.withDeadlineAfter(timeout, MILLISECONDS)
       }
+
+    ClientCalls
+      .asyncUnaryCall(
+        channel,
+        method.descriptor,
+        callOptions,
+        req.headers,
+        req.as[GeneratedMessage](using method.requestMessageCompanion),
+      )
       .map { response =>
         val headers = headerMapping.toHeaders(response.headers) ++
           headerMapping.trailersToHeaders(response.trailers)
@@ -88,24 +82,41 @@ class ConnectHandler[F[_]: Async](
           logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
         }
 
-        Response(Ok, headers = headers).withMessage(response.value)
+        mkUnaryResponse(Status.Ok, headers, response.value)
       }
+  }
 
   private def handleClientStreaming(
     req: EntityToDecode[F],
     method: MethodRegistry.Entry,
-  ): F[Response[F]] =
-    req.message match {
-      case _: String =>
-        logger.warn(
-          s"Client streaming method ${method.descriptor.getFullMethodName} called with GET request"
-        )
-
-        Async[F].raiseError(Status.NOT_FOUND.asException())
-      case stream: Stream[F, Byte] =>
-        Async[F].raiseError(
-          Status.UNIMPLEMENTED.withDescription(s"Unsupported method type: CLIENT_STREAMING").asException()
-        )
+  )(using MessageCodec[F], EncodeOptions): F[Response[F]] = {
+    if (logger.isTraceEnabled) {
+      logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}")
     }
+
+    val callOptions = CallOptions.DEFAULT
+      .pipeIfDefined(Option(req.headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, timeout) =>
+        options.withDeadlineAfter(timeout, MILLISECONDS)
+      }
+
+    ClientCalls
+      .streamingCall(
+        channel,
+        method.descriptor,
+        callOptions,
+        req.headers,
+        req.as[GeneratedMessage](using method.requestMessageCompanion),
+      )
+      .map { response =>
+        val headers = headerMapping.toHeaders(response.headers) ++
+          headerMapping.trailersToHeaders(response.trailers)
+
+        if (logger.isTraceEnabled) {
+          logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+        }
+
+        mkUnaryResponse(Status.Ok, headers, response.value)
+      }
+  }
 
 }

@@ -29,8 +29,6 @@ class ConnectErrorHandler[F[_]: Applicative](
 
     val httpStatus = Status.fromInt(details.httpStatusCode).fold(throw _, identity)
 
-    Response[F](httpStatus, headers = headers)
-      .withMessage(details.error)
-      .pure[F]
+    mkUnaryResponse(httpStatus, headers, details.error).pure[F]
   }
 }
