@@ -2,7 +2,7 @@ package org.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
 import cats.implicits.*
-import fs2.interop.scodec.StreamDecoder
+import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import fs2.{Chunk, Stream}
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
@@ -12,8 +12,9 @@ import org.json4s.jackson.JsonMethods
 import org.slf4j.LoggerFactory
 import scalapb.json4s.{Parser, Printer}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
+import scodec.bits.ByteVector
 
-import java.io.InputStreamReader
+import java.io.{ByteArrayOutputStream, InputStreamReader, OutputStreamWriter}
 import scala.io.Source
 
 class JsonStreamingMessageCodec[F[_]: Sync](
@@ -54,7 +55,7 @@ class JsonStreamingMessageCodec[F[_]: Sync](
             val json = jsonReader.readValue[JValue](InputStreamReader(bv.toInputStream, entity.charset))
 
             if (logger.isTraceEnabled) {
-              val str = Source.fromInputStream(bv.toInputStream, entity.charset.name).mkString
+              val str = Source.fromBytes(chunk.toArray, entity.charset.name).mkString
               logger.trace(s">>> JSON: $str")
             }
 
@@ -65,22 +66,33 @@ class JsonStreamingMessageCodec[F[_]: Sync](
       .adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  override def encode[A <: Message](message: A, options: EncodeOptions): EncodedEntity[F] = {
-    val json = printer.toJson(message)
+  override def encode[A <: Message](messages: Stream[F, A], options: EncodeOptions): EncodedEntity[F] = {
+    val body = messages
+      .evalMap { m =>
+        Sync[F].delay {
+          val bytes = {
+            val json = printer.toJson(m)
+            val baos = ByteArrayOutputStream(128)
+            val osw  = OutputStreamWriter(baos, options.charset)
+            JsonMethods.mapper.writeValue(osw, json)
 
-    if (logger.isTraceEnabled) {
-      logger.trace(s"<<< JSON: ${JsonMethods.compact(json)}")
-    }
+            baos.toByteArray
+          }
 
-    val bytes = JsonMethods.mapper.writeValueAsBytes(json)
+          if (logger.isTraceEnabled) {
+            logger.trace(s"<<< JSON: ${Source.fromBytes(bytes, options.charset.name).mkString}")
+          }
 
-    val entity = EncodedEntity[F](
+          EnvelopedMessage(ByteVector.view(bytes), false)
+        }
+      }
+      .through(StreamEncoder.many(EnvelopedMessage.codec).toPipeByte)
+
+    EncodedEntity[F](
       headers = Map(
         "Content-Type" -> mediaType.show
       ),
-      body = Stream.chunk(Chunk.array(bytes)),
+      body = body,
     )
-
-    entity.pipe(compressor.compress(options.encoding))
   }
 }

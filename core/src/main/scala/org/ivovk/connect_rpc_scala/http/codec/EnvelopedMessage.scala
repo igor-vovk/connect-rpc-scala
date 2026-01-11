@@ -12,6 +12,10 @@ case class EnvelopedMessage(
 )
 
 object EnvelopedMessage {
+
+  def apply(data: ByteVector, isCompressed: Boolean): EnvelopedMessage =
+    EnvelopedMessage(0, false, isCompressed, data)
+
   val codec: Codec[EnvelopedMessage] = {
     ("reserved" | uint(6)) ::
       ("isEndStream" | bool) ::

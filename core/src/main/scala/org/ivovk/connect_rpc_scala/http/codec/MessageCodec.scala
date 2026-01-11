@@ -10,11 +10,15 @@ import java.nio.charset.Charset
 import scala.annotation.threadUnsafe
 
 case class EncodeOptions(
-  encoding: ContentCoding
+  charset: Charset,
+  encoding: ContentCoding,
 )
 
 object EncodeOptions {
-  given Default: EncodeOptions = EncodeOptions(ContentCoding.identity)
+  given Default: EncodeOptions = EncodeOptions(
+    charset = Charset.defaultCharset(),
+    encoding = ContentCoding.identity,
+  )
 }
 
 /**
@@ -62,6 +66,6 @@ trait MessageCodec[F[_]] {
 
   def decode[A <: Message](m: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A]
 
-  def encode[A <: Message](message: A, options: EncodeOptions): EncodedEntity[F]
+  def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F]
 
 }

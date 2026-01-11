@@ -6,6 +6,7 @@ import com.google.protobuf.any.Any
 import connectrpc.ErrorDetailsAny
 import connectrpc.conformance.v1 as conformance
 import connectrpc.conformance.v1.*
+import fs2.Stream
 import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import fs2.io.{stdin, stdout}
 import io.grpc.{CallOptions, Channel, MethodDescriptor}
@@ -110,7 +111,7 @@ object Http4sClientLauncher extends IOApp.Simple {
         methodDescriptor,
         callOptions,
         metadata,
-        fs2.Stream.emit(request),
+        Stream.emit(request),
       )
 
       val cancelF = if (spec.getCancel.getAfterCloseSendMs > 0) {

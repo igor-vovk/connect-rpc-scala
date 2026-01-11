@@ -1,5 +1,6 @@
 package org.ivovk.connect_rpc_scala.http4s
 
+import fs2.Stream
 import org.http4s.{Header, Headers, Response, Status}
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import scalapb.GeneratedMessage
@@ -11,7 +12,7 @@ object ResponseExtensions {
     headers: Headers,
     message: GeneratedMessage,
   )(using codec: MessageCodec[F], options: EncodeOptions): Response[F] = {
-    val responseEntity = codec.encode(message, options)
+    val responseEntity = codec.encode(Stream.emit(message), options)
 
     val h = headers
       .put(responseEntity.headers.map(Header.ToRaw.keyValuesToRaw).toSeq*)

@@ -2,6 +2,7 @@ package org.ivovk.connect_rpc_scala.netty.connect
 
 import cats.effect.Async
 import cats.implicits.*
+import fs2.Stream
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.{CallOptions, Channel, Status}
 import io.netty.handler.codec.http.{HttpHeaders, HttpResponse}
@@ -28,7 +29,8 @@ class ConnectHandler[F[_]: Async](
     method: MethodRegistry.Entry,
   )(using MessageCodec[F]): F[HttpResponse] = {
     given EncodeOptions = EncodeOptions(
-      encoding = req.encoding
+      charset = req.charset,
+      encoding = req.encoding,
     )
 
     val f = method.descriptor.getType match
@@ -71,7 +73,7 @@ class ConnectHandler[F[_]: Async](
           method.descriptor,
           callOptions,
           req.headers,
-          fs2.Stream.emit[F, GeneratedMessage](message),
+          Stream.emit[F, GeneratedMessage](message),
         )
       }
       .flatMap { response =>

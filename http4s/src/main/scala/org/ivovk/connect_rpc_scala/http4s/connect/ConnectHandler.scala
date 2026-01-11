@@ -29,7 +29,8 @@ class ConnectHandler[F[_]: Async](
     method: MethodRegistry.Entry,
   )(using MessageCodec[F]): F[Response[F]] = {
     given EncodeOptions = EncodeOptions(
-      encoding = req.encoding
+      charset = req.charset,
+      encoding = req.encoding,
     )
 
     if (logger.isTraceEnabled) {

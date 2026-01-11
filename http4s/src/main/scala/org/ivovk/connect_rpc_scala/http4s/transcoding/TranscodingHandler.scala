@@ -3,6 +3,7 @@ package org.ivovk.connect_rpc_scala.http4s.transcoding
 import cats.effect.Async
 import cats.implicits.*
 import io.grpc.*
+import fs2.Stream
 import org.http4s.{Response, Status}
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
@@ -50,7 +51,7 @@ class TranscodingHandler[F[_]: Async](
         method.descriptor,
         callOptions,
         headers,
-        fs2.Stream.emit[F, GeneratedMessage](message),
+        Stream.emit[F, GeneratedMessage](message),
       )
       .map { response =>
         val headers = headerMapping.toHeaders(response.headers) ++

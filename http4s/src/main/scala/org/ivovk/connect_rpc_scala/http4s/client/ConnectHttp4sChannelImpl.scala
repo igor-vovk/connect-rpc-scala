@@ -3,6 +3,7 @@ package org.ivovk.connect_rpc_scala.http4s.client
 import cats.effect.Sync
 import cats.effect.std.Dispatcher
 import cats.implicits.*
+import fs2.Stream
 import io.grpc.*
 import org.http4s.client.Client
 import org.http4s.{Header, Headers, HttpVersion, Method, Request, Uri}
@@ -63,7 +64,7 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
       }
 
     private def doSendMessage(message: Message): F[Unit] = {
-      val entity = messageCodec.encode(message, EncodeOptions.Default)
+      val entity = messageCodec.encode(Stream.emit(message), EncodeOptions.Default)
 
       val request = Request[F](
         method = Method.POST,

@@ -2,9 +2,8 @@ package org.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Async
 import cats.implicits.*
-import com.google.protobuf.CodedOutputStream
-import fs2.Stream
-import fs2.io.{readOutputStream, toInputStreamResource}
+import com.fasterxml.jackson.databind.util.ByteBufferBackedInputStream
+import fs2.{Chunk, Stream}
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
@@ -26,8 +25,12 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
       case str: String =>
         Async[F].delay(cmp.parseFrom(base64dec.decode(str.getBytes(entity.charset))))
       case stream: Stream[F, Byte] =>
-        toInputStreamResource(stream.through(compressor.decompress(entity.encoding)))
-          .use(is => Async[F].delay(cmp.parseFrom(is)))
+        stream.through(compressor.decompress(entity.encoding))
+          .chunkAll
+          .evalMap { chunk =>
+            Async[F].delay(cmp.parseFrom(ByteBufferBackedInputStream(chunk.toByteBuffer)))
+          }
+          .compile.onlyOrError
     }
 
     Stream.eval(msg)
@@ -40,19 +43,20 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
       .adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  override def encode[A <: Message](message: A, options: EncodeOptions): EncodedEntity[F] = {
-    if (logger.isTraceEnabled) {
-      logger.trace(s"<<< Proto: ${message.toProtoString}")
+  override def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F] = {
+    val body = message.flatMap { msg =>
+      if (logger.isTraceEnabled) {
+        logger.trace(s"<<< Proto: ${msg.toProtoString}")
+      }
+
+      Stream.chunk(Chunk.array(msg.toByteArray))
     }
 
-    val dataLength = message.serializedSize
-    val chunkSize  = CodedOutputStream.DEFAULT_BUFFER_SIZE min dataLength
-
-    val entity = EncodedEntity(
+    val entity = EncodedEntity[F](
       headers = Map(
         "Content-Type" -> mediaType.show
       ),
-      body = readOutputStream(chunkSize)(os => Async[F].delay(message.writeTo(os))),
+      body = body,
     )
 
     entity.pipe(compressor.compress(options.encoding))
