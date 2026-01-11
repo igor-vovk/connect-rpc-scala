@@ -5,7 +5,12 @@ import cats.effect.std.Dispatcher
 import cats.effect.{Async, Resource}
 import org.http4s.Uri
 import org.http4s.client.Client
-import org.ivovk.connect_rpc_scala.http.codec.{JsonSerDeser, JsonSerDeserBuilder, ProtoMessageCodec}
+import org.ivovk.connect_rpc_scala.http.codec.{
+  JsonSerdes,
+  JsonSerdesBuilder,
+  MessageCodec,
+  ProtoMessageCodec,
+}
 import org.ivovk.connect_rpc_scala.http4s.client.{ConnectHttp4sChannel, ConnectHttp4sChannelImpl}
 
 object ConnectHttp4sChannelBuilder {
@@ -20,12 +25,12 @@ object ConnectHttp4sChannelBuilder {
 
 class ConnectHttp4sChannelBuilder[F[_]: Async] private (
   client: Client[F],
-  customJsonSerDeser: Option[JsonSerDeser[F]],
+  customJsonSerDeser: Option[JsonSerdes[F]],
   useBinaryFormat: Boolean,
 ) {
 
   private def copy(
-    customJsonSerDeser: Option[JsonSerDeser[F]] = customJsonSerDeser,
+    customJsonSerDeser: Option[JsonSerdes[F]] = customJsonSerDeser,
     useBinaryFormat: Boolean = useBinaryFormat,
   ): ConnectHttp4sChannelBuilder[F] =
     new ConnectHttp4sChannelBuilder(
@@ -34,8 +39,8 @@ class ConnectHttp4sChannelBuilder[F[_]: Async] private (
       useBinaryFormat,
     )
 
-  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): ConnectHttp4sChannelBuilder[F] =
-    copy(customJsonSerDeser = Some(method(JsonSerDeserBuilder[F]()).build))
+  def withJsonCodecConfigurator(method: Endo[JsonSerdesBuilder[F]]): ConnectHttp4sChannelBuilder[F] =
+    copy(customJsonSerDeser = Some(method(JsonSerdesBuilder[F]()).build))
 
   /**
    * Use protobuf binary format for messages.
@@ -49,9 +54,9 @@ class ConnectHttp4sChannelBuilder[F[_]: Async] private (
   def build(baseUri: Uri): Resource[F, ConnectHttp4sChannel] =
     for dispatcher <- Dispatcher.parallel[F](await = false)
     yield {
-      val codec =
+      val codec: MessageCodec[F] =
         if useBinaryFormat then ProtoMessageCodec[F]()
-        else customJsonSerDeser.getOrElse(JsonSerDeserBuilder[F]().build).codec
+        else customJsonSerDeser.getOrElse(JsonSerdesBuilder[F]().build).codec
 
       val headerMapping = Http4sHeaderMapping(
         h => !"Connection".equalsIgnoreCase(h),

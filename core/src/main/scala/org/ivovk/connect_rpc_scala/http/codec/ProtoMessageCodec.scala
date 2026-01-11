@@ -5,7 +5,7 @@ import cats.implicits.*
 import com.google.protobuf.CodedOutputStream
 import fs2.Stream
 import fs2.io.{readOutputStream, toInputStreamResource}
-import org.http4s.{DecodeResult, InvalidMessageBodyFailure, MediaType}
+import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
@@ -21,26 +21,23 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
 
   override val mediaType: MediaType = MediaTypes.`application/proto`
 
-  override def decode[A <: Message](
-    entity: EntityToDecode[F]
-  )(using cmp: Companion[A]): DecodeResult[F, A] = {
+  override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
     val msg = entity.message match {
       case str: String =>
         Async[F].delay(cmp.parseFrom(base64dec.decode(str.getBytes(entity.charset))))
       case stream: Stream[F, Byte] =>
-        toInputStreamResource(compressor.decompressed(entity.encoding, stream))
+        toInputStreamResource(stream.through(compressor.decompress(entity.encoding)))
           .use(is => Async[F].delay(cmp.parseFrom(is)))
     }
 
-    msg
+    Stream.eval(msg)
       .pipeIf(logger.isTraceEnabled) {
         _.map { msg =>
           logger.trace(s">>> Proto: ${msg.toProtoString}")
           msg
         }
       }
-      .attemptT
-      .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
+      .adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
   override def encode[A <: Message](message: A, options: EncodeOptions): EncodedEntity[F] = {
@@ -57,7 +54,7 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
       length = Some(dataLength.toLong),
     )
 
-    compressor.compressed(options.encoding, entity)
+    entity.pipe(compressor.compress(options.encoding))
   }
 
 }

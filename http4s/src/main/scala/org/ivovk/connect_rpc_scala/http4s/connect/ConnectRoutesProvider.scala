@@ -65,7 +65,7 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
       case Some(codec) => r(codec)
       case None        =>
         val message = s"Unsupported media-type ${mediaType.show}. " +
-          s"Supported media types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}"
+          s"Supported media types: ${registry.allSupported.map(_.show).mkString(", ")}"
 
         Response(UnsupportedMediaType).withEntity(message).pure[F]
     }

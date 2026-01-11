@@ -1,19 +1,23 @@
 package org.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
+import cats.effect.kernel.Async
 import cats.implicits.*
-import fs2.text.decodeWithCharset
 import fs2.{Chunk, Stream}
-import org.http4s.{DecodeResult, InvalidMessageBodyFailure, MediaType}
+import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
+import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
+import org.json4s.JValue
 import org.json4s.jackson.JsonMethods
 import org.slf4j.LoggerFactory
 import scalapb.json4s.{Parser, Printer}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
+import java.io.{InputStreamReader, StringReader}
 import java.net.URLDecoder
+import scala.io.Source
 
-class JsonMessageCodec[F[_]: Sync](
+class JsonMessageCodec[F[_]: Async](
   parser: Parser,
   printer: Printer,
   decodingTransform: JsonTransform = AsIsJsonTransform,
@@ -24,47 +28,54 @@ class JsonMessageCodec[F[_]: Sync](
 
   override val mediaType: MediaType = MediaTypes.`application/json`
 
-  override def decode[A <: Message](
-    entity: EntityToDecode[F]
-  )(using cmp: Companion[A]): DecodeResult[F, A] = {
-    val charset = entity.charset
-    val string  = entity.message match {
-      case str: String =>
-        Sync[F].delay(URLDecoder.decode(str, charset))
+  private val jsonReader = JsonMethods.mapper.readerFor(classOf[JValue])
+
+  override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
+    val stream = entity.message match {
+      case str: String if str.isEmpty =>
+        Stream.emit(cmp.defaultInstance)
+      case s: String =>
+        Stream.eval(Sync[F].delay {
+          val str = URLDecoder.decode(s, entity.charset)
+
+          if (logger.isTraceEnabled) {
+            logger.trace(s">>> JSON: $str")
+          }
+
+          val json = jsonReader.readValue[JValue](StringReader(str))
+          parser.fromJson(decodingTransform(json))
+        })
       case stream: Stream[F, Byte] =>
-        compressor
-          .decompressed(entity.encoding, stream)
-          .through(decodeWithCharset(charset))
-          .compile
-          .string
+        stream
+          .through(compressor.decompress(entity.encoding))
+          .chunkAll
+          .evalMap { chunk =>
+            Sync[F].delay {
+              val bv = chunk.toByteVector
+
+              if (logger.isTraceEnabled) {
+                val str = Source.fromInputStream(bv.toInputStream, entity.charset.name).mkString
+                logger.trace(s">>> JSON: $str")
+              }
+
+              val json = jsonReader.readValue[JValue](InputStreamReader(bv.toInputStream, entity.charset))
+
+              parser.fromJson(decodingTransform(json))
+            }
+          }
     }
 
-    string
-      .flatMap { str =>
-        if (logger.isTraceEnabled) {
-          logger.trace(s">>> JSON: $str")
-        }
-
-        if str.nonEmpty then
-          Sync[F].delay {
-            val json = JsonMethods.parse(str)
-
-            parser.fromJson(decodingTransform(json))
-          }
-        else cmp.defaultInstance.pure[F]
-      }
-      .attemptT
-      .leftMap(e => InvalidMessageBodyFailure(e.getMessage, e.some))
+    stream.adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
   override def encode[A <: Message](message: A, options: EncodeOptions): EncodedEntity[F] = {
-    val string = printer.print(message)
+    val json = printer.toJson(message)
 
     if (logger.isTraceEnabled) {
-      logger.trace(s"<<< JSON: $string")
+      logger.trace(s"<<< JSON: ${JsonMethods.compact(json)}")
     }
 
-    val bytes = string.getBytes()
+    val bytes = JsonMethods.mapper.writeValueAsBytes(json)
 
     val entity = EncodedEntity[F](
       headers = Map("Content-Type" -> mediaType.show),
@@ -72,7 +83,7 @@ class JsonMessageCodec[F[_]: Sync](
       length = Some(bytes.length.toLong),
     )
 
-    compressor.compressed(options.encoding, entity)
+    entity.pipe(compressor.compress(options.encoding))
   }
 
   def withDecodingJsonTransform(transform: JsonTransform): JsonMessageCodec[F] =

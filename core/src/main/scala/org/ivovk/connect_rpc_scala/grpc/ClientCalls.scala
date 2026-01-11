@@ -36,7 +36,7 @@ object ClientCalls {
 
     val response = Async[F].async[Response[Resp]] { cb =>
       Async[F].delay {
-        call.start(CallbackListener[Resp](cb), headers)
+        call.start(UnaryCallListener[Resp](cb), headers)
         call.sendMessage(request)
         call.halfClose()
         // request 2 messages to catch a case when a server sends more than one message
@@ -49,7 +49,7 @@ object ClientCalls {
     (call, response)
   }
 
-  private class CallbackListener[Resp](
+  private class UnaryCallListener[Resp](
     cb: Either[Throwable, Response[Resp]] => Unit
   ) extends ClientCall.Listener[Resp] {
 

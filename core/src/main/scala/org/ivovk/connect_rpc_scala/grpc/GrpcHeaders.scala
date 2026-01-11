@@ -32,6 +32,9 @@ object GrpcHeaders {
 
   private[connect_rpc_scala] val ContentEncodingKey: Key[String] = asciiKey("content-encoding")
 
+  private[connect_rpc_scala] val StreamingContentEncodingKey: Key[String] =
+    asciiKey("connect-content-encoding")
+
   private[connect_rpc_scala] val XTestCaseNameKey: Key[String] = asciiKey("x-test-case-name")
 
   private[connect_rpc_scala] val ConnectTimeoutMsKey: Key[Long] =

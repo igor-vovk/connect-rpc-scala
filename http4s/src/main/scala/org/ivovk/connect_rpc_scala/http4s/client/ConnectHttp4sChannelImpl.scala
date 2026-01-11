@@ -100,19 +100,26 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
 
             messageCodec
               .decode(EntityToDecode[F](response.body, metadata))(using responseCompanion)
-              .fold(
-                decodeFailure => closeCall(Status.UNKNOWN.withCause(decodeFailure), trailers),
-                response => respondAndCloseCall(response, trailers),
-              )
+              .compile
+              .onlyOrError
+              .attempt
+              .map {
+                case Left(decodeFailure) => closeCall(Status.UNKNOWN.withCause(decodeFailure), trailers)
+                case Right(response)     => respondAndCloseCall(response, trailers)
+              }
           } else {
             val grpcStatusByHttpStatus = StatusCodeMappings.GrpcStatusCodesByHttpStatusCode
               .get(response.status.code)
               .fold(Status.UNKNOWN)(Status.fromCode)
 
             messageCodec.decode[connectrpc.Error](EntityToDecode[F](response.body, metadata))
-              .fold(
-                decodeFailure => closeCall(grpcStatusByHttpStatus.withCause(decodeFailure), trailers),
-                error => {
+              .compile
+              .onlyOrError
+              .attempt
+              .map {
+                case Left(decodeFailure) =>
+                  closeCall(grpcStatusByHttpStatus.withCause(decodeFailure), trailers)
+                case Right(error) =>
                   if (logger.isTraceEnabled) {
                     logger.trace("<<< Received error response: {}", error)
                   }
@@ -126,8 +133,7 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
                     status.withDescription(error.getMessage),
                     trailers,
                   )
-                },
-              )
+              }
           }
         }
         .recoverWith {

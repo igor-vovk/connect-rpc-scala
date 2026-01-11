@@ -1,20 +1,20 @@
 package org.ivovk.connect_rpc_scala.http.codec
 
-import cats.MonadThrow
 import fs2.Stream
 import io.grpc.Metadata
-import org.http4s.{ContentCoding, DecodeResult, MediaType}
+import org.http4s.{ContentCoding, MediaType}
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 import java.nio.charset.Charset
+import scala.annotation.threadUnsafe
 
 case class EncodeOptions(
-  encoding: Option[ContentCoding]
+  encoding: ContentCoding
 )
 
 object EncodeOptions {
-  given Default: EncodeOptions = EncodeOptions(None)
+  given Default: EncodeOptions = EncodeOptions(ContentCoding.identity)
 }
 
 /**
@@ -27,16 +27,28 @@ case class EntityToDecode[F[_]](
   message: String | Stream[F, Byte],
   headers: Metadata,
 ) {
-  private def contentType: Option[GrpcHeaders.ContentType] =
+  @threadUnsafe
+  private lazy val contentType: Option[GrpcHeaders.ContentType] =
     Option(headers.get(GrpcHeaders.ContentTypeKey))
 
-  def charset: Charset = contentType.flatMap(_.nioCharset).getOrElse(Charset.defaultCharset())
+  def charset: Charset =
+    contentType.flatMap(_.nioCharset).getOrElse(Charset.defaultCharset())
 
-  def encoding: Option[ContentCoding] =
-    Option(headers.get(GrpcHeaders.ContentEncodingKey)).map(ContentCoding.unsafeFromString)
+  private def isStreaming = contentType.exists(_.mediaType.startsWith("application/connect+"))
 
-  def as[A <: Message: Companion](using M: MonadThrow[F], codec: MessageCodec[F]): F[A] =
-    M.rethrow(codec.decode(this)(using summon[Companion[A]]).value)
+  @threadUnsafe
+  lazy val encoding: ContentCoding = {
+    val key =
+      if isStreaming then GrpcHeaders.StreamingContentEncodingKey
+      else GrpcHeaders.ContentEncodingKey
+
+    Option(headers.get(key))
+      .map(ContentCoding.unsafeFromString)
+      .getOrElse(ContentCoding.identity)
+  }
+
+  def as[A <: Message: Companion](using codec: MessageCodec[F]): Stream[F, A] =
+    codec.decode(this)(using summon[Companion[A]])
 }
 
 case class EncodedEntity[F[_]](
@@ -49,7 +61,7 @@ trait MessageCodec[F[_]] {
 
   val mediaType: MediaType
 
-  def decode[A <: Message](m: EntityToDecode[F])(using cmp: Companion[A]): DecodeResult[F, A]
+  def decode[A <: Message](m: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A]
 
   def encode[A <: Message](message: A, options: EncodeOptions): EncodedEntity[F]
 
