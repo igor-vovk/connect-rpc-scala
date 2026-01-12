@@ -9,7 +9,6 @@ import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistr
 import org.ivovk.connect_rpc_scala.http.HeaderMapping.cachedAsciiKey
 import org.ivovk.connect_rpc_scala.http.MetadataToHeaders
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, EntityToDecode, MessageCodec}
-import org.ivovk.connect_rpc_scala.http4s.ErrorHandler
 import org.ivovk.connect_rpc_scala.http4s.ResponseBuilder.*
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.{Logger, LoggerFactory}
@@ -21,9 +20,11 @@ import scala.jdk.CollectionConverters.*
 
 class ConnectHandler[F[_]: Async](
   channel: Channel,
-  errorHandler: ErrorHandler[F],
   headerMapping: MetadataToHeaders[Headers],
 ) {
+
+  private val unaryErrorHandler     = ConnectUnaryErrorHandler[F](headerMapping)
+  private val streamingErrorHandler = ConnectStreamingErrorHandler[F](headerMapping)
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -44,17 +45,17 @@ class ConnectHandler[F[_]: Async](
       }
     }
 
-    val f = method.descriptor.getType match
+    method.descriptor.getType match
       case MethodType.UNARY =>
-        handleUnary(req, method)
+        handleUnary(req, method).handleErrorWith(unaryErrorHandler.handle)
       case MethodType.CLIENT_STREAMING =>
-        handleClientStreaming(req, method)
+        handleClientStreaming(req, method).handleErrorWith(streamingErrorHandler.handle)
       case unsupported =>
-        Async[F].raiseError(
-          GrpcStatus.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported").asException()
-        )
-
-    f.handleErrorWith(errorHandler.handle)
+        Async[F]
+          .raiseError(
+            GrpcStatus.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported").asException()
+          )
+          .handleErrorWith(unaryErrorHandler.handle)
   }
 
   private def handleUnary(
@@ -121,7 +122,6 @@ class ConnectHandler[F[_]: Async](
         val responseMetadata = Seq.newBuilder[connectrpc.MetadataEntry]
         val headersToAdd     = Seq.newBuilder[Header.Raw]
 
-        // TODO: move trailers without "trailer-" prefix to headers
         response.trailers.keys.forEach { key =>
           if key.startsWith("trailer-") then
             responseMetadata += connectrpc.MetadataEntry(

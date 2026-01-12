@@ -7,7 +7,7 @@ import org.ivovk.connect_rpc_scala.http.json.{
   ErrorDetailsAnyFormat,
 }
 import scalapb.json4s.{FormatRegistry, JsonFormat, TypeRegistry}
-import scalapb.{json4s, GeneratedMessage, GeneratedMessageCompanion}
+import scalapb.{json4s, GeneratedMessage => Message, GeneratedMessageCompanion => Companion}
 
 case class JsonSerdes[F[_]](
   parser: json4s.Parser,
@@ -28,7 +28,7 @@ case class JsonSerdesBuilder[F[_]: Sync] private (
   formatRegistry: FormatRegistry,
 ) {
 
-  def registerType[T <: GeneratedMessage](using cmp: GeneratedMessageCompanion[T]): JsonSerdesBuilder[F] =
+  def registerType[T <: Message](using cmp: Companion[T]): JsonSerdesBuilder[F] =
     copy(
       typeRegistry = typeRegistry.addMessageByCompanion(cmp)
     )

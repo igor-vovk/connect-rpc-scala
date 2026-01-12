@@ -22,7 +22,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     request: UnaryRequest,
     ctx: Metadata,
   ): F[(UnaryResponse, Metadata)] =
-    for res <- handleUnaryRequest(
+    for res <- handleUnaryAndClientStreaming(
         request.getResponseDefinition,
         Seq(request),
         ctx,
@@ -36,7 +36,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     request: IdempotentUnaryRequest,
     ctx: Metadata,
   ): F[(IdempotentUnaryResponse, Metadata)] =
-    for res <- handleUnaryRequest(
+    for res <- handleUnaryAndClientStreaming(
         request.getResponseDefinition,
         Seq(request),
         ctx,
@@ -46,7 +46,23 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
       res.trailers,
     )
 
-  private def handleUnaryRequest(
+  override def clientStream(
+    request: fs2.Stream[F, ClientStreamRequest],
+    ctx: Metadata,
+  ): F[(ClientStreamResponse, Metadata)] =
+    for
+      requests <- request.compile.to(Seq)
+      resp     <- handleUnaryAndClientStreaming(
+        requests.flatMap(_.responseDefinition).head,
+        requests,
+        ctx,
+      )
+    yield (
+      ClientStreamResponse(resp.payload.some),
+      resp.trailers,
+    )
+
+  private def handleUnaryAndClientStreaming(
     responseDefinition: UnaryResponseDefinition,
     requests: Seq[GeneratedMessage],
     ctx: Metadata,
@@ -91,24 +107,6 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     request: ServerStreamRequest,
     ctx: Metadata,
   ): fs2.Stream[F, ServerStreamResponse] = ???
-
-  override def clientStream(
-    request: fs2.Stream[F, ClientStreamRequest],
-    ctx: Metadata,
-  ): F[(ClientStreamResponse, Metadata)] =
-    for
-      requests <- request.compile.toList
-      responseDefinition = requests.flatMap(_.responseDefinition).head
-
-      resp <- handleUnaryRequest(
-        responseDefinition,
-        requests,
-        ctx,
-      )
-    yield (
-      ClientStreamResponse(resp.payload.some),
-      resp.trailers,
-    )
 
   override def bidiStream(
     request: fs2.Stream[F, BidiStreamRequest],

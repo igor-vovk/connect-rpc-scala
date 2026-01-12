@@ -10,8 +10,8 @@ import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.codec.*
 import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
-import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectErrorHandler, ConnectHandler, ConnectRoutesProvider}
-import org.ivovk.connect_rpc_scala.http4s.transcoding.{TranscodingHandler, TranscodingRoutesProvider}
+import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectHandler, ConnectRoutesProvider}
+import org.ivovk.connect_rpc_scala.http4s.transcoding.{DefaultTranscodingErrorHandler, TranscodingHandler, TranscodingRoutesProvider}
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
 
 import java.util.concurrent.Executor
@@ -220,13 +220,8 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
 
       val methodRegistry = MethodRegistry(services)
 
-      val connectErrorHandler = ConnectErrorHandler[F](
-        headerMapping
-      )
-
       val connectHandler = ConnectHandler[F](
         channel,
-        connectErrorHandler,
         headerMapping,
       )
 
@@ -245,7 +240,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
 
       val transcodingHandler = TranscodingHandler[F](
         channel,
-        transcodingErrorHandler.getOrElse(connectErrorHandler),
+        transcodingErrorHandler.getOrElse(DefaultTranscodingErrorHandler()),
         headerMapping,
       )
 

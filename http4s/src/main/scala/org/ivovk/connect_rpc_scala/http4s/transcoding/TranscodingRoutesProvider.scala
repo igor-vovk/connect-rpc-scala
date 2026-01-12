@@ -41,7 +41,7 @@ class TranscodingRoutesProvider[F[_]: Async](
             val pathMessage  = serDeser.parser.fromJson[Message](pathJson)
             val queryMessage = serDeser.parser.fromJson[Message](queryJson)
 
-            handler.handleUnary(
+            handler.handle(
               bodyMessage.merge(pathMessage).merge(queryMessage).build,
               headers,
               method,

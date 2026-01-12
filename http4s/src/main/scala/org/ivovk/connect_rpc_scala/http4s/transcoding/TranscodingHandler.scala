@@ -23,7 +23,7 @@ class TranscodingHandler[F[_]: Async](
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  def handleUnary(
+  def handle(
     message: GeneratedMessage,
     headers: Metadata,
     method: MethodRegistry.Entry,

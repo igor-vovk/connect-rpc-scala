@@ -2,15 +2,16 @@ package org.ivovk.connect_rpc_scala.http4s.connect
 
 import cats.Applicative
 import cats.implicits.*
-import org.http4s.{Response, Status}
+import org.http4s.{Headers, Response, Status}
 import org.ivovk.connect_rpc_scala.connect.ErrorHandling
+import org.ivovk.connect_rpc_scala.http.MetadataToHeaders
 import org.ivovk.connect_rpc_scala.http.codec.MessageCodec
+import org.ivovk.connect_rpc_scala.http4s.ErrorHandler
 import org.ivovk.connect_rpc_scala.http4s.ResponseBuilder.*
-import org.ivovk.connect_rpc_scala.http4s.{ErrorHandler, Http4sHeaderMapping}
 import org.slf4j.LoggerFactory
 
-class ConnectErrorHandler[F[_]: Applicative](
-  headerMapping: Http4sHeaderMapping
+class ConnectUnaryErrorHandler[F[_]: Applicative](
+  headerMapping: MetadataToHeaders[Headers]
 ) extends ErrorHandler[F] {
 
   private val logger = LoggerFactory.getLogger(getClass)
