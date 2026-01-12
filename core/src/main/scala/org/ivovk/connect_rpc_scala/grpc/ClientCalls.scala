@@ -12,14 +12,14 @@ object ClientCalls {
   /**
    * Asynchronous unary call.
    */
-  def asyncUnaryCall[F[_]: Async, Req, Resp](
+  def clientStreamingCall[F[_]: Async, Req, Resp](
     channel: Channel,
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
     headers: Metadata,
     request: Stream[F, Req],
   ): F[Response[Resp]] =
-    asyncUnaryCall2(channel, method, options, headers, request)._2
+    clientStreamingCall2(channel, method, options, headers, request)._2
 
   /**
    * Asynchronous unary call with a return of the call itself.
@@ -27,7 +27,7 @@ object ClientCalls {
    * This method exposes the `ClientCall` object, which can be useful for advanced use cases, such as
    * cancellation or additional control over the call.
    */
-  def asyncUnaryCall2[F[_]: Async, Req, Resp](
+  def clientStreamingCall2[F[_]: Async, Req, Resp](
     channel: Channel,
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
@@ -89,43 +89,6 @@ object ClientCalls {
       cb(res)
     }
 
-  }
-
-  def streamingCall[F[_]: Async, Req, Resp](
-    channel: Channel,
-    method: MethodDescriptor[Req, Resp],
-    options: CallOptions,
-    headers: Metadata,
-    requests: Stream[F, Req],
-  ): F[Response[Resp]] =
-    streamingCall2(channel, method, options, headers, requests)._2
-
-  def streamingCall2[F[_]: Async, Req, Resp](
-    channel: Channel,
-    method: MethodDescriptor[Req, Resp],
-    options: CallOptions,
-    headers: Metadata,
-    requests: Stream[F, Req],
-  ): (ClientCall[Req, Resp], F[Response[Resp]]) = {
-    val call = channel.newCall(method, options)
-
-    val response: F[Response[Resp]] = Async[F].async[Response[Resp]] { cb =>
-      for {
-        _ <- Async[F].delay(call.start(UnaryResponseListener[Resp](cb), headers))
-        _ <- requests
-          .evalMap(req => Async[F].delay(call.sendMessage(req)))
-          .compile.drain
-        cancel <- Async[F].delay {
-          call.halfClose()
-          // request 2 messages to catch a case when a server sends more than one message
-          call.request(2)
-
-          Some(Async[F].delay(call.cancel("Cancelled", null)))
-        }
-      } yield cancel
-    }
-
-    (call, response)
   }
 
 }
