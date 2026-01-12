@@ -1,34 +1,39 @@
 package org.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
-import org.ivovk.connect_rpc_scala.http.json.{ConnectErrorFormat, ErrorDetailsAnyFormat}
+import org.ivovk.connect_rpc_scala.http.json.{
+  ConnectErrorFormat,
+  EndStreamMessageFormat,
+  ErrorDetailsAnyFormat,
+}
 import scalapb.json4s.{FormatRegistry, JsonFormat, TypeRegistry}
-import scalapb.{json4s, GeneratedMessage, GeneratedMessageCompanion}
+import scalapb.{json4s, GeneratedMessage => Message, GeneratedMessageCompanion => Companion}
 
-case class JsonSerDeser[F[_]](
+case class JsonSerdes[F[_]](
   parser: json4s.Parser,
   codec: JsonMessageCodec[F],
+  streamingCodec: JsonStreamingMessageCodec[F],
 )
 
-object JsonSerDeserBuilder {
-  def apply[F[_]: Sync](): JsonSerDeserBuilder[F] =
-    new JsonSerDeserBuilder(
+object JsonSerdesBuilder {
+  def apply[F[_]: Sync](): JsonSerdesBuilder[F] =
+    new JsonSerdesBuilder(
       typeRegistry = TypeRegistry.default,
       formatRegistry = JsonFormat.DefaultRegistry,
     )
 }
 
-case class JsonSerDeserBuilder[F[_]: Sync] private (
+case class JsonSerdesBuilder[F[_]: Sync] private (
   typeRegistry: TypeRegistry,
   formatRegistry: FormatRegistry,
 ) {
 
-  def registerType[T <: GeneratedMessage](using cmp: GeneratedMessageCompanion[T]): JsonSerDeserBuilder[F] =
+  def registerType[T <: Message](using cmp: Companion[T]): JsonSerdesBuilder[F] =
     copy(
       typeRegistry = typeRegistry.addMessageByCompanion(cmp)
     )
 
-  def build: JsonSerDeser[F] = {
+  def build: JsonSerdes[F] = {
     val formatRegistry = this.formatRegistry
       .registerMessageFormatter[connectrpc.ErrorDetailsAny](
         ErrorDetailsAnyFormat.writer,
@@ -37,6 +42,10 @@ case class JsonSerDeserBuilder[F[_]: Sync] private (
       .registerMessageFormatter[connectrpc.Error](
         ConnectErrorFormat.writer,
         ConnectErrorFormat.parser,
+      )
+      .registerMessageFormatter[connectrpc.EndStreamMessage](
+        EndStreamMessageFormat.writer,
+        EndStreamMessageFormat.parser,
       )
 
     val parser = new json4s.Parser()
@@ -47,9 +56,10 @@ case class JsonSerDeserBuilder[F[_]: Sync] private (
       .withTypeRegistry(typeRegistry)
       .withFormatRegistry(formatRegistry)
 
-    JsonSerDeser[F](
+    JsonSerdes[F](
       parser = parser,
       codec = new JsonMessageCodec[F](parser, printer),
+      streamingCodec = new JsonStreamingMessageCodec[F](parser, printer),
     )
   }
 

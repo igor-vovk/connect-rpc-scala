@@ -1,6 +1,8 @@
 package org.ivovk.connect_rpc_scala.grpc
 
 import cats.effect.Async
+import cats.implicits.*
+import fs2.Stream
 import io.grpc.*
 
 object ClientCalls {
@@ -15,7 +17,7 @@ object ClientCalls {
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
     headers: Metadata,
-    request: Req,
+    request: Stream[F, Req],
   ): F[Response[Resp]] =
     asyncUnaryCall2(channel, method, options, headers, request)._2
 
@@ -30,26 +32,30 @@ object ClientCalls {
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
     headers: Metadata,
-    request: Req,
+    request: Stream[F, Req],
   ): (ClientCall[Req, Resp], F[Response[Resp]]) = {
     val call = channel.newCall(method, options)
 
     val response = Async[F].async[Response[Resp]] { cb =>
-      Async[F].delay {
-        call.start(CallbackListener[Resp](cb), headers)
-        call.sendMessage(request)
-        call.halfClose()
-        // request 2 messages to catch a case when a server sends more than one message
-        call.request(2)
+      for {
+        _ <- Async[F].delay(call.start(UnaryResponseListener[Resp](cb), headers))
+        _ <- request
+          .evalMap(req => Async[F].delay(call.sendMessage(req)))
+          .compile.drain
+        resp <- Async[F].delay {
+          call.halfClose()
+          // request 2 messages to catch a case when a server sends more than one message
+          call.request(2)
 
-        Some(Async[F].delay(call.cancel("Cancelled", null)))
-      }
+          Some(Async[F].delay(call.cancel("Cancelled", null)))
+        }
+      } yield resp
     }
 
     (call, response)
   }
 
-  private class CallbackListener[Resp](
+  private class UnaryResponseListener[Resp](
     cb: Either[Throwable, Response[Resp]] => Unit
   ) extends ClientCall.Listener[Resp] {
 
@@ -83,6 +89,43 @@ object ClientCalls {
       cb(res)
     }
 
+  }
+
+  def streamingCall[F[_]: Async, Req, Resp](
+    channel: Channel,
+    method: MethodDescriptor[Req, Resp],
+    options: CallOptions,
+    headers: Metadata,
+    requests: Stream[F, Req],
+  ): F[Response[Resp]] =
+    streamingCall2(channel, method, options, headers, requests)._2
+
+  def streamingCall2[F[_]: Async, Req, Resp](
+    channel: Channel,
+    method: MethodDescriptor[Req, Resp],
+    options: CallOptions,
+    headers: Metadata,
+    requests: Stream[F, Req],
+  ): (ClientCall[Req, Resp], F[Response[Resp]]) = {
+    val call = channel.newCall(method, options)
+
+    val response: F[Response[Resp]] = Async[F].async[Response[Resp]] { cb =>
+      for {
+        _ <- Async[F].delay(call.start(UnaryResponseListener[Resp](cb), headers))
+        _ <- requests
+          .evalMap(req => Async[F].delay(call.sendMessage(req)))
+          .compile.drain
+        cancel <- Async[F].delay {
+          call.halfClose()
+          // request 2 messages to catch a case when a server sends more than one message
+          call.request(2)
+
+          Some(Async[F].delay(call.cancel("Cancelled", null)))
+        }
+      } yield cancel
+    }
+
+    (call, response)
   }
 
 }

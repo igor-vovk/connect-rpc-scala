@@ -13,4 +13,6 @@ class MessageCodecRegistry[F[_]] private (codecs: Map[MediaType, MessageCodec[F]
 
   def byMediaType(mediaType: MediaType): Option[MessageCodec[F]] = codecs.get(mediaType)
 
+  def allSupported: Seq[MediaType] = codecs.keys.toSeq
+
 }

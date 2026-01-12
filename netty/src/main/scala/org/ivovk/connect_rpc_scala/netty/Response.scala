@@ -2,6 +2,7 @@ package org.ivovk.connect_rpc_scala.netty
 
 import cats.effect.Async
 import cats.implicits.*
+import fs2.Stream
 import io.netty.buffer.Unpooled
 import io.netty.handler.codec.http.*
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
@@ -17,7 +18,7 @@ object Response {
     status: HttpResponseStatus = HttpResponseStatus.OK,
     headers: HttpHeaders = EmptyHttpHeaders.INSTANCE,
   )(using codec: MessageCodec[F], options: EncodeOptions): F[HttpResponse] = {
-    val responseEntity = codec.encode(message, options)
+    val responseEntity = codec.encode(Stream.emit(message), options)
 
     responseEntity.body.chunks.map(ByteBufConversions.chunkToByteBuf).compile.toList
       .map { byteBufs =>
@@ -29,7 +30,6 @@ object Response {
 
         response.headers().add(headers)
         responseEntity.headers.foreach((name, value) => response.headers().set(name, value))
-        responseEntity.length.foreach(response.headers().set(HttpHeaderNames.CONTENT_LENGTH, _))
 
         if (logger.isTraceEnabled) {
           logger.trace(s"<<< Headers: ${response.headers()}")

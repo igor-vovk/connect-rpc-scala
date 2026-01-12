@@ -3,6 +3,7 @@ package org.ivovk.connect_rpc_scala.http4s.connect
 import cats.MonadThrow
 import cats.data.OptionT
 import cats.implicits.*
+import fs2.Stream
 import org.http4s.Status.UnsupportedMediaType
 import org.http4s.{Headers, HttpRoutes, MediaType, Method, Response}
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
@@ -15,7 +16,7 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
   methodRegistry: MethodRegistry,
   codecRegistry: MessageCodecRegistry[F],
   headerMapping: HeadersToMetadata[Headers],
-  handler: ConnectHandler[F],
+  handler: ConnectServerHandler[F],
 ) {
   private val OptionTNone: OptionT[F, Response[F]] = OptionT.none[F, Response[F]]
 
@@ -44,7 +45,7 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
                 .flatMap(MediaTypes.parseShort(_).toOption)
             else req.contentType.map(_.mediaType)
 
-          val message: String | fs2.Stream[F, Byte] =
+          val message: String | Stream[F, Byte] =
             if aGetMethod then req.multiParams.get("message").flatMap(_.headOption).getOrElse("")
             else req.body
 
@@ -65,7 +66,7 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
       case Some(codec) => r(codec)
       case None        =>
         val message = s"Unsupported media-type ${mediaType.show}. " +
-          s"Supported media types: ${MediaTypes.allSupported.map(_.show).mkString(", ")}"
+          s"Supported media types: ${registry.allSupported.map(_.show).mkString(", ")}"
 
         Response(UnsupportedMediaType).withEntity(message).pure[F]
     }

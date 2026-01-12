@@ -120,38 +120,46 @@ The library provides two frontends:
 
 Feature comparison:
 
-|                       | __http4s frontend__                 | __Netty frontend__                  |
-|-----------------------|-------------------------------------|-------------------------------------|
-| __Status__            | production ready                    | alpha                               |
-|                       |                                     |                                     |
-| __ConnectRPC server__ | ✅                                   | ✅                                   |
-| - JSON encoding       | ✅ (fully conformant)                | ✅ (fully conformant)                |
-| - Protobuf encoding   | ⌛ partially /<br/> 13/85 tests pass | ⌛ partially /<br/> 12/85 tests pass |
-| - Unary requests      | ✅                                   | ✅                                   |
-| - Streaming requests  | planned                             | planned                             |
-| - GET-requests        | ✅                                   | ✅                                   |
-| - Compression         | identity/gzip                       | identity/gzip                       |
-|                       |                                     |                                     |
-| __ConnectRPC client__ | ✅                                   | planned                             |
-| - JSON encoding       | ✅ (fully conformant)                |                                     |
-| - Protobuf encoding   | ⌛ partially /<br/> 26/56 tests pass |                                     |
-| - Unary requests      | ✅                                   |                                     |
-| - Streaming requests  | planned                             | planned                             |
-| - Compression         | identity                            |                                     |
-|                       |                                     |                                     |
-| __gRPC Transcoding__  | ✅ (see table below)                 | planned                             |
+|                       | __http4s frontend__               | __Netty frontend__                |
+|-----------------------|-----------------------------------|-----------------------------------|
+| __Status__            | production ready                  | alpha                             |
+|                       |                                   |                                   |
+| __ConnectRPC server__ | ✅                                 | ✅                                 |
+| - JSON encoding       | ✅ (fully conformant)              | ✅ (fully conformant)              |
+| - Protobuf encoding   | ⌛ partial /<br/> 13/85 tests pass | ⌛ partial /<br/> 12/85 tests pass |
+| - Unary requests      | ✅                                 | ✅                                 |
+| - Streaming requests  | partial (see _Streaming support_) | ➖                                 |
+| - GET-requests        | ✅                                 | ✅                                 |
+| - Compression         | identity/gzip                     | identity/gzip                     |
+|                       |                                   |                                   |
+| __ConnectRPC client__ | ✅                                 | planned                           |
+| - JSON encoding       | ✅ (fully conformant)              |                                   |
+| - Protobuf encoding   | ⌛ partial /<br/> 26/56 tests pass |                                   |
+| - Unary requests      | ✅                                 |                                   |
+| - Streaming requests  | planned                           | planned                           |
+| - Compression         | identity                          |                                   |
+|                       |                                   |                                   |
+| __gRPC Transcoding__  | ✅ (see _Transcoding support_)     | planned                           |
 
-Built-in [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) support:
+Streaming support:
 
-|                                                                                 | __http4s server__ | __Netty server__ |
-|---------------------------------------------------------------------------------|-------------------|------------------|
-| __gRPC Transcoding<br/>(`google.api.http` annotations)__                        | ✅                 | planned          |
-| - GET, POST, PUT, DELETE, PATCH methods                                         | ✅                 | ➖                |
-| - Path parameters, e.g., `/v1/countries/{name}`                                 | ✅                 | ➖                |
-| - Query parameters, repeating query parameters<br/>(e.g., `?a=1&a=2`) as arrays | ✅                 | ➖                |
-| - Request body (JSON)                                                           | ✅                 | ➖                |
-| - Request body field mapping, e.g. <br/>`body: "request"`, `body: "*"`          | ✅                 | ➖                |
-| - Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets`             | ➖                 | ➖                |
+|                  | __http4s server__ | __http4s client__ |
+|------------------|-------------------|-------------------|
+| Client streaming | ✅                 | planned           |
+| Server streaming | planned           | planned           |
+| Bidi streaming   | planned           | planned           |
+
+[GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) support:
+
+|                                                                                 | __http4s server__ |
+|---------------------------------------------------------------------------------|-------------------|
+| __gRPC Transcoding<br/>(`google.api.http` annotations)__                        | ✅                 |
+| - GET, POST, PUT, DELETE, PATCH methods                                         | ✅                 |
+| - Path parameters, e.g., `/v1/countries/{name}`                                 | ✅                 |
+| - Query parameters, repeating query parameters<br/>(e.g., `?a=1&a=2`) as arrays | ✅                 |
+| - Request body (JSON)                                                           | ✅                 |
+| - Request body field mapping, e.g. <br/>`body: "request"`, `body: "*"`          | ✅                 |
+| - Path suffixes, e.g., `/v1/{name=projects/*/locations/*}/datasets`             | ➖                 |
 
 The library works with all ScalaPB code-generators:
 

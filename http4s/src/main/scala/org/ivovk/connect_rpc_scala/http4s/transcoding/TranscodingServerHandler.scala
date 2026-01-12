@@ -3,11 +3,11 @@ package org.ivovk.connect_rpc_scala.http4s.transcoding
 import cats.effect.Async
 import cats.implicits.*
 import io.grpc.*
-import org.http4s.Response
-import org.http4s.Status.Ok
+import fs2.Stream
+import org.http4s.{Response, Status}
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
-import org.ivovk.connect_rpc_scala.http4s.ResponseExtensions.*
+import org.ivovk.connect_rpc_scala.http4s.ResponseBuilder.*
 import org.ivovk.connect_rpc_scala.http4s.{ErrorHandler, Http4sHeaderMapping}
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.{Logger, LoggerFactory}
@@ -15,7 +15,7 @@ import scalapb.GeneratedMessage
 
 import scala.concurrent.duration.*
 
-class TranscodingHandler[F[_]: Async](
+class TranscodingServerHandler[F[_]: Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
   headerMapping: Http4sHeaderMapping,
@@ -23,7 +23,7 @@ class TranscodingHandler[F[_]: Async](
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  def handleUnary(
+  def handle(
     message: GeneratedMessage,
     headers: Metadata,
     method: MethodRegistry.Entry,
@@ -51,7 +51,7 @@ class TranscodingHandler[F[_]: Async](
         method.descriptor,
         callOptions,
         headers,
-        message,
+        Stream.emit[F, GeneratedMessage](message),
       )
       .map { response =>
         val headers = headerMapping.toHeaders(response.headers) ++
@@ -61,7 +61,7 @@ class TranscodingHandler[F[_]: Async](
           logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
         }
 
-        Response(Ok, headers = headers).withMessage(response.value)
+        mkUnaryResponse(Status.Ok, headers, response.value)
       }
       .handleErrorWith(errorHandler.handle)
   }

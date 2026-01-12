@@ -4,7 +4,6 @@ import connectrpc.{Error, ErrorDetailsAny}
 import org.json4s.JsonAST.{JArray, JString, JValue}
 import org.json4s.MonadicJValue.*
 import org.json4s.{JNothing, JObject}
-import scalapb.json4s.{Parser, Printer}
 
 object ConnectErrorFormat {
 
@@ -19,7 +18,7 @@ object ConnectErrorFormat {
     codes
   }
 
-  val writer: (Printer, Error) => JValue = { (printer, error) =>
+  val writer: Writer[Error] = { (printer, error) =>
     JObject(
       List.concat(
         Some("code" -> stringErrorCodes(error.code.value)),
@@ -29,7 +28,7 @@ object ConnectErrorFormat {
     )
   }
 
-  val parser: (Parser, JValue) => Error = {
+  val parser: Reader[Error] = {
     case (parser, obj @ JObject(fields)) =>
       val code = obj \ "code" match
         case JString(code) =>

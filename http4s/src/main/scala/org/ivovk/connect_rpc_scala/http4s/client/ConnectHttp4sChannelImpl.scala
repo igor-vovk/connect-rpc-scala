@@ -3,6 +3,7 @@ package org.ivovk.connect_rpc_scala.http4s.client
 import cats.effect.Sync
 import cats.effect.std.Dispatcher
 import cats.implicits.*
+import fs2.Stream
 import io.grpc.*
 import org.http4s.client.Client
 import org.http4s.{Header, Headers, HttpVersion, Method, Request, Uri}
@@ -17,7 +18,8 @@ import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage as Message
 
 import java.util.concurrent.TimeUnit
-import scala.concurrent.{Future, TimeoutException}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future, TimeoutException}
 
 class ConnectHttp4sChannelImpl[F[_]: Sync](
   httpClient: Client[F],
@@ -28,7 +30,7 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
 ) extends ConnectHttp4sChannel {
   private val logger = LoggerFactory.getLogger(getClass)
 
-  private class ClientCallImpl[Req, Resp](
+  private class UnaryClientCall[Req, Resp](
     md: MethodDescriptor[Req, Resp],
     callOptions: CallOptions,
   ) extends ClientCall[Req, Resp] {
@@ -47,8 +49,8 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
       if (logger.isTraceEnabled) {
         logger.trace("Cancelling call with message: {}, cause: {}", message, cause)
       }
-      // call closeCall only after cancelCall is completed?
-      cancelCall()
+
+      Await.result(cancelCall(), Duration.Inf)
       closeCall(Status.CANCELLED.withDescription(message).withCause(cause), new Metadata())
     }
 
@@ -63,7 +65,7 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
       }
 
     private def doSendMessage(message: Message): F[Unit] = {
-      val entity = messageCodec.encode(message, EncodeOptions.Default)
+      val entity = messageCodec.encode(Stream.emit(message), EncodeOptions.Default)
 
       val request = Request[F](
         method = Method.POST,
@@ -100,19 +102,26 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
 
             messageCodec
               .decode(EntityToDecode[F](response.body, metadata))(using responseCompanion)
-              .fold(
-                decodeFailure => closeCall(Status.UNKNOWN.withCause(decodeFailure), trailers),
-                response => respondAndCloseCall(response, trailers),
-              )
+              .compile
+              .onlyOrError
+              .attempt
+              .map {
+                case Left(decodeFailure) => closeCall(Status.UNKNOWN.withCause(decodeFailure), trailers)
+                case Right(response)     => respondAndCloseCall(response, trailers)
+              }
           } else {
             val grpcStatusByHttpStatus = StatusCodeMappings.GrpcStatusCodesByHttpStatusCode
               .get(response.status.code)
               .fold(Status.UNKNOWN)(Status.fromCode)
 
             messageCodec.decode[connectrpc.Error](EntityToDecode[F](response.body, metadata))
-              .fold(
-                decodeFailure => closeCall(grpcStatusByHttpStatus.withCause(decodeFailure), trailers),
-                error => {
+              .compile
+              .onlyOrError
+              .attempt
+              .map {
+                case Left(decodeFailure) =>
+                  closeCall(grpcStatusByHttpStatus.withCause(decodeFailure), trailers)
+                case Right(error) =>
                   if (logger.isTraceEnabled) {
                     logger.trace("<<< Received error response: {}", error)
                   }
@@ -126,8 +135,7 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
                     status.withDescription(error.getMessage),
                     trailers,
                   )
-                },
-              )
+              }
           }
         }
         .recoverWith {
@@ -154,7 +162,7 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
   override def newCall[Req, Resp](
     md: MethodDescriptor[Req, Resp],
     callOptions: CallOptions,
-  ): ClientCall[Req, Resp] = new ClientCallImpl[Req, Resp](md, callOptions)
+  ): ClientCall[Req, Resp] = new UnaryClientCall[Req, Resp](md, callOptions)
 
   override def authority(): String =
     baseUri.authority.getOrElse(Uri.Authority()).renderString

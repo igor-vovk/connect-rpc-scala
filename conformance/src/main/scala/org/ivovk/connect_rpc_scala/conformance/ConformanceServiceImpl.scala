@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.any.Any
 import connectrpc.conformance.v1.*
 import connectrpc.conformance.v1.UnaryResponseDefinition.Response
+import fs2.Stream
 import io.grpc.internal.GrpcUtil
 import io.grpc.{Metadata, Status, StatusRuntimeException}
 import org.ivovk.connect_rpc_scala.conformance.util.ConformanceHeadersConv
@@ -22,7 +23,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     request: UnaryRequest,
     ctx: Metadata,
   ): F[(UnaryResponse, Metadata)] =
-    for res <- handleUnaryRequest(
+    for res <- handleUnaryAndClientStreaming(
         request.getResponseDefinition,
         Seq(request),
         ctx,
@@ -36,7 +37,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     request: IdempotentUnaryRequest,
     ctx: Metadata,
   ): F[(IdempotentUnaryResponse, Metadata)] =
-    for res <- handleUnaryRequest(
+    for res <- handleUnaryAndClientStreaming(
         request.getResponseDefinition,
         Seq(request),
         ctx,
@@ -46,7 +47,23 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
       res.trailers,
     )
 
-  private def handleUnaryRequest(
+  override def clientStream(
+    request: Stream[F, ClientStreamRequest],
+    ctx: Metadata,
+  ): F[(ClientStreamResponse, Metadata)] =
+    for
+      requests <- request.compile.to(Seq)
+      resp     <- handleUnaryAndClientStreaming(
+        requests.flatMap(_.responseDefinition).head,
+        requests,
+        ctx,
+      )
+    yield (
+      ClientStreamResponse(resp.payload.some),
+      resp.trailers,
+    )
+
+  private def handleUnaryAndClientStreaming(
     responseDefinition: UnaryResponseDefinition,
     requests: Seq[GeneratedMessage],
     ctx: Metadata,
@@ -90,17 +107,12 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
   override def serverStream(
     request: ServerStreamRequest,
     ctx: Metadata,
-  ): fs2.Stream[F, ServerStreamResponse] = ???
-
-  override def clientStream(
-    request: fs2.Stream[F, ClientStreamRequest],
-    ctx: Metadata,
-  ): F[(ClientStreamResponse, Metadata)] = ???
+  ): Stream[F, ServerStreamResponse] = ???
 
   override def bidiStream(
-    request: fs2.Stream[F, BidiStreamRequest],
+    request: Stream[F, BidiStreamRequest],
     ctx: Metadata,
-  ): fs2.Stream[F, BidiStreamResponse] = ???
+  ): Stream[F, BidiStreamResponse] = ???
 
   // This endpoint must stay unimplemented
   override def unimplemented(

@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * ZIO-gRPC requires a `ManagedChannel` to connect to a gRPC server, but ConnectHttp4sChannel abstracts away
- * the lifecycle management to http4s client. This class provides a facade for `ManagedChannel`.
+ * the lifecycle management to http4s client. This class provides the facade for `ManagedChannel`.
  */
 class ManagedChannelFacade(channel: Channel) extends ManagedChannel {
 

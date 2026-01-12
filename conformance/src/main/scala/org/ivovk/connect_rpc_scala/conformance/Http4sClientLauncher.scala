@@ -6,6 +6,7 @@ import com.google.protobuf.any.Any
 import connectrpc.ErrorDetailsAny
 import connectrpc.conformance.v1 as conformance
 import connectrpc.conformance.v1.*
+import fs2.Stream
 import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import fs2.io.{stdin, stdout}
 import io.grpc.{CallOptions, Channel, MethodDescriptor}
@@ -62,6 +63,7 @@ object Http4sClientLauncher extends IOApp.Simple {
               _
                 .registerType[conformance.UnaryRequest]
                 .registerType[conformance.IdempotentUnaryRequest]
+                .registerType[conformance.ClientStreamRequest]
             )
             .pipeIf(spec.codec.isProto)(_.enableBinaryFormat())
             .build(baseUri)
@@ -90,26 +92,26 @@ object Http4sClientLauncher extends IOApp.Simple {
       s"Invalid service name: ${spec.service}.",
     )
 
-    def doRun[Req <: Message: Companion, Resp](
+    def runUnaryRequest[Req <: Message: Companion, Resp](
       methodDescriptor: MethodDescriptor[Req, Resp]
     )(
       extractPayloads: Resp => Seq[conformance.ConformancePayload]
     ): IO[ClientCompatResponse] = {
-      val request  = spec.requestMessages.head.unpack[Req]
+      val requests = spec.requestMessages.map(_.unpack[Req])
       val metadata = ConformanceHeadersConv.toMetadata(spec.requestHeaders)
 
-      logger.info(">>> Decoded request: {}", request)
+      logger.info(">>> Decoded request(s): {}", requests)
       logger.info(">>> Decoded metadata: {}", metadata)
 
       val callOptions = CallOptions.DEFAULT
         .pipeIfDefined(spec.timeoutMs)((co, t) => co.withDeadlineAfter(t, TimeUnit.MILLISECONDS))
 
-      val (clientCall, respF) = ClientCalls.asyncUnaryCall2[IO, Req, Resp](
+      val (clientCall, respF) = ClientCalls.streamingCall2[IO, Req, Resp](
         channel,
         methodDescriptor,
         callOptions,
         metadata,
-        request,
+        Stream.emits(requests),
       )
 
       val cancelF = if (spec.getCancel.getAfterCloseSendMs > 0) {
@@ -156,9 +158,11 @@ object Http4sClientLauncher extends IOApp.Simple {
 
     spec.method match {
       case Some("Unary") =>
-        doRun(ConformanceServiceGrpc.METHOD_UNARY)(_.payload.toSeq)
+        runUnaryRequest(ConformanceServiceGrpc.METHOD_UNARY)(_.payload.toSeq)
       case Some("Unimplemented") =>
-        doRun(ConformanceServiceGrpc.METHOD_UNIMPLEMENTED)(_ => Seq.empty)
+        runUnaryRequest(ConformanceServiceGrpc.METHOD_UNIMPLEMENTED)(_ => Seq.empty)
+      case Some("ClientStream") =>
+        runUnaryRequest(ConformanceServiceGrpc.METHOD_CLIENT_STREAM)(_.payload.toSeq)
       case Some(other) =>
         ClientCompatResponse(spec.testName)
           .withError(ClientErrorResult(s"Unsupported method: $other."))

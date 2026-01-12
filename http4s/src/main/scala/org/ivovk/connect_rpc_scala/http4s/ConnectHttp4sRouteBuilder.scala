@@ -10,10 +10,13 @@ import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.codec.*
 import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
-import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectErrorHandler, ConnectHandler, ConnectRoutesProvider}
-import org.ivovk.connect_rpc_scala.http4s.transcoding.{TranscodingHandler, TranscodingRoutesProvider}
+import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectRoutesProvider, ConnectServerHandler}
+import org.ivovk.connect_rpc_scala.http4s.transcoding.{
+  DefaultTranscodingErrorHandler,
+  TranscodingRoutesProvider,
+  TranscodingServerHandler,
+}
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
-import org.ivovk.connect_rpc_scala.util.PipeSyntax.pipe
 
 import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
@@ -39,7 +42,7 @@ object Http4sRouteBuilder {
       services = services,
       serverConfigurator = identity,
       channelConfigurator = identity,
-      customJsonSerDeser = None,
+      customJsonSerdes = None,
       incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
       outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       pathPrefix = Uri.Path.Root,
@@ -68,7 +71,7 @@ object ConnectHttp4sRouteBuilder {
       services = services,
       serverConfigurator = identity,
       channelConfigurator = identity,
-      customJsonSerDeser = None,
+      customJsonSerdes = None,
       incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
       outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       pathPrefix = Uri.Path.Root,
@@ -85,7 +88,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
   services: Seq[ServerServiceDefinition],
   serverConfigurator: Endo[ServerBuilder[_]],
   channelConfigurator: Endo[ManagedChannelBuilder[_]],
-  customJsonSerDeser: Option[JsonSerDeser[F]],
+  customJsonSerdes: Option[JsonSerdes[F]],
   incomingHeadersFilter: HeadersFilter,
   outgoingHeadersFilter: HeadersFilter,
   pathPrefix: Uri.Path,
@@ -100,7 +103,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     services: Seq[ServerServiceDefinition] = services,
     serverConfigurator: Endo[ServerBuilder[_]] = serverConfigurator,
     channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
-    customJsonSerDeser: Option[JsonSerDeser[F]] = customJsonSerDeser,
+    customJsonSerdes: Option[JsonSerdes[F]] = customJsonSerdes,
     incomingHeadersFilter: HeadersFilter = incomingHeadersFilter,
     outgoingHeadersFilter: HeadersFilter = outgoingHeadersFilter,
     pathPrefix: Uri.Path = pathPrefix,
@@ -114,7 +117,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
       services,
       serverConfigurator,
       channelConfigurator,
-      customJsonSerDeser,
+      customJsonSerdes,
       incomingHeadersFilter,
       outgoingHeadersFilter,
       pathPrefix,
@@ -131,8 +134,8 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
   def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectHttp4sRouteBuilder[F] =
     copy(channelConfigurator = method)
 
-  def withJsonCodecConfigurator(method: Endo[JsonSerDeserBuilder[F]]): ConnectHttp4sRouteBuilder[F] =
-    copy(customJsonSerDeser = Some(method(JsonSerDeserBuilder[F]()).build))
+  def withJsonCodecConfigurator(method: Endo[JsonSerdesBuilder[F]]): ConnectHttp4sRouteBuilder[F] =
+    copy(customJsonSerdes = Some(method(JsonSerdesBuilder[F]()).build))
 
   /**
    * Filter for incoming headers.
@@ -190,9 +193,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
    */
   def build: Resource[F, HttpApp[F]] =
     for routes <- buildRoutes
-    yield routes.all
-      .pipe(ar => additionalRoutes.fold(ar)(ar <+> _))
-      .orNotFound
+    yield Seq.concat(routes.all.some, additionalRoutes).reduce(_ <+> _).orNotFound
 
   /**
    * Use this method if you want to add additional routes and/or http4s middleware.
@@ -214,21 +215,17 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
         treatTrailersAsHeaders,
       )
 
-      val jsonSerDeser  = customJsonSerDeser.getOrElse(JsonSerDeserBuilder[F]().build)
+      val jsonSerDeser  = customJsonSerdes.getOrElse(JsonSerdesBuilder[F]().build)
       val codecRegistry = MessageCodecRegistry[F](
         jsonSerDeser.codec,
+        jsonSerDeser.streamingCodec,
         ProtoMessageCodec[F](),
       )
 
       val methodRegistry = MethodRegistry(services)
 
-      val connectErrorHandler = ConnectErrorHandler[F](
-        headerMapping
-      )
-
-      val connectHandler = ConnectHandler[F](
+      val connectServerHandler = ConnectServerHandler[F](
         channel,
-        connectErrorHandler,
         headerMapping,
       )
 
@@ -237,7 +234,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
         methodRegistry,
         codecRegistry,
         headerMapping,
-        connectHandler,
+        connectServerHandler,
       ).routes
 
       val transcodingUrlMatcher = TranscodingUrlMatcher[F](
@@ -245,15 +242,15 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
         http4sPathToConnectRpcPath(pathPrefix),
       )
 
-      val transcodingHandler = TranscodingHandler[F](
+      val transcodingServerHandler = TranscodingServerHandler[F](
         channel,
-        transcodingErrorHandler.getOrElse(connectErrorHandler),
+        transcodingErrorHandler.getOrElse(DefaultTranscodingErrorHandler()),
         headerMapping,
       )
 
       val transcodingRoutes = TranscodingRoutesProvider[F](
         transcodingUrlMatcher,
-        transcodingHandler,
+        transcodingServerHandler,
         headerMapping,
         jsonSerDeser,
       ).routes

@@ -21,6 +21,14 @@ test-conformance-http4s-server-nonstable: build-conformance
 						--build-arg parallel_args="--parallel 1"
 	@code=$$(cat out/exit_code | tr -d '\n'); echo "Exiting with code: $$code"; exit $$code
 
+.PHONY: test-conformance-http4s-server-streaming
+test-conformance-http4s-server-streaming: build-conformance
+	@echo "Running conformance tests for http4s server (streaming)"
+	$(DOCKER_BUILD_CMD) --build-arg launcher=Http4sServerLauncher \
+						--build-arg config=suite-http4s-streaming.yaml \
+						--build-arg parallel_args="--parallel 1"
+	@code=$$(cat out/exit_code | tr -d '\n'); echo "Exiting with code: $$code"; exit $$code
+
 .PHONY: test-conformance-http4s-client
 test-conformance-http4s-client: build-conformance
 	@echo "Running conformance tests for http4s client"

@@ -2,12 +2,13 @@ package org.ivovk.connect_rpc_scala.netty.connect
 
 import cats.effect.Async
 import cats.implicits.*
+import fs2.Stream
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.{CallOptions, Channel, Status}
 import io.netty.handler.codec.http.{HttpHeaders, HttpResponse}
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.MetadataToHeaders
-import org.ivovk.connect_rpc_scala.http.codec.{Compressor, EncodeOptions, EntityToDecode, MessageCodec}
+import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, EntityToDecode, MessageCodec}
 import org.ivovk.connect_rpc_scala.netty.{ErrorHandler, Response}
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
@@ -28,7 +29,8 @@ class ConnectHandler[F[_]: Async](
     method: MethodRegistry.Entry,
   )(using MessageCodec[F]): F[HttpResponse] = {
     given EncodeOptions = EncodeOptions(
-      encoding = req.encoding.filter(Compressor.supportedEncodings.contains)
+      charset = req.charset,
+      encoding = req.encoding,
     )
 
     val f = method.descriptor.getType match
@@ -55,6 +57,7 @@ class ConnectHandler[F[_]: Async](
     }
 
     req.as[GeneratedMessage](using method.requestMessageCompanion)
+      .compile.onlyOrError
       .flatMap { message =>
         if (logger.isTraceEnabled) {
           logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}")
@@ -70,7 +73,7 @@ class ConnectHandler[F[_]: Async](
           method.descriptor,
           callOptions,
           req.headers,
-          message,
+          Stream.emit[F, GeneratedMessage](message),
         )
       }
       .flatMap { response =>
