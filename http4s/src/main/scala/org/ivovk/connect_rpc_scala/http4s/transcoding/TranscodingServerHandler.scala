@@ -15,7 +15,7 @@ import scalapb.GeneratedMessage
 
 import scala.concurrent.duration.*
 
-class TranscodingHandler[F[_]: Async](
+class TranscodingServerHandler[F[_]: Async](
   channel: Channel,
   errorHandler: ErrorHandler[F],
   headerMapping: Http4sHeaderMapping,

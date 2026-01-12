@@ -143,11 +143,11 @@ Feature comparison:
 
 Streaming support:
 
-|                  | __http4s server__ |
-|------------------|-------------------|
-| Client streaming | ✅                 |
-| Server streaming | planned           |
-| Bidi streaming   | planned           |
+|                  | __http4s server__ | __http4s client__ |
+|------------------|-------------------|-------------------|
+| Client streaming | ✅                 | planned           |
+| Server streaming | planned           | planned           |
+| Bidi streaming   | planned           | planned           |
 
 [GRPC Transcoding](https://cloud.google.com/endpoints/docs/grpc/transcoding) support:
 

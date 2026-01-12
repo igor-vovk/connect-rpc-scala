@@ -15,7 +15,7 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
   methodRegistry: MethodRegistry,
   codecRegistry: MessageCodecRegistry[F],
   headerMapping: HeadersToMetadata[Headers],
-  handler: ConnectHandler[F],
+  handler: ConnectServerHandler[F],
 ) {
   private val OptionTNone: OptionT[F, Response[F]] = OptionT.none[F, Response[F]]
 

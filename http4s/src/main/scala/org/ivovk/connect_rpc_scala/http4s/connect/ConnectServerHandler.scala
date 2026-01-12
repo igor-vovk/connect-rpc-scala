@@ -5,6 +5,7 @@ import cats.implicits.*
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.{Status as GrpcStatus, *}
 import org.http4s.{Header, Headers, Response, Status}
+import org.ivovk.connect_rpc_scala.connect.ErrorHandling
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.HeaderMapping.cachedAsciiKey
 import org.ivovk.connect_rpc_scala.http.MetadataToHeaders
@@ -18,13 +19,10 @@ import scalapb.GeneratedMessage
 import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 
-class ConnectHandler[F[_]: Async](
+class ConnectServerHandler[F[_]: Async](
   channel: Channel,
   headerMapping: MetadataToHeaders[Headers],
 ) {
-
-  private val unaryErrorHandler     = ConnectUnaryErrorHandler[F](headerMapping)
-  private val streamingErrorHandler = ConnectStreamingErrorHandler[F](headerMapping)
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -47,15 +45,13 @@ class ConnectHandler[F[_]: Async](
 
     method.descriptor.getType match
       case MethodType.UNARY =>
-        handleUnary(req, method).handleErrorWith(unaryErrorHandler.handle)
+        handleUnary(req, method).handleErrorWith(handleUnaryError)
       case MethodType.CLIENT_STREAMING =>
-        handleClientStreaming(req, method).handleErrorWith(streamingErrorHandler.handle)
+        handleClientStreaming(req, method).handleErrorWith(handleStreamingError)
       case unsupported =>
-        Async[F]
-          .raiseError(
-            GrpcStatus.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported").asException()
-          )
-          .handleErrorWith(unaryErrorHandler.handle)
+        handleUnaryError(
+          GrpcStatus.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported").asException()
+        )
   }
 
   private def handleUnary(
@@ -91,6 +87,23 @@ class ConnectHandler[F[_]: Async](
       }
   }
 
+  private def handleUnaryError(e: Throwable)(using MessageCodec[F]): F[Response[F]] = {
+    val details = ErrorHandling.extractDetails(e)
+    val headers = headerMapping.trailersToHeaders(details.trailers)
+
+    if (logger.isTraceEnabled) {
+      logger.trace(
+        s"<<< Http Status: ${details.httpStatusCode}, Connect Error Code: ${details.error.code}"
+      )
+      logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+      logger.trace(s"<<< Error processing request", e)
+    }
+
+    val httpStatus = Status.fromInt(details.httpStatusCode).fold(throw _, identity)
+
+    mkUnaryResponse(httpStatus, headers, details.error).pure[F]
+  }
+
   private def handleClientStreaming(
     req: EntityToDecode[F],
     method: MethodRegistry.Entry,
@@ -119,32 +132,64 @@ class ConnectHandler[F[_]: Async](
           logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
         }
 
-        val responseMetadata = Seq.newBuilder[connectrpc.MetadataEntry]
-        val headersToAdd     = Seq.newBuilder[Header.Raw]
-
-        response.trailers.keys.forEach { key =>
-          if key.startsWith("trailer-") then
-            responseMetadata += connectrpc.MetadataEntry(
-              key = key.substring("trailer-".length),
-              value = response.trailers.getAll(cachedAsciiKey(key)).asScala.toSeq,
-            )
-          else
-            headersToAdd += Header.Raw(
-              CIString(key),
-              response.trailers.getAll(cachedAsciiKey(key)).asScala.mkString(","),
-            )
-        }
+        val (responseMetadata, headersToAdd) = streamingExtractMetadataAndHeaders(response.trailers)
 
         mkStreamingResponse(
-          headers ++ Headers(headersToAdd.result()),
+          headers ++ Headers(headersToAdd),
           fs2.Stream(
             response.value,
             connectrpc.EndStreamMessage(
-              metadata = responseMetadata.result()
+              metadata = responseMetadata
             ),
           ),
         )
       }
+  }
+
+  private def handleStreamingError(e: Throwable)(using MessageCodec[F]): F[Response[F]] = {
+    val details = ErrorHandling.extractDetails(e)
+    val headers = headerMapping.toHeaders(details.headers)
+
+    val (responseMetadata, headersToAdd) = streamingExtractMetadataAndHeaders(details.trailers)
+
+    if (logger.isTraceEnabled) {
+      logger.trace(
+        s"<<< Http Status: ${details.httpStatusCode}, Connect Error Code: ${details.error.code}"
+      )
+      logger.trace(s"<<< Error processing request", e)
+    }
+
+    mkStreamingResponse[F](
+      headers ++ Headers(headersToAdd),
+      fs2.Stream(
+        connectrpc.EndStreamMessage(
+          error = Some(details.error),
+          metadata = responseMetadata,
+        )
+      ),
+    ).pure[F]
+  }
+
+  private def streamingExtractMetadataAndHeaders(
+    trailers: Metadata
+  ): (Seq[connectrpc.MetadataEntry], Seq[Header.Raw]) = {
+    val responseMetadata = Seq.newBuilder[connectrpc.MetadataEntry]
+    val headersToAdd     = Seq.newBuilder[Header.Raw]
+
+    trailers.keys.forEach { key =>
+      if key.startsWith("trailer-") then
+        responseMetadata += connectrpc.MetadataEntry(
+          key = key.substring("trailer-".length),
+          value = trailers.getAll(cachedAsciiKey(key)).asScala.toSeq,
+        )
+      else
+        headersToAdd += Header.Raw(
+          CIString(key),
+          trailers.getAll(cachedAsciiKey(key)).asScala.mkString(","),
+        )
+    }
+
+    (responseMetadata.result(), headersToAdd.result())
   }
 
 }

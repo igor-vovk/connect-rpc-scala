@@ -10,8 +10,12 @@ import org.ivovk.connect_rpc_scala.grpc.*
 import org.ivovk.connect_rpc_scala.http.*
 import org.ivovk.connect_rpc_scala.http.codec.*
 import org.ivovk.connect_rpc_scala.http4s.Conversions.http4sPathToConnectRpcPath
-import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectHandler, ConnectRoutesProvider}
-import org.ivovk.connect_rpc_scala.http4s.transcoding.{DefaultTranscodingErrorHandler, TranscodingHandler, TranscodingRoutesProvider}
+import org.ivovk.connect_rpc_scala.http4s.connect.{ConnectRoutesProvider, ConnectServerHandler}
+import org.ivovk.connect_rpc_scala.http4s.transcoding.{
+  DefaultTranscodingErrorHandler,
+  TranscodingRoutesProvider,
+  TranscodingServerHandler,
+}
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher
 
 import java.util.concurrent.Executor
@@ -220,7 +224,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
 
       val methodRegistry = MethodRegistry(services)
 
-      val connectHandler = ConnectHandler[F](
+      val connectServerHandler = ConnectServerHandler[F](
         channel,
         headerMapping,
       )
@@ -230,7 +234,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
         methodRegistry,
         codecRegistry,
         headerMapping,
-        connectHandler,
+        connectServerHandler,
       ).routes
 
       val transcodingUrlMatcher = TranscodingUrlMatcher[F](
@@ -238,7 +242,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
         http4sPathToConnectRpcPath(pathPrefix),
       )
 
-      val transcodingHandler = TranscodingHandler[F](
+      val transcodingServerHandler = TranscodingServerHandler[F](
         channel,
         transcodingErrorHandler.getOrElse(DefaultTranscodingErrorHandler()),
         headerMapping,
@@ -246,7 +250,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
 
       val transcodingRoutes = TranscodingRoutesProvider[F](
         transcodingUrlMatcher,
-        transcodingHandler,
+        transcodingServerHandler,
         headerMapping,
         jsonSerDeser,
       ).routes

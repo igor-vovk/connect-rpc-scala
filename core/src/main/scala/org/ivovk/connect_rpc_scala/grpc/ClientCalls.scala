@@ -99,7 +99,7 @@ object ClientCalls {
   ): F[Response[Resp]] =
     streamingCall2(channel, method, options, headers, requests)._2
 
-  private def streamingCall2[F[_]: Async, Req, Resp](
+  def streamingCall2[F[_]: Async, Req, Resp](
     channel: Channel,
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,

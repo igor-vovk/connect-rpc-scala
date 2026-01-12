@@ -14,7 +14,7 @@ import org.ivovk.connect_rpc_scala.transcoding.MatchedRequest
 
 class TranscodingRoutesProvider[F[_]: Async](
   urlMatcher: TranscodingUrlMatcher[F],
-  handler: TranscodingHandler[F],
+  handler: TranscodingServerHandler[F],
   headerMapping: HeadersToMetadata[Headers],
   serDeser: JsonSerdes[F],
 ) {

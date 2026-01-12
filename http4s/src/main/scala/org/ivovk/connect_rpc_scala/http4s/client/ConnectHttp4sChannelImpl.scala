@@ -18,7 +18,8 @@ import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage as Message
 
 import java.util.concurrent.TimeUnit
-import scala.concurrent.{Future, TimeoutException}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future, TimeoutException}
 
 class ConnectHttp4sChannelImpl[F[_]: Sync](
   httpClient: Client[F],
@@ -29,7 +30,7 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
 ) extends ConnectHttp4sChannel {
   private val logger = LoggerFactory.getLogger(getClass)
 
-  private class ClientCallImpl[Req, Resp](
+  private class UnaryClientCall[Req, Resp](
     md: MethodDescriptor[Req, Resp],
     callOptions: CallOptions,
   ) extends ClientCall[Req, Resp] {
@@ -48,8 +49,8 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
       if (logger.isTraceEnabled) {
         logger.trace("Cancelling call with message: {}, cause: {}", message, cause)
       }
-      // call closeCall only after cancelCall is completed?
-      cancelCall()
+
+      Await.result(cancelCall(), Duration.Inf)
       closeCall(Status.CANCELLED.withDescription(message).withCause(cause), new Metadata())
     }
 
@@ -161,7 +162,7 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
   override def newCall[Req, Resp](
     md: MethodDescriptor[Req, Resp],
     callOptions: CallOptions,
-  ): ClientCall[Req, Resp] = new ClientCallImpl[Req, Resp](md, callOptions)
+  ): ClientCall[Req, Resp] = new UnaryClientCall[Req, Resp](md, callOptions)
 
   override def authority(): String =
     baseUri.authority.getOrElse(Uri.Authority()).renderString
