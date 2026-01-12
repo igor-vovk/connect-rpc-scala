@@ -3,11 +3,6 @@ package org.ivovk.connect_rpc_scala.conformance
 import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.{host, port}
 import connectrpc.conformance.v1 as conformance
-import connectrpc.conformance.v1.{
-  ConformanceServiceFs2GrpcTrailers,
-  ServerCompatRequest,
-  ServerCompatResponse,
-}
 import fs2.Stream
 import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import fs2.io.{stdin, stdout}
@@ -38,10 +33,10 @@ object Http4sServerLauncher extends IOApp.Simple {
   override def run: IO[Unit] = {
     val res = for
       req <- stdin[IO](2048)
-        .through(StreamDecoder.once(ProtoCodecs.decoderFor[ServerCompatRequest]).toPipeByte)
+        .through(StreamDecoder.once(ProtoCodecs.decoderFor[conformance.ServerCompatRequest]).toPipeByte)
         .compile.onlyOrError.toResource
 
-      service <- ConformanceServiceFs2GrpcTrailers.bindServiceResource(
+      service <- conformance.ConformanceServiceFs2GrpcTrailers.bindServiceResource(
         ConformanceServiceImpl[IO]()
       )
 
@@ -70,9 +65,8 @@ object Http4sServerLauncher extends IOApp.Simple {
         .build
 
       addr = server.address
-      resp = ServerCompatResponse(addr.getHostString, addr.getPort)
 
-      _ <- Stream.emit(resp)
+      _ <- Stream.emit(conformance.ServerCompatResponse(addr.getHostString, addr.getPort))
         .through(StreamEncoder.once(ProtoCodecs.encoder).toPipeByte[IO])
         .through(stdout)
         .compile.drain.toResource

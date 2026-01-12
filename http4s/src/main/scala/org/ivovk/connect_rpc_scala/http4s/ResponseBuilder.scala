@@ -23,7 +23,7 @@ object ResponseBuilder {
 
   def mkStreamingResponse[F[_]](
     headers: Headers,
-    messages: fs2.Stream[F, GeneratedMessage],
+    messages: Stream[F, GeneratedMessage],
   )(using codec: MessageCodec[F], options: EncodeOptions): Response[F] = {
     val responseEntity = codec.encode(messages, options)
 

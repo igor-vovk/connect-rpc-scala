@@ -3,6 +3,7 @@ package org.ivovk.connect_rpc_scala.http4s.connect
 import cats.MonadThrow
 import cats.data.OptionT
 import cats.implicits.*
+import fs2.Stream
 import org.http4s.Status.UnsupportedMediaType
 import org.http4s.{Headers, HttpRoutes, MediaType, Method, Response}
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
@@ -44,7 +45,7 @@ class ConnectRoutesProvider[F[_]: MonadThrow](
                 .flatMap(MediaTypes.parseShort(_).toOption)
             else req.contentType.map(_.mediaType)
 
-          val message: String | fs2.Stream[F, Byte] =
+          val message: String | Stream[F, Byte] =
             if aGetMethod then req.multiParams.get("message").flatMap(_.headOption).getOrElse("")
             else req.body
 

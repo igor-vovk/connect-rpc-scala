@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.any.Any
 import connectrpc.conformance.v1.*
 import connectrpc.conformance.v1.UnaryResponseDefinition.Response
+import fs2.Stream
 import io.grpc.internal.GrpcUtil
 import io.grpc.{Metadata, Status, StatusRuntimeException}
 import org.ivovk.connect_rpc_scala.conformance.util.ConformanceHeadersConv
@@ -47,7 +48,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     )
 
   override def clientStream(
-    request: fs2.Stream[F, ClientStreamRequest],
+    request: Stream[F, ClientStreamRequest],
     ctx: Metadata,
   ): F[(ClientStreamResponse, Metadata)] =
     for
@@ -106,12 +107,12 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
   override def serverStream(
     request: ServerStreamRequest,
     ctx: Metadata,
-  ): fs2.Stream[F, ServerStreamResponse] = ???
+  ): Stream[F, ServerStreamResponse] = ???
 
   override def bidiStream(
-    request: fs2.Stream[F, BidiStreamRequest],
+    request: Stream[F, BidiStreamRequest],
     ctx: Metadata,
-  ): fs2.Stream[F, BidiStreamResponse] = ???
+  ): Stream[F, BidiStreamResponse] = ???
 
   // This endpoint must stay unimplemented
   override def unimplemented(

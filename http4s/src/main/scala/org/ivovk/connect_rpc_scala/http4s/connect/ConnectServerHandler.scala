@@ -2,6 +2,7 @@ package org.ivovk.connect_rpc_scala.http4s.connect
 
 import cats.effect.Async
 import cats.implicits.*
+import fs2.Stream
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.{Status as GrpcStatus, *}
 import org.http4s.{Header, Headers, Response, Status}
@@ -136,7 +137,7 @@ class ConnectServerHandler[F[_]: Async](
 
         mkStreamingResponse(
           headers ++ Headers(headersToAdd),
-          fs2.Stream(
+          Stream(
             response.value,
             connectrpc.EndStreamMessage(
               metadata = responseMetadata
@@ -161,7 +162,7 @@ class ConnectServerHandler[F[_]: Async](
 
     mkStreamingResponse[F](
       headers ++ Headers(headersToAdd),
-      fs2.Stream(
+      Stream(
         connectrpc.EndStreamMessage(
           error = Some(details.error),
           metadata = responseMetadata,

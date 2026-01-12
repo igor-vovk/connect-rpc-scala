@@ -2,6 +2,7 @@ package org.ivovk.connect_rpc_scala.grpc
 
 import cats.effect.Async
 import cats.implicits.*
+import fs2.Stream
 import io.grpc.*
 
 object ClientCalls {
@@ -16,7 +17,7 @@ object ClientCalls {
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
     headers: Metadata,
-    request: fs2.Stream[F, Req],
+    request: Stream[F, Req],
   ): F[Response[Resp]] =
     asyncUnaryCall2(channel, method, options, headers, request)._2
 
@@ -31,7 +32,7 @@ object ClientCalls {
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
     headers: Metadata,
-    request: fs2.Stream[F, Req],
+    request: Stream[F, Req],
   ): (ClientCall[Req, Resp], F[Response[Resp]]) = {
     val call = channel.newCall(method, options)
 
@@ -95,7 +96,7 @@ object ClientCalls {
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
     headers: Metadata,
-    requests: fs2.Stream[F, Req],
+    requests: Stream[F, Req],
   ): F[Response[Resp]] =
     streamingCall2(channel, method, options, headers, requests)._2
 
@@ -104,7 +105,7 @@ object ClientCalls {
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
     headers: Metadata,
-    requests: fs2.Stream[F, Req],
+    requests: Stream[F, Req],
   ): (ClientCall[Req, Resp], F[Response[Resp]]) = {
     val call = channel.newCall(method, options)
 
