@@ -106,7 +106,7 @@ object Http4sClientLauncher extends IOApp.Simple {
       val callOptions = CallOptions.DEFAULT
         .pipeIfDefined(spec.timeoutMs)((co, t) => co.withDeadlineAfter(t, TimeUnit.MILLISECONDS))
 
-      val (clientCall, respF) = ClientCalls.streamingCall2[IO, Req, Resp](
+      val (clientCall, respF) = ClientCalls.clientStreamingCall2[IO, Req, Resp](
         channel,
         methodDescriptor,
         callOptions,
