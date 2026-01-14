@@ -107,7 +107,7 @@ object Http4sClientLauncher extends IOApp.Simple {
         .pipeIfDefined(spec.timeoutMs)((co, t) => co.withDeadlineAfter(t, TimeUnit.MILLISECONDS))
 
       ClientCalls
-        .requestStreamingCall[IO, Req, Resp](
+        .clientStreamingCall[IO, Req, Resp](
           channel,
           methodDescriptor,
           callOptions,

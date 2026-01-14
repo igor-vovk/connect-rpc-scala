@@ -46,7 +46,7 @@ class TranscodingServerHandler[F[_]: Async](
       }
 
     ClientCalls
-      .requestStreamingCall(
+      .clientStreamingCall(
         channel,
         method.descriptor,
         callOptions,

@@ -12,7 +12,7 @@ object ClientCalls {
   /**
    * Call that accepts one or more requests and after returns one response.
    */
-  def requestStreamingCall[F[_]: Async, Req, Resp](
+  def clientStreamingCall[F[_]: Async, Req, Resp](
     channel: Channel,
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
