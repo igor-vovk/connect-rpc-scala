@@ -10,49 +10,30 @@ object ClientCalls {
   case class Response[T](headers: Metadata, value: T, trailers: Metadata)
 
   /**
-   * Asynchronous unary call.
+   * Call that accepts one or more requests and after returns one response.
    */
-  def clientStreamingCall[F[_]: Async, Req, Resp](
+  def requestStreamingCall[F[_]: Async, Req, Resp](
     channel: Channel,
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
     headers: Metadata,
     request: Stream[F, Req],
-  ): F[Response[Resp]] =
-    clientStreamingCall2(channel, method, options, headers, request)._2
-
-  /**
-   * Asynchronous unary call with a return of the call itself.
-   *
-   * This method exposes the `ClientCall` object, which can be useful for advanced use cases, such as
-   * cancellation or additional control over the call.
-   */
-  def clientStreamingCall2[F[_]: Async, Req, Resp](
-    channel: Channel,
-    method: MethodDescriptor[Req, Resp],
-    options: CallOptions,
-    headers: Metadata,
-    request: Stream[F, Req],
-  ): (ClientCall[Req, Resp], F[Response[Resp]]) = {
+  ): F[Response[Resp]] = Async[F].async { cb =>
     val call = channel.newCall(method, options)
 
-    val response = Async[F].async[Response[Resp]] { cb =>
-      for {
-        _ <- Async[F].delay(call.start(UnaryResponseListener[Resp](cb), headers))
-        _ <- request
-          .evalMap(req => Async[F].delay(call.sendMessage(req)))
-          .compile.drain
-        resp <- Async[F].delay {
-          call.halfClose()
-          // request 2 messages to catch a case when a server sends more than one message
-          call.request(2)
+    for
+      _ <- Async[F].delay(call.start(UnaryResponseListener[Resp](cb), headers))
+      _ <- request
+        .evalMap(req => Async[F].delay(call.sendMessage(req)))
+        .compile.drain
+      resp <- Async[F].delay {
+        call.halfClose()
+        // request 2 messages to catch a case when a server sends more than one message
+        call.request(2)
 
-          Some(Async[F].delay(call.cancel("Cancelled", null)))
-        }
-      } yield resp
-    }
-
-    (call, response)
+        Some(Async[F].delay(call.cancel("Cancelled", null)))
+      }
+    yield resp
   }
 
   private class UnaryResponseListener[Resp](

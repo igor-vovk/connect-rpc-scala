@@ -69,7 +69,7 @@ class ConnectServerHandler[F[_]: Async](
       }
 
     ClientCalls
-      .clientStreamingCall(
+      .requestStreamingCall(
         channel,
         method.descriptor,
         callOptions,
@@ -119,7 +119,7 @@ class ConnectServerHandler[F[_]: Async](
       }
 
     ClientCalls
-      .clientStreamingCall(
+      .requestStreamingCall(
         channel,
         method.descriptor,
         callOptions,

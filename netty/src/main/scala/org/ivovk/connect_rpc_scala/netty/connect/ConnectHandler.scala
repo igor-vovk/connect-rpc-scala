@@ -68,7 +68,7 @@ class ConnectHandler[F[_]: Async](
             options.withDeadlineAfter(timeoutMs, MILLISECONDS)
           }
 
-        ClientCalls.clientStreamingCall(
+        ClientCalls.requestStreamingCall(
           channel,
           method.descriptor,
           callOptions,

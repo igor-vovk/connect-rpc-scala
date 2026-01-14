@@ -106,21 +106,14 @@ object Http4sClientLauncher extends IOApp.Simple {
       val callOptions = CallOptions.DEFAULT
         .pipeIfDefined(spec.timeoutMs)((co, t) => co.withDeadlineAfter(t, TimeUnit.MILLISECONDS))
 
-      val (clientCall, respF) = ClientCalls.clientStreamingCall2[IO, Req, Resp](
-        channel,
-        methodDescriptor,
-        callOptions,
-        metadata,
-        Stream.emits(requests),
-      )
-
-      val cancelF = if (spec.getCancel.getAfterCloseSendMs > 0) {
-        IO.sleep(spec.getCancel.getAfterCloseSendMs.millis) *> IO(
-          clientCall.cancel("Requested by specification", null)
+      ClientCalls
+        .requestStreamingCall[IO, Req, Resp](
+          channel,
+          methodDescriptor,
+          callOptions,
+          metadata,
+          Stream.emits(requests),
         )
-      } else IO.unit
-
-      respF
         .map { resp =>
           logger.info("<<< Conformance test completed: {}", spec.testName)
 
@@ -153,7 +146,17 @@ object Http4sClientLauncher extends IOApp.Simple {
             )
           )
         }
-        .parProductL(cancelF)
+        .start
+        .flatMap { fiber =>
+          if (spec.getCancel.getAfterCloseSendMs > 0) {
+            IO.sleep(spec.getCancel.getAfterCloseSendMs.millis) *>
+              IO(logger.info(">>> Cancelling call for test: {}", spec.testName)) *>
+              fiber.cancel.as(fiber)
+          } else {
+            fiber.pure[IO]
+          }
+        }
+        .flatMap(_.joinWith(IO.raiseError(new RuntimeException("fiber has been cancelled"))))
     }
 
     spec.method match {
