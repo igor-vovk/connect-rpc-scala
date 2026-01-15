@@ -107,7 +107,22 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
   override def serverStream(
     request: ServerStreamRequest,
     ctx: Metadata,
-  ): Stream[F, ServerStreamResponse] = ???
+  ): Stream[F, ServerStreamResponse] = {
+    val responseDefinition = request.getResponseDefinition
+
+    val requestInfo = ConformancePayload.RequestInfo(
+      requestHeaders = ConformanceHeadersConv.toHeaderSeq(ctx),
+      timeoutMs = extractTimeoutMs(ctx),
+      requests = Seq(Any.pack(request)),
+    )
+
+    Stream.emits(responseDefinition.responseData)
+      .zip(Stream.emit(Some(requestInfo)) ++ Stream.constant(None)) // Only first frame gets requestInfo
+      .evalMap { (data, requestInfo) =>
+        Async[F].sleep(responseDefinition.responseDelayMs.millis) *>
+          ServerStreamResponse(ConformancePayload(data, requestInfo).some).pure[F]
+      }
+  }
 
   override def bidiStream(
     request: Stream[F, BidiStreamRequest],

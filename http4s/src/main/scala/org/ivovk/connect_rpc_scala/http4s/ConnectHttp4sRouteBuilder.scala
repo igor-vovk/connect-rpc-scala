@@ -1,6 +1,7 @@
 package org.ivovk.connect_rpc_scala.http4s
 
 import cats.data.OptionT
+import cats.effect.std.Dispatcher
 import cats.effect.{Async, Resource}
 import cats.implicits.*
 import cats.{Endo, Monad}
@@ -201,13 +202,15 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
    * Otherwise, [[build]] method is preferred.
    */
   def buildRoutes: Resource[F, Routes[F]] =
-    for channel <- InProcessChannelBridge.create(
+    for
+      channel <- InProcessChannelBridge.create(
         services,
         serverConfigurator,
         channelConfigurator,
         executor,
         waitForShutdown,
       )
+      dispatcher <- Dispatcher.parallel[F](await = false)
     yield {
       val headerMapping = Http4sHeaderMapping(
         incomingHeadersFilter,
@@ -226,6 +229,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
 
       val connectServerHandler = ConnectServerHandler[F](
         channel,
+        dispatcher,
         headerMapping,
       )
 

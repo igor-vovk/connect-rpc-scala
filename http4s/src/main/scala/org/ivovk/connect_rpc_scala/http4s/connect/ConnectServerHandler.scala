@@ -1,8 +1,9 @@
 package org.ivovk.connect_rpc_scala.http4s.connect
 
 import cats.effect.Async
+import cats.effect.std.Dispatcher
 import cats.implicits.*
-import fs2.Stream
+import fs2.{Pull, Stream}
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.{Status as GrpcStatus, *}
 import org.http4s.{Header, Headers, Response, Status}
@@ -22,6 +23,7 @@ import scala.jdk.CollectionConverters.*
 
 class ConnectServerHandler[F[_]: Async](
   channel: Channel,
+  dispatcher: Dispatcher[F],
   headerMapping: MetadataToHeaders[Headers],
 ) {
 
@@ -49,6 +51,8 @@ class ConnectServerHandler[F[_]: Async](
         handleUnary(req, method).handleErrorWith(handleUnaryError)
       case MethodType.CLIENT_STREAMING =>
         handleClientStreaming(req, method).handleErrorWith(handleStreamingError)
+      case MethodType.SERVER_STREAMING =>
+        handleServerStreaming(req, method).handleErrorWith(handleStreamingError)
       case unsupported =>
         handleUnaryError(
           GrpcStatus.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported").asException()
@@ -169,6 +173,75 @@ class ConnectServerHandler[F[_]: Async](
         )
       ),
     ).pure[F]
+  }
+
+  def handleServerStreaming(
+    req: EntityToDecode[F],
+    method: MethodRegistry.Entry,
+  )(using MessageCodec[F], EncodeOptions): F[Response[F]] = {
+    if (logger.isTraceEnabled) {
+      logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}")
+    }
+
+    val callOptions = CallOptions.DEFAULT
+      .pipeIfDefined(Option(req.headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, timeout) =>
+        options.withDeadlineAfter(timeout, MILLISECONDS)
+      }
+
+    val responseStream = ClientCalls
+      .serverStreamingCall(
+        channel,
+        dispatcher,
+        method.descriptor,
+        callOptions,
+        req.headers,
+        req.as[GeneratedMessage](using method.requestMessageCompanion),
+      )
+
+    responseStream.pull.uncons1.flatMap {
+      case Some(first, rest) =>
+        first match {
+          case ClientCalls.StreamingResponse.Headers(metadata) =>
+            val headers = headerMapping.toHeaders(metadata)
+
+            if (logger.isTraceEnabled) {
+              logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+            }
+
+            val bodyStream = rest.flatMap {
+              case ClientCalls.StreamingResponse.Message(value) =>
+                Stream.emit(value)
+              case ClientCalls.StreamingResponse.Trailers(trailers) =>
+                val (responseMetadata, _) = streamingExtractMetadataAndHeaders(trailers)
+
+                Stream.emit(
+                  connectrpc.EndStreamMessage(
+                    metadata = responseMetadata
+                  )
+                )
+              case _ => Stream.empty
+            }
+
+            Pull.output1(mkStreamingResponse(headers, bodyStream))
+          case ClientCalls.StreamingResponse.Trailers(metadata) =>
+            val (responseMetadata, headersToAdd) = streamingExtractMetadataAndHeaders(metadata)
+
+            val headers = Headers(headersToAdd)
+
+            Pull.output1(
+              mkStreamingResponse(
+                headers,
+                Stream.emit(connectrpc.EndStreamMessage(metadata = responseMetadata)).covary[F],
+              )
+            )
+          case _ =>
+            Pull.raiseError(
+              new IllegalStateException("First message of the stream must be headers or trailers")
+            )
+        }
+      case None =>
+        Pull.raiseError(new IllegalStateException("No messages received from the server"))
+    }.stream.compile.onlyOrError
   }
 
   private def streamingExtractMetadataAndHeaders(
