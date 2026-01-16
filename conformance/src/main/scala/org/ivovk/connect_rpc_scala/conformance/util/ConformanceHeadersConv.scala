@@ -8,6 +8,11 @@ import scala.jdk.CollectionConverters.given
 
 object ConformanceHeadersConv {
 
+  extension (h: Header) {
+    def trailerize: Header =
+      h.copy(name = s"trailer-${h.name}")
+  }
+
   def toHeaderSeq(metadata: Metadata): Seq[Header] =
     metadata.keys().asScala
       .map { key =>
