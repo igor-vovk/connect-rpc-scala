@@ -114,22 +114,24 @@ class ConformanceServiceImpl[F[_]]()(using F: Async[F])
       requests = Seq(Any.pack(request)),
     )
 
-//    val headers  = toMetadata(responseDefinition.responseHeaders)
-//    val trailers = toMetadata(responseDefinition.responseTrailers.map(_.trailerize))
+    val trailers = toMetadata(
+      responseDefinition.responseHeaders ++ responseDefinition.responseTrailers.map(_.trailerize)
+    )
 
     val bodyStream =
       Stream.emits(responseDefinition.responseData)
         .zip(Stream(Some(requestInfo)) ++ Stream.constant(None)) // Only first frame gets requestInfo
-        .evalMap { (data, requestInfo) =>
-          F.sleep(responseDefinition.responseDelayMs.millis) *>
-            ServerStreamResponse(ConformancePayload(data, requestInfo).some).pure[F]
+        .flatMap { (data, requestInfo) =>
+          Stream.sleep[F](responseDefinition.responseDelayMs.millis) >>
+            Stream.emit(ServerStreamResponse(ConformancePayload(data, requestInfo).some))
         }
 
-    val error = Stream.fromOption(responseDefinition.error).flatMap { err =>
-      Stream.raiseError(statusRuntimeExceptionFromError(err).withDetails(requestInfo))
-    }
+    val maybeError = responseDefinition.error match
+      case Some(err) =>
+        Stream.raiseError(statusRuntimeExceptionFromError(err, trailers).withDetails(requestInfo))
+      case None => Stream.empty
 
-    bodyStream ++ error
+    bodyStream ++ maybeError
   }
 
   override def bidiStream(
@@ -145,7 +147,7 @@ class ConformanceServiceImpl[F[_]]()(using F: Async[F])
 
   private def statusRuntimeExceptionFromError(
     error: Error,
-    trailers: Metadata = Metadata(),
+    trailers: Metadata,
   ): StatusRuntimeException = {
     val status = Status.fromCodeValue(error.code.value)
       .withDescription(error.message.orNull)
