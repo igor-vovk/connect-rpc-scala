@@ -17,10 +17,11 @@ import scodec.bits.ByteVector
 import java.io.{ByteArrayOutputStream, InputStreamReader, OutputStreamWriter}
 import scala.io.Source
 
-class JsonStreamingMessageCodec[F[_]: Sync](
+class JsonStreamingMessageCodec[F[_]](
   parser: Parser,
   printer: Printer,
-) extends MessageCodec[F] {
+)(using F: Sync[F])
+    extends MessageCodec[F] {
   private val logger     = LoggerFactory.getLogger(getClass)
   private val compressor = Compressor[F]()
 
@@ -50,7 +51,7 @@ class JsonStreamingMessageCodec[F[_]: Sync](
       }
       .evalMap { chunk =>
         if chunk.nonEmpty then
-          Sync[F].delay {
+          F.delay {
             val bv   = chunk.toByteVector
             val json = jsonReader.readValue[JValue](InputStreamReader(bv.toInputStream, entity.charset))
 
@@ -61,7 +62,7 @@ class JsonStreamingMessageCodec[F[_]: Sync](
 
             parser.fromJson(json)
           }
-        else Sync[F].pure(cmp.defaultInstance)
+        else F.pure(cmp.defaultInstance)
       }
       .adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
@@ -69,7 +70,7 @@ class JsonStreamingMessageCodec[F[_]: Sync](
   override def encode[A <: Message](messages: Stream[F, A], options: EncodeOptions): EncodedEntity[F] = {
     val body = messages
       .evalMap { message =>
-        Sync[F].delay {
+        F.delay {
           val bytes = {
             val json   = printer.toJson(message)
             val baos   = ByteArrayOutputStream(128)
@@ -83,10 +84,15 @@ class JsonStreamingMessageCodec[F[_]: Sync](
             logger.trace(s"<<< JSON: ${Source.fromBytes(bytes, options.charset.name).mkString}")
           }
 
-          EnvelopedMessage(ByteVector.view(bytes))
-            .withEndStream(message.isInstanceOf[connectrpc.EndStreamMessage])
+          val isEndStream = message match {
+            case _: connectrpc.EndStreamMessage => true
+            case _                              => false
+          }
+
+          EnvelopedMessage(ByteVector.view(bytes), isEndStream)
         }
       }
+      .debug(m => s"<<< Enveloped Message: $m", logger.trace)
       .through(StreamEncoder.many(EnvelopedMessage.codec).toPipeByte)
 
     EncodedEntity[F](
