@@ -28,23 +28,23 @@ lazy val noPublish = List(
 )
 
 lazy val Versions = new {
-  val catsEffectTesting = "1.7.0"
-  val cedi              = "0.2.3"
-  val fs2               = "3.12.2"
-  val grpc              = "1.78.0"
-  val http4s            = "0.23.33"
-  val logback           = "1.5.24"
-  val netty             = "4.2.9.Final"
-  val scalapb           = _root_.scalapb.compiler.Version.scalapbVersion
-  val slf4j             = "2.0.17"
-  val scalatest         = "3.2.19"
+  val ceTesting = "1.7.0"
+  val cedi      = "0.2.3"
+  val fs2       = "3.12.2"
+  val grpc      = "1.78.0"
+  val http4s    = "0.23.33"
+  val logback   = "1.5.24"
+  val netty     = "4.2.9.Final"
+  val scalapb   = _root_.scalapb.compiler.Version.scalapbVersion
+  val slf4j     = "2.0.17"
+  val scalatest = "3.2.19"
 }
 
 lazy val commonDeps = Seq(
   libraryDependencies ++= Seq(
     "org.slf4j"      % "slf4j-api"                     % Versions.slf4j,
-    "org.scalatest" %% "scalatest"                     % Versions.scalatest         % Test,
-    "org.typelevel" %% "cats-effect-testing-scalatest" % Versions.catsEffectTesting % Test,
+    "org.scalatest" %% "scalatest"                     % Versions.scalatest % Test,
+    "org.typelevel" %% "cats-effect-testing-scalatest" % Versions.ceTesting % Test,
   )
 )
 
