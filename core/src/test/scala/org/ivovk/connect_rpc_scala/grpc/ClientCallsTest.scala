@@ -1,43 +1,36 @@
 package org.ivovk.connect_rpc_scala.grpc
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO}
 import cats.effect.testing.scalatest.AsyncIOSpec
 import fs2.Stream
 import io.grpc.*
 import org.scalatest.funsuite.AsyncFunSuite
 import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.duration.*
+import java.io.InputStream
 
 class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
+
+  private val dummyMarshaller = new MethodDescriptor.Marshaller[String] {
+    override def stream(value: String): InputStream = ???
+    override def parse(stream: InputStream): String = ???
+  }
 
   // Mock method descriptors for testing
   private val clientStreamingMethodDescriptor = MethodDescriptor
     .newBuilder[String, String]()
     .setType(MethodDescriptor.MethodType.CLIENT_STREAMING)
     .setFullMethodName("test.Service/ClientStreamMethod")
-    .setRequestMarshaller(new MethodDescriptor.Marshaller[String] {
-      override def stream(value: String): java.io.InputStream = ???
-      override def parse(stream: java.io.InputStream): String = ???
-    })
-    .setResponseMarshaller(new MethodDescriptor.Marshaller[String] {
-      override def stream(value: String): java.io.InputStream = ???
-      override def parse(stream: java.io.InputStream): String = ???
-    })
+    .setRequestMarshaller(dummyMarshaller)
+    .setResponseMarshaller(dummyMarshaller)
     .build()
 
   private val serverStreamingMethodDescriptor = MethodDescriptor
     .newBuilder[String, String]()
     .setType(MethodDescriptor.MethodType.SERVER_STREAMING)
     .setFullMethodName("test.Service/ServerStreamMethod")
-    .setRequestMarshaller(new MethodDescriptor.Marshaller[String] {
-      override def stream(value: String): java.io.InputStream = ???
-      override def parse(stream: java.io.InputStream): String = ???
-    })
-    .setResponseMarshaller(new MethodDescriptor.Marshaller[String] {
-      override def stream(value: String): java.io.InputStream = ???
-      override def parse(stream: java.io.InputStream): String = ???
-    })
+    .setRequestMarshaller(dummyMarshaller)
+    .setResponseMarshaller(dummyMarshaller)
     .build()
 
   // Mock channel that provides a controllable ClientCall
@@ -48,8 +41,13 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
     var cancelled: Boolean                    = false
     var sentMessages: List[String]            = List.empty
 
-    override def start(responseListener: ClientCall.Listener[String], headers: Metadata): Unit =
+    private val whenStarted_  = Deferred.unsafe[IO, Unit]
+    def whenStarted: IO[Unit] = whenStarted_.get
+
+    override def start(responseListener: ClientCall.Listener[String], headers: Metadata): Unit = {
       listener = responseListener
+      whenStarted_.complete(()).unsafeRunSync()
+    }
 
     override def request(numMessages: Int): Unit =
       requestCount = numMessages
@@ -101,8 +99,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream("msg1", "msg2", "msg3"),
       ).start
-      _ <- IO.sleep(100.millis) *> IO {
-        // Simulate server sending response
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(headers)
         testCall.simulateMessage("response")
         testCall.simulateClose(Status.OK, new Metadata())
@@ -132,7 +129,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream.empty,
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         testCall.simulateMessage("response")
         testCall.simulateClose(Status.OK, new Metadata())
@@ -159,7 +156,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream("msg1"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         testCall.simulateClose(Status.INVALID_ARGUMENT.withDescription("Bad request"), new Metadata())
       }
@@ -188,7 +185,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream("msg1"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         // Close without sending a message
         testCall.simulateClose(Status.OK, new Metadata())
@@ -214,7 +211,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream("msg1"),
       ).start
-      error <- IO.sleep(50.millis) *> IO {
+      error <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         testCall.simulateMessage("response1")
         // Try to send a second message - should throw
@@ -246,7 +243,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream("msg1"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(headers)
         testCall.simulateMessage("response")
         testCall.simulateClose(Status.OK, trailers)
@@ -279,7 +276,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         messages,
       ).start
-      _ <- IO.sleep(100.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         testCall.simulateMessage("response")
         testCall.simulateClose(Status.OK, new Metadata())
@@ -312,7 +309,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream.emit("request"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(headers)
         testCall.simulateMessage("message1")
         testCall.simulateMessage("message2")
@@ -349,7 +346,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream.emit("request"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         testCall.simulateMessage("message1")
         testCall.simulateClose(Status.INTERNAL.withDescription("Test error"), new Metadata())
@@ -377,7 +374,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream.emit("request"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         testCall.simulateClose(Status.OK, new Metadata())
       }.start
@@ -404,7 +401,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream("req1", "req2", "req3"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         testCall.simulateMessage("resp1")
         testCall.simulateMessage("resp2")
@@ -433,7 +430,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream.emit("request"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         // Simulate server sending only trailers (no headers, no messages)
         val trailers = new Metadata()
         trailers.put(Metadata.Key.of("trailer-key", Metadata.ASCII_STRING_MARSHALLER), "trailer-value")
@@ -466,7 +463,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream.emit("request"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         (1 to messageCount).foreach(i => testCall.simulateMessage(s"message$i"))
         testCall.simulateClose(Status.OK, new Metadata())
@@ -495,7 +492,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         new Metadata(),
         Stream.emit("request"),
       ).start
-      _ <- IO.sleep(50.millis) *> IO {
+      _ <- testCall.whenStarted *> IO {
         testCall.simulateHeaders(new Metadata())
         testCall.simulateMessage("message")
 
