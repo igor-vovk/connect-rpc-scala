@@ -1,11 +1,13 @@
 package org.ivovk.connect_rpc_scala.grpc
 
-import cats.effect.Async
+import cats.effect.{Async, Sync}
 import cats.effect.std.{unsafe, Queue}
 import cats.implicits.*
 import fs2.Compiler.Target.forConcurrent
 import fs2.Stream
 import io.grpc.*
+
+import java.util.concurrent.CountDownLatch
 
 object ClientCalls {
 
@@ -36,6 +38,12 @@ object ClientCalls {
     headers: Metadata,
     request: Stream[F, Req],
   )(using F: Async[F]): (ClientCall[Req, Resp], F[UnaryResponse[Resp]]) = {
+    require(
+      method.getType == MethodDescriptor.MethodType.UNARY ||
+        method.getType == MethodDescriptor.MethodType.CLIENT_STREAMING,
+      s"Method type must be UNARY or CLIENT_STREAMING, but was ${method.getType}",
+    )
+
     val call = channel.newCall(method, options)
 
     val response = F.async[UnaryResponse[Resp]] { cb =>
@@ -93,17 +101,13 @@ object ClientCalls {
 
   }
 
-  object StreamResponse {
-    case class Headers(headers: Metadata)
+  private type Trailers            = Metadata
+  private type StreamingMessage[T] = T | Trailers
 
-    case class Message[T](value: T)
-
-    case class Trailers(trailers: Metadata)
-
-    type Compound[T] = Headers | Message[T] | Trailers
-  }
-
-  type StreamResponse[T] = StreamResponse.Compound[T]
+  case class StreamingResponse[F[_], T](
+    headers: Metadata,
+    messages: Stream[F, StreamingMessage[T]],
+  )
 
   def serverStreamingCall[F[_]: Async, Req, Resp](
     channel: Channel,
@@ -111,7 +115,7 @@ object ClientCalls {
     options: CallOptions,
     headers: Metadata,
     request: Stream[F, Req],
-  ): Stream[F, StreamResponse[Resp]] =
+  ): F[StreamingResponse[F, Resp]] =
     serverStreamingCall2(channel, method, options, headers, request)._2
 
   private def serverStreamingCall2[F[_], Req, Resp](
@@ -119,41 +123,79 @@ object ClientCalls {
     method: MethodDescriptor[Req, Resp],
     options: CallOptions,
     headers: Metadata,
-    request: Stream[F, Req],
-  )(using F: Async[F]): (ClientCall[Req, Resp], Stream[F, StreamResponse[Resp]]) = {
+    messages: Stream[F, Req],
+  )(using F: Async[F]): (ClientCall[Req, Resp], F[StreamingResponse[F, Resp]]) = {
+    require(
+      method.getType == MethodDescriptor.MethodType.SERVER_STREAMING,
+      s"Method type must be SERVER_STREAMING, but was ${method.getType}",
+    )
+
     val call = channel.newCall(method, options)
 
-    val responseF = for {
-      queue <- Queue.unsafeUnbounded[F, Option[Either[Throwable, StreamResponse[Resp]]]]
-      _     <- F.delay(call.start(StreamingResponseListener(queue), headers))
-      _     <- request
-        .evalMap(req => F.delay(call.sendMessage(req)))
-        .onFinalize(F.delay(call.halfClose()))
-        .compile.drain
+    val response = F.async[StreamingResponse[F, Resp]] { cb =>
+      for {
+        listener <- StreamingResponseListener[F, Resp](cb)
+        _        <- F.delay(call.start(listener, headers))
+        _        <- messages
+          .evalMap(req => F.delay(call.sendMessage(req)))
+          .onFinalize(F.delay(call.halfClose()))
+          .compile.drain
+        _ <- F.delay(call.request(Int.MaxValue))
+      } yield Some(F.delay(call.cancel("Cancelled", null)))
+    }
 
-      _ <- F.delay(call.request(Int.MaxValue))
-    } yield Stream.fromQueueNoneTerminated(queue).evalMap(F.fromEither)
-
-    (call, Stream.force(responseF))
+    (call, response)
   }
 
-  private class StreamingResponseListener[F[_], Resp](
-    queue: unsafe.UnboundedQueue[F, Option[Either[Throwable, StreamResponse[Resp]]]]
+  private object StreamingResponseListener {
+
+    private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
+
+    def apply[F[_], Resp](
+      cb: Either[Throwable, StreamingResponse[F, Resp]] => Unit
+    )(using F: Async[F]): F[StreamingResponseListener[F, Resp]] =
+      for queue <- Queue.unsafeUnbounded[F, Option[Either[Throwable, StreamingMessage[Resp]]]]
+      yield new StreamingResponseListener[F, Resp](cb, queue, logger)
+  }
+
+  private class StreamingResponseListener[F[_], Resp] private (
+    cb: Either[Throwable, StreamingResponse[F, Resp]] => Unit,
+    queue: unsafe.UnboundedQueue[F, Option[Either[Throwable, StreamingMessage[Resp]]]],
+    logger: org.slf4j.Logger,
+  )(
+    using F: Sync[F]
   ) extends ClientCall.Listener[Resp] {
 
-    override def onHeaders(headers: Metadata): Unit =
-      queue.unsafeOffer(Some(Right(StreamResponse.Headers(headers))))
+    private val countDownLatch = new CountDownLatch(1)
 
-    override def onMessage(message: Resp): Unit =
-      queue.unsafeOffer(Some(Right(StreamResponse.Message(message))))
+    private def executeCallback(headers: Metadata): Unit = {
+      if countDownLatch.getCount > 0 then countDownLatch.countDown()
+      else return
+
+      val stream = Stream.fromQueueNoneTerminated(queue).evalMap(F.fromEither)
+
+      cb(Right(StreamingResponse(headers, stream)))
+    }
+
+    override def onHeaders(headers: Metadata): Unit = {
+      logger.trace(s"<<< onHeaders: $headers")
+
+      executeCallback(headers)
+    }
+
+    override def onMessage(message: Resp): Unit = {
+      logger.trace(s"<<< onMessage: $message")
+
+      queue.unsafeOffer(Some(Right(message)))
+    }
 
     override def onClose(status: Status, trailers: Metadata): Unit = {
-      val res: Either[Exception, StreamResponse[Resp]] =
-        if status.isOk then Right(StreamResponse.Trailers(trailers))
-        else Left(StatusException(status, trailers))
+      logger.trace(s"<<< onClose: status=$status, trailers=$trailers")
 
-      queue.unsafeOffer(Some(res))
+      queue.unsafeOffer(Some(Either.cond(status.isOk, trailers, StatusException(status, trailers))))
       queue.unsafeOffer(None)
+
+      executeCallback(new Metadata()) // in case onHeaders was not called
     }
 
   }

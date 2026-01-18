@@ -2,12 +2,11 @@ package org.ivovk.connect_rpc_scala.http4s.connect
 
 import cats.effect.Async
 import cats.implicits.*
-import fs2.{Pull, Stream}
+import fs2.Stream
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.{Status as GrpcStatus, *}
 import org.http4s.{Header, Headers, Response, Status}
 import org.ivovk.connect_rpc_scala.connect.ErrorHandling
-import org.ivovk.connect_rpc_scala.grpc.ClientCalls.StreamResponse
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.HeaderMapping.cachedAsciiKey
 import org.ivovk.connect_rpc_scala.http.MetadataToHeaders
@@ -178,16 +177,12 @@ class ConnectServerHandler[F[_]: Async](
     req: EntityToDecode[F],
     method: MethodRegistry.Entry,
   )(using MessageCodec[F], EncodeOptions): F[Response[F]] = {
-    if (logger.isTraceEnabled) {
-      logger.trace(s">>> Method: ${method.descriptor.getFullMethodName}")
-    }
-
     val callOptions = CallOptions.DEFAULT
       .pipeIfDefined(Option(req.headers.get(GrpcHeaders.ConnectTimeoutMsKey))) { (options, timeout) =>
         options.withDeadlineAfter(timeout, MILLISECONDS)
       }
 
-    val responseStream = ClientCalls
+    ClientCalls
       .serverStreamingCall(
         channel,
         method.descriptor,
@@ -195,59 +190,30 @@ class ConnectServerHandler[F[_]: Async](
         req.headers,
         req.as[GeneratedMessage](using method.requestMessageCompanion),
       )
+      .map { response =>
+        val headers = headerMapping.toHeaders(response.headers)
 
-    responseStream
-      .pipeIf(logger.isTraceEnabled) {
-        _.debug(el => s"<<< Frame: $el", logger.trace)
-      }
-      .pull.uncons1
-      .flatMap {
-        case Some(first, rest) =>
-          first match {
-            case StreamResponse.Headers(metadata) =>
-              val headers = headerMapping.toHeaders(metadata)
+        if (logger.isTraceEnabled) {
+          logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+        }
 
-              if (logger.isTraceEnabled) {
-                logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
-              }
+        val messages = response.messages
+          .map {
+            case message: GeneratedMessage =>
+              message
+            case trailers: Metadata =>
+              val (responseMetadata, _) = streamingExtractMetadataAndHeaders(trailers)
 
-              val messages = rest.flatMap {
-                case StreamResponse.Message(value) =>
-                  Stream.emit(value)
-                case StreamResponse.Trailers(trailers) =>
-                  val (responseMetadata, _) = streamingExtractMetadataAndHeaders(trailers)
-
-                  Stream.emit(
-                    connectrpc.EndStreamMessage(
-                      metadata = responseMetadata
-                    )
-                  )
-                case StreamResponse.Headers(_) =>
-                  Stream.raiseError(
-                    new IllegalStateException("Unexpected headers message in the body stream")
-                  )
-              }
-
-              Pull.output1(mkStreamingResponse(headers, messages))
-            case StreamResponse.Trailers(metadata) =>
-              val (responseMetadata, headersToAdd) = streamingExtractMetadataAndHeaders(metadata)
-
-              val headers = Headers(headersToAdd)
-
-              Pull.output1(
-                mkStreamingResponse(
-                  headers,
-                  Stream.emit(connectrpc.EndStreamMessage(metadata = responseMetadata)).covary[F],
-                )
-              )
-            case _ =>
-              Pull.raiseError(
-                new IllegalStateException("First message of the stream must be headers or trailers")
+              connectrpc.EndStreamMessage(
+                metadata = responseMetadata
               )
           }
-        case None =>
-          Pull.raiseError(new IllegalStateException("No messages received from the server"))
-      }.stream.compile.onlyOrError
+          .pipeIf(logger.isTraceEnabled) {
+            _.debug(el => s"<<< Frame: $el", logger.trace)
+          }
+
+        mkStreamingResponse(headers, messages)
+      }
   }
 
   private def streamingExtractMetadataAndHeaders(
