@@ -9,7 +9,7 @@ import connectrpc.conformance.v1.UnaryResponseDefinition.Response
 import fs2.Stream
 import io.grpc.internal.GrpcUtil
 import io.grpc.{Metadata, Status, StatusRuntimeException}
-import org.ivovk.connect_rpc_scala.conformance.util.ConformanceHeadersConv
+import org.ivovk.connect_rpc_scala.conformance.util.ConformanceHeadersConv.*
 import org.ivovk.connect_rpc_scala.syntax.all.*
 import scalapb.GeneratedMessage
 
@@ -17,7 +17,8 @@ import scala.concurrent.duration.*
 
 case class UnaryHandlerResponse(payload: ConformancePayload, trailers: Metadata)
 
-class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrailers[F, Metadata] {
+class ConformanceServiceImpl[F[_]]()(using F: Async[F])
+    extends ConformanceServiceFs2GrpcTrailers[F, Metadata] {
 
   override def unary(
     request: UnaryRequest,
@@ -69,15 +70,15 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     ctx: Metadata,
   ): F[UnaryHandlerResponse] = {
     val requestInfo = ConformancePayload.RequestInfo(
-      requestHeaders = ConformanceHeadersConv.toHeaderSeq(ctx),
+      requestHeaders = toHeaderSeq(ctx),
       timeoutMs = extractTimeoutMs(ctx),
       requests = requests.map(Any.pack),
     )
 
-    val trailers = ConformanceHeadersConv.toMetadata(
+    val trailers = toMetadata(
       Seq.concat(
         responseDefinition.responseHeaders,
-        responseDefinition.responseTrailers.map(h => h.copy(name = s"trailer-${h.name}")),
+        responseDefinition.responseTrailers.map(_.trailerize),
       )
     )
 
@@ -85,13 +86,10 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
       case Response.ResponseData(byteString) => byteString
       case Response.Empty                    => ByteString.EMPTY
       case Response.Error(error)             =>
-        val status = Status.fromCodeValue(error.code.value)
-          .withDescription(error.message.orNull)
-
-        throw new StatusRuntimeException(status, trailers).withDetails(requestInfo)
+        throw statusRuntimeExceptionFromError(error, trailers).withDetails(requestInfo)
     }
 
-    Async[F].sleep(responseDefinition.responseDelayMs.millis) *>
+    F.sleep(responseDefinition.responseDelayMs.millis) *>
       UnaryHandlerResponse(
         ConformancePayload(
           responseData,
@@ -107,7 +105,34 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
   override def serverStream(
     request: ServerStreamRequest,
     ctx: Metadata,
-  ): Stream[F, ServerStreamResponse] = ???
+  ): Stream[F, ServerStreamResponse] = {
+    val responseDefinition = request.getResponseDefinition
+
+    val requestInfo = ConformancePayload.RequestInfo(
+      requestHeaders = toHeaderSeq(ctx),
+      timeoutMs = extractTimeoutMs(ctx),
+      requests = Seq(Any.pack(request)),
+    )
+
+    val trailers = toMetadata(
+      responseDefinition.responseHeaders ++ responseDefinition.responseTrailers.map(_.trailerize)
+    )
+
+    val bodyStream =
+      Stream.emits(responseDefinition.responseData)
+        .zip(Stream(Some(requestInfo)) ++ Stream.constant(None)) // Only first frame gets requestInfo
+        .flatMap { (data, requestInfo) =>
+          Stream.sleep[F](responseDefinition.responseDelayMs.millis) >>
+            Stream.emit(ServerStreamResponse(ConformancePayload(data, requestInfo).some))
+        }
+
+    val maybeError = responseDefinition.error match
+      case Some(err) =>
+        Stream.raiseError(statusRuntimeExceptionFromError(err, trailers).withDetails(requestInfo))
+      case None => Stream.empty
+
+    bodyStream ++ maybeError
+  }
 
   override def bidiStream(
     request: Stream[F, BidiStreamRequest],
@@ -119,5 +144,15 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceFs2GrpcTrail
     request: UnimplementedRequest,
     ctx: Metadata,
   ): F[(UnimplementedResponse, Metadata)] = ???
+
+  private def statusRuntimeExceptionFromError(
+    error: Error,
+    trailers: Metadata,
+  ): StatusRuntimeException = {
+    val status = Status.fromCodeValue(error.code.value)
+      .withDescription(error.message.orNull)
+
+    StatusRuntimeException(status, trailers)
+  }
 
 }

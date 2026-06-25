@@ -22,8 +22,8 @@ case class EnvelopedMessage(
 
 object EnvelopedMessage {
 
-  def apply(data: ByteVector): EnvelopedMessage =
-    EnvelopedMessage(false, false, data)
+  def apply(data: ByteVector, endStream: Boolean = false): EnvelopedMessage =
+    EnvelopedMessage(endStream, false, data)
 
   val codec: Codec[EnvelopedMessage] =
     ("reserved" | ignore(6)) ~>
