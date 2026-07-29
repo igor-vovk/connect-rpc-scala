@@ -29,7 +29,7 @@ object ConnectErrorFormat {
   }
 
   val parser: Reader[Error] = {
-    case (parser, obj @ JObject(fields)) =>
+    case (parser, obj @ JObject(_)) =>
       val code = obj \ "code" match
         case JString(code) =>
           connectrpc.Code

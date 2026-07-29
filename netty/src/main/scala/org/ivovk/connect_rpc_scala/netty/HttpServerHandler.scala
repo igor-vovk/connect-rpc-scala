@@ -128,6 +128,8 @@ class HttpServerHandler[F[_]: Async](
                 Async[F].delay(ctx.fireChannelReadComplete())
             }
         }
+      case other =>
+        super.channelRead(ctx, other)
     }
 
   private def sendError(

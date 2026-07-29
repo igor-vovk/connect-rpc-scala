@@ -10,3 +10,15 @@ updates:
     schedule:
       interval: "weekly"
       day: "friday"
+
+  - package-ecosystem: "sbt"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+
+  - package-ecosystem: "docker"
+    directory: "/conformance-build"
+    schedule:
+      interval: "weekly"
+      day: "friday"
