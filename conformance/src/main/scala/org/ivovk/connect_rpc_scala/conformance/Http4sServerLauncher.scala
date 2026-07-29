@@ -32,7 +32,7 @@ object Http4sServerLauncher extends IOApp.Simple {
 
   override def run: IO[Unit] = {
     val res = for
-      req <- stdin[IO](2048)
+      _ <- stdin[IO](2048)
         .through(StreamDecoder.once(ProtoCodecs.decoderFor[conformance.ServerCompatRequest]).toPipeByte)
         .compile.onlyOrError.toResource
 

@@ -17,7 +17,7 @@ object EndStreamMessageFormat {
   }
 
   val parser: Reader[EndStreamMessage] = {
-    case (parser, obj @ JObject(fields)) =>
+    case (parser, obj @ JObject(_)) =>
       val error = obj \ "error" match
         case JNothing  => None
         case errorJson => Some(ConnectErrorFormat.parser(parser, errorJson))

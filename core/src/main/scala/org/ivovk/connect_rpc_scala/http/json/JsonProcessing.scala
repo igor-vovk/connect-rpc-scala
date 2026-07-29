@@ -42,8 +42,8 @@ object JsonProcessing {
       .mapValues { fields =>
         if (
           fields.forall {
-            case (list: List[String], v: JValue) => true
-            case _                               => false
+            case (_: List[String], _: JValue) => true
+            case _                            => false
           }
         ) {
           JObject(groupFields2(fields.asInstanceOf[List[(List[String], JValue)]]))

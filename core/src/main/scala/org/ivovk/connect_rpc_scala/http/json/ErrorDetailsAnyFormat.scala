@@ -22,14 +22,14 @@ object ErrorDetailsAnyFormat {
   }
 
   val parser: Reader[ErrorDetailsAny] = {
-    case (parser, obj @ JObject(fields)) =>
+    case (_, obj @ JObject(_)) =>
       (obj \ "type", obj \ "value") match {
         case (JString(t), JString(v)) =>
           ErrorDetailsAny(t, unsafeWrap(base64dec.decode(v)))
         case _ =>
           throw new JsonFormatException(s"Error parsing ErrorDetailAny: $obj")
       }
-    case (parser, other) =>
+    case (_, other) =>
       throw new JsonFormatException(s"Expected an object, got $other")
   }
 

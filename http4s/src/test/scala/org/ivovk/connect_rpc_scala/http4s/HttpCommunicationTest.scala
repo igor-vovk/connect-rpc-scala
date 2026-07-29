@@ -164,7 +164,7 @@ class HttpCommunicationTest extends AnyFunSuite, Matchers {
       }
       .use { response =>
         for {
-          body <- response.as[String]
+          _ <- response.as[String]
         } yield assert(response.status == Status.NotFound)
       }
       .unsafeRunSync()

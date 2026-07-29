@@ -1,4 +1,4 @@
-FROM eclipse-temurin:24-jre AS base
+FROM docker.io/library/eclipse-temurin:25-jre AS base
 
 FROM ghcr.io/igor-vovk/connect-conformance-dockerimage:1.0.5-1 AS conformance
 
@@ -28,4 +28,4 @@ RUN LOGS_PATH="/out" \
 
 FROM scratch AS export
 
-COPY --link --from=runner /out /
+COPY --from=runner /out /

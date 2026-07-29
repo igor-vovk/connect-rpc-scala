@@ -24,7 +24,7 @@ object InProcessChannelBridge {
   ): Resource[F, Channel] =
     for
       name    <- Resource.eval(Sync[F].delay(InProcessServerBuilder.generateName()))
-      server  <- createServer(name, services, serverConfigurator, executor, waitForShutdown)
+      _       <- createServer(name, services, serverConfigurator, executor, waitForShutdown)
       channel <- createStub(name, channelConfigurator, executor, waitForShutdown)
     yield channel
 
