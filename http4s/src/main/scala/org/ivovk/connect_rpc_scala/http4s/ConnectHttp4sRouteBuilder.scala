@@ -22,39 +22,6 @@ import java.util.concurrent.Executor
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 
-@deprecated("Use ConnectHttp4sRouteBuilder", "0.4.1")
-object Http4sRouteBuilder {
-
-  /** Please use [[ConnectHttp4sRouteBuilder.forService]] instead. */
-  def forService[F[_]: Async](service: ServerServiceDefinition): ConnectHttp4sRouteBuilder[F] =
-    forServices(Seq(service))
-
-  /** Please use [[ConnectHttp4sRouteBuilder.forServices]] instead. */
-  def forServices[F[_]: Async](
-    service: ServerServiceDefinition,
-    other: ServerServiceDefinition*
-  ): ConnectHttp4sRouteBuilder[F] =
-    forServices(service +: other)
-
-  /** Please use [[ConnectHttp4sRouteBuilder.forServices]] instead. */
-  def forServices[F[_]: Async](services: Seq[ServerServiceDefinition]): ConnectHttp4sRouteBuilder[F] =
-    new ConnectHttp4sRouteBuilder(
-      services = services,
-      serverConfigurator = identity,
-      channelConfigurator = identity,
-      customJsonSerdes = None,
-      incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
-      outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
-      pathPrefix = Uri.Path.Root,
-      executor = ExecutionContext.global,
-      waitForShutdown = 5.seconds,
-      treatTrailersAsHeaders = true,
-      transcodingErrorHandler = None,
-      additionalRoutes = None,
-    )
-
-}
-
 object ConnectHttp4sRouteBuilder {
 
   def forService[F[_]: Async](service: ServerServiceDefinition): ConnectHttp4sRouteBuilder[F] =
