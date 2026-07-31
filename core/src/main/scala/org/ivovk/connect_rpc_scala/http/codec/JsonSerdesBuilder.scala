@@ -6,7 +6,7 @@ import org.ivovk.connect_rpc_scala.http.json.{
   EndStreamMessageFormat,
   ErrorDetailsAnyFormat,
 }
-import scalapb.{GeneratedMessage => Message, GeneratedMessageCompanion => Companion}
+import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 import scalapb_circe.{FormatRegistry, JsonFormat, Parser, Printer}
 import scalapb_json.TypeRegistry
 
