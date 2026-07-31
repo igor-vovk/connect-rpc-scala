@@ -108,6 +108,14 @@ lazy val conformance = project
     ),
   )
 
+lazy val benchmarks = project
+  .dependsOn(core)
+  .enablePlugins(JmhPlugin)
+  .settings(
+    name := "connect-rpc-scala-benchmarks",
+    noPublish,
+  )
+
 lazy val examples = project.in(file("examples"))
   .aggregate(
     example_connectrpc_grpc_servers,
@@ -168,6 +176,7 @@ lazy val root = (project in file("."))
     http4s,
     netty,
     conformance,
+    benchmarks,
     examples,
   )
   .settings(
