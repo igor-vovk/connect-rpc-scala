@@ -4,18 +4,14 @@ import cats.effect.Sync
 import cats.implicits.*
 import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import fs2.{Chunk, Stream}
+import io.circe.Printer as CircePrinter
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
-import org.json4s.JValue
-import org.json4s.jackson.JsonMethods
 import org.slf4j.LoggerFactory
-import scalapb.json4s.{Parser, Printer}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
+import scalapb_circe.{Parser, Printer}
 import scodec.bits.ByteVector
-
-import java.io.{ByteArrayOutputStream, InputStreamReader, OutputStreamWriter}
-import scala.io.Source
 
 class JsonStreamingMessageCodec[F[_]: Sync](
   parser: Parser,
@@ -25,8 +21,6 @@ class JsonStreamingMessageCodec[F[_]: Sync](
   private val compressor = Compressor[F]()
 
   override val mediaType: MediaType = MediaTypes.`application/connect+json`
-
-  private val jsonReader = JsonMethods.mapper.readerFor(classOf[JValue])
 
   override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
     val stream = entity.message match {
@@ -51,14 +45,12 @@ class JsonStreamingMessageCodec[F[_]: Sync](
       .evalMap { chunk =>
         if chunk.nonEmpty then
           Sync[F].delay {
-            val bv   = chunk.toByteVector
-            val json = jsonReader.readValue[JValue](InputStreamReader(bv.toInputStream, entity.charset))
-
             if (logger.isTraceEnabled) {
-              val str = Source.fromBytes(chunk.toArray, entity.charset.name).mkString
+              val str = entity.charset.decode(chunk.toByteBuffer).toString
               logger.trace(s">>> JSON: $str")
             }
 
+            val json = CirceJsonParser.parse(chunk, entity.charset)
             parser.fromJson(json)
           }
         else Sync[F].pure(cmp.defaultInstance)
@@ -70,17 +62,10 @@ class JsonStreamingMessageCodec[F[_]: Sync](
     val body = messages
       .evalMap { message =>
         Sync[F].delay {
-          val bytes = {
-            val json   = printer.toJson(message)
-            val baos   = ByteArrayOutputStream(128)
-            val writer = OutputStreamWriter(baos, options.charset)
-            JsonMethods.mapper.writeValue(writer, json)
-
-            baos.toByteArray
-          }
+          val bytes = CircePrinter.noSpaces.printToByteBuffer(printer.toJson(message), options.charset)
 
           if (logger.isTraceEnabled) {
-            logger.trace(s"<<< JSON: ${Source.fromBytes(bytes, options.charset.name).mkString}")
+            logger.trace(s"<<< JSON: ${options.charset.decode(bytes.asReadOnlyBuffer)}")
           }
 
           EnvelopedMessage(ByteVector.view(bytes))

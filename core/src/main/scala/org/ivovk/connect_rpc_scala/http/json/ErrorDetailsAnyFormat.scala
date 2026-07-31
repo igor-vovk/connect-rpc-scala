@@ -2,9 +2,8 @@ package org.ivovk.connect_rpc_scala.http.json
 
 import com.google.protobuf.UnsafeByteOperations.unsafeWrap
 import connectrpc.ErrorDetailsAny
-import org.json4s.JsonAST.{JObject, JString}
-import org.json4s.MonadicJValue.*
-import scalapb.json4s.JsonFormatException
+import io.circe.Json
+import scalapb_json.JsonFormatException
 
 import java.util.Base64
 import scala.language.existentials
@@ -15,22 +14,24 @@ object ErrorDetailsAnyFormat {
   private val base64dec = Base64.getDecoder
 
   val writer: Writer[ErrorDetailsAny] = { (_, any) =>
-    JObject(
-      "type"  -> JString(any.`type`),
-      "value" -> JString(base64enc.encodeToString(any.value.toByteArray)),
+    Json.obj(
+      "type"  -> Json.fromString(any.`type`),
+      "value" -> Json.fromString(base64enc.encodeToString(any.value.toByteArray)),
     )
   }
 
-  val parser: Reader[ErrorDetailsAny] = {
-    case (_, obj @ JObject(_)) =>
-      (obj \ "type", obj \ "value") match {
-        case (JString(t), JString(v)) =>
-          ErrorDetailsAny(t, unsafeWrap(base64dec.decode(v)))
-        case _ =>
-          throw new JsonFormatException(s"Error parsing ErrorDetailAny: $obj")
-      }
-    case (_, other) =>
-      throw new JsonFormatException(s"Expected an object, got $other")
+  val parser: Reader[ErrorDetailsAny] = { (_, json) =>
+    json.asObject match {
+      case Some(obj) =>
+        (obj("type").flatMap(_.asString), obj("value").flatMap(_.asString)) match {
+          case (Some(t), Some(v)) =>
+            ErrorDetailsAny(t, unsafeWrap(base64dec.decode(v)))
+          case _ =>
+            throw new JsonFormatException(s"Error parsing ErrorDetailAny: $json")
+        }
+      case None =>
+        throw new JsonFormatException(s"Expected an object, got $json")
+    }
   }
 
 }

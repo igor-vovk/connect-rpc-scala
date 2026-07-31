@@ -297,7 +297,7 @@ requests being made to the server (private APIs are just straight GRPC communica
 Connect RPC conformance tests are run on every commit.
 The library is not a web-server or proxy, it uses `http4s` as a server implementation, and it uses official
 `GRPC-inprocess` bridge to communicate with the GRPC services.
-JSON ↔ Protobuf conversions are done using the `scalapb-json4s` library.
+JSON ↔ Protobuf conversions are done using the `scalapb-circe` library.
 
 What the library does is just puts it all together, exposing HTTP routes, where it parses JSON to case classes, resolves
 particular GRPC endpoint and calls it.

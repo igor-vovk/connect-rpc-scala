@@ -1,57 +1,60 @@
 package org.ivovk.connect_rpc_scala.http.json
 
 import connectrpc.{EndStreamMessage, MetadataEntry}
-import org.json4s.JsonAST.{JObject, JString, JValue}
-import org.json4s.MonadicJValue.*
-import org.json4s.{JArray, JNothing}
+import io.circe.{Json, JsonObject}
 
 object EndStreamMessageFormat {
 
   val writer: Writer[EndStreamMessage] = { (printer, message) =>
-    JObject(
+    Json.obj(
       List.concat(
         message.error.map(error => "error" -> ConnectErrorFormat.writer(printer, error)),
         Option(message.metadata).filterNot(_.isEmpty).map(m => "metadata" -> metadataToJson(m)),
-      )
+      )*
     )
   }
 
-  val parser: Reader[EndStreamMessage] = {
-    case (parser, obj @ JObject(_)) =>
-      val error = obj \ "error" match
-        case JNothing  => None
-        case errorJson => Some(ConnectErrorFormat.parser(parser, errorJson))
+  val parser: Reader[EndStreamMessage] = { (parser, json) =>
+    json.asObject match {
+      case Some(obj) =>
+        val error = obj("error").map(ConnectErrorFormat.parser(parser, _))
 
-      val metadata = obj \ "metadata" match
-        case JObject(fields) => jsonToMetadata(fields)
-        case JNothing        => Seq.empty
-        case _               => throw new IllegalArgumentException(s"Error parsing EndStreamMessage: $obj")
+        val metadata = obj("metadata") match
+          case Some(value) =>
+            value.asObject match
+              case Some(fields) => jsonToMetadata(fields)
+              case None => throw new IllegalArgumentException(s"Error parsing EndStreamMessage: $json")
+          case None => Seq.empty
 
-      EndStreamMessage(
-        error = error,
-        metadata = metadata,
-      )
-    case (_, other) =>
-      throw new IllegalArgumentException(s"Expected an object, got $other")
+        EndStreamMessage(
+          error = error,
+          metadata = metadata,
+        )
+      case None =>
+        throw new IllegalArgumentException(s"Expected an object, got $json")
+    }
   }
 
-  private def metadataToJson(metadata: Seq[MetadataEntry]): JValue =
-    JObject(
-      metadata.map(entry => entry.key -> JArray(entry.value.map(JString(_)).toList)).toList
+  private def metadataToJson(metadata: Seq[MetadataEntry]): Json =
+    Json.obj(
+      metadata.map(entry => entry.key -> Json.fromValues(entry.value.map(Json.fromString)))*
     )
 
-  private def jsonToMetadata(fields: List[(String, JValue)]): Seq[MetadataEntry] =
-    fields.map { case (key, value) =>
-      val values = value match
-        case JArray(arr) =>
-          arr.map {
-            case JString(s) => s
-            case v => throw new IllegalArgumentException(s"Expected string in metadata array, got $v")
+  private def jsonToMetadata(fields: JsonObject): Seq[MetadataEntry] =
+    fields.toIterable.map { case (key, value) =>
+      val values = value.asArray match
+        case Some(arr) =>
+          arr.map { json =>
+            json.asString.getOrElse(
+              throw new IllegalArgumentException(s"Expected string in metadata array, got $json")
+            )
           }
-        case JString(s) => Seq(s)
-        case _          => throw new IllegalArgumentException(s"Expected array or string for metadata value")
+        case None =>
+          value.asString match
+            case Some(s) => Seq(s)
+            case None    => throw new IllegalArgumentException("Expected array or string for metadata value")
 
       MetadataEntry(key = key, value = values)
-    }
+    }.toSeq
 
 }

@@ -2,20 +2,30 @@ package org.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
 import cats.implicits.*
-import com.fasterxml.jackson.databind.util.ByteBufferBackedInputStream
 import fs2.{Chunk, Stream}
+import io.circe.{Json, Printer as CircePrinter}
+import io.circe.jawn.JawnParser
+import io.circe.parser.parse
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
-import org.json4s.JValue
-import org.json4s.jackson.JsonMethods
 import org.slf4j.LoggerFactory
-import scalapb.json4s.{Parser, Printer}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
+import scalapb_circe.{Parser, Printer}
 
-import java.io.{ByteArrayOutputStream, InputStreamReader, OutputStreamWriter, StringReader}
 import java.net.URLDecoder
-import scala.io.Source
+import java.nio.charset.{Charset, StandardCharsets}
+private[codec] object CirceJsonParser {
+  private val parser = new JawnParser()
+
+  def parse(chunk: Chunk[Byte], charset: Charset): Json = {
+    val result =
+      if charset == StandardCharsets.UTF_8 then parser.parseByteBuffer(chunk.toByteBuffer)
+      else parser.parseCharSequence(charset.decode(chunk.toByteBuffer))
+
+    result.fold(throw _, identity)
+  }
+}
 
 class JsonMessageCodec[F[_]: Sync](
   parser: Parser,
@@ -27,8 +37,6 @@ class JsonMessageCodec[F[_]: Sync](
   private val compressor = Compressor[F]()
 
   override val mediaType: MediaType = MediaTypes.`application/json`
-
-  private val jsonReader = JsonMethods.mapper.readerFor(classOf[JValue])
 
   override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
     val stream = entity.message match {
@@ -42,7 +50,7 @@ class JsonMessageCodec[F[_]: Sync](
             logger.trace(s">>> JSON: $str")
           }
 
-          val json = jsonReader.readValue[JValue](StringReader(str))
+          val json = parse(str).fold(throw _, identity)
           parser.fromJson(decodingTransform(json))
         })
       case stream: Stream[F, Byte] =>
@@ -53,14 +61,11 @@ class JsonMessageCodec[F[_]: Sync](
             if !chunk.isEmpty then
               Sync[F].delay {
                 if (logger.isTraceEnabled) {
-                  val str = Source.fromBytes(chunk.toArray, entity.charset.name).mkString
+                  val str = entity.charset.decode(chunk.toByteBuffer).toString
                   logger.trace(s">>> JSON: $str")
                 }
 
-                val reader =
-                  InputStreamReader(ByteBufferBackedInputStream(chunk.toByteBuffer), entity.charset)
-                val json = jsonReader.readValue[JValue](reader)
-
+                val json = CirceJsonParser.parse(chunk, entity.charset)
                 parser.fromJson(decodingTransform(json))
               }
             else Sync[F].pure(cmp.defaultInstance)
@@ -74,20 +79,13 @@ class JsonMessageCodec[F[_]: Sync](
     val body = message
       .evalMap { m =>
         Sync[F].delay {
-          val bytes = {
-            val json   = printer.toJson(m)
-            val baos   = ByteArrayOutputStream(128)
-            val writer = OutputStreamWriter(baos, options.charset)
-            JsonMethods.mapper.writeValue(writer, json)
-
-            baos.toByteArray
-          }
+          val bytes = CircePrinter.noSpaces.printToByteBuffer(printer.toJson(m), options.charset)
 
           if (logger.isTraceEnabled) {
-            logger.trace(s"<<< JSON: ${Source.fromBytes(bytes, options.charset.name).mkString}")
+            logger.trace(s"<<< JSON: ${options.charset.decode(bytes.asReadOnlyBuffer)}")
           }
 
-          Chunk.array(bytes)
+          Chunk.byteBuffer(bytes)
         }
       }
       .flatMap(Stream.chunk)

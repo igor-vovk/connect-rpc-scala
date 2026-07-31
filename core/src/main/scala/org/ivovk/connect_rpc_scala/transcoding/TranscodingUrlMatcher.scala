@@ -2,6 +2,7 @@ package org.ivovk.connect_rpc_scala.transcoding
 
 import cats.implicits.*
 import com.google.api.http.{CustomHttpPattern, HttpRule}
+import io.circe.Json
 import org.http4s.{Method, Uri}
 import org.ivovk.connect_rpc_scala
 import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
@@ -9,15 +10,16 @@ import org.ivovk.connect_rpc_scala.http.Paths.{Path, Segment}
 import org.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, JsonTransform, SubKeyJsonTransform}
 import org.ivovk.connect_rpc_scala.http.json.JsonProcessing.*
 import org.ivovk.connect_rpc_scala.util.SeqOps.*
-import org.json4s.JsonAST.{JField, JObject}
-import org.json4s.{JString, JValue}
+import scalapb.descriptors.ScalaType
+import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
+import scalapb_json.{NameUtils, ScalapbJsonCommon}
 
 import scala.collection.immutable.ArraySeq
 
 case class MatchedRequest(
   method: MethodRegistry.Entry,
-  pathJson: JValue,
-  queryJson: JValue,
+  pathJson: Json,
+  queryJson: Json,
   reqBodyTransform: JsonTransform,
 )
 
@@ -79,7 +81,10 @@ object TranscodingUrlMatcher {
 
         (httpRule :: additionalBindings).map { rule =>
           val (httpMethod, pattern) = extractMethodAndPattern(rule)
-          val bodyTransform         = extractRequestBodyTransform(rule)
+          val bodyTransform         = extractRequestBodyTransform(
+            rule,
+            method.requestMessageCompanion,
+          )
 
           Entry(
             method,
@@ -126,10 +131,39 @@ object TranscodingUrlMatcher {
     else none
   }
 
-  private def extractRequestBodyTransform(rule: HttpRule): JsonTransform =
+  private def extractRequestBodyTransform(
+    rule: HttpRule,
+    requestCompanion: Companion[Message],
+  ): JsonTransform =
     rule.body match
       case "*" | ""  => AsIsJsonTransform
-      case fieldName => SubKeyJsonTransform(fieldName)
+      case fieldName => SubKeyJsonTransform(toJsonFieldPath(requestCompanion, fieldName))
+
+  private def toJsonFieldPath(
+    requestCompanion: Companion[Message],
+    fieldPath: String,
+  ): String = {
+    val initialDescriptor = Option(requestCompanion).map(_.scalaDescriptor)
+
+    fieldPath
+      .split('.')
+      .foldLeft((List.empty[String], initialDescriptor)) { case ((jsonPath, descriptor), fieldName) =>
+        val field    = descriptor.flatMap(_.fields.find(_.name == fieldName))
+        val jsonName = field
+          .map(ScalapbJsonCommon.jsonName)
+          .getOrElse(NameUtils.snakeCaseToCamelCase(fieldName))
+        val nestedDescriptor = field.flatMap {
+          _.scalaType match
+            case ScalaType.Message(descriptor) => Some(descriptor)
+            case _                             => None
+        }
+
+        (jsonName :: jsonPath, nestedDescriptor)
+      }
+      ._1
+      .reverse
+      .mkString(".")
+  }
 }
 
 class TranscodingUrlMatcher[F[_]](
@@ -146,7 +180,7 @@ class TranscodingUrlMatcher[F[_]](
     def doMatch(
       node: RouteTree,
       path: Path,
-      pathVars: List[JField],
+      pathVars: List[JsonField],
     ): Option[MatchedRequest] =
       node match {
         case Node(isVariable, patternSegment, children) if path.nonEmpty =>
@@ -154,18 +188,24 @@ class TranscodingUrlMatcher[F[_]](
           val pathTail    = path.tail
 
           if isVariable then
-            val newPatchVars = (patternSegment -> JString(pathSegment)) :: pathVars
+            val newPatchVars = (patternSegment -> Json.fromString(pathSegment)) :: pathVars
 
             children.colFirst(doMatch(_, pathTail, newPatchVars))
           else if pathSegment == patternSegment then children.colFirst(doMatch(_, pathTail, pathVars))
           else none
         case Leaf(entry) if path.isEmpty && entry.httpMethod.forall(_ == method) =>
-          val queryParams = query.map((k, v) => k -> JString(v.getOrElse(""))).toList
+          val companion  = entry.method.requestMessageCompanion
+          val pathParams = pathVars.map { (k, v) =>
+            toJsonFieldPath(companion, k) -> v
+          }
+          val queryParams = query.map { (k, v) =>
+            toJsonFieldPath(companion, k) -> Json.fromString(v.getOrElse(""))
+          }.toList
 
           MatchedRequest(
             entry.method,
-            JObject(groupFields(pathVars)),
-            JObject(groupFields(queryParams)),
+            Json.obj(groupFields(pathParams)*),
+            Json.obj(groupFields(queryParams)*),
             entry.reqBodyTransform,
           ).some
         case _ => none

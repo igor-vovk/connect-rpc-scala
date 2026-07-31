@@ -1,59 +1,65 @@
 package org.ivovk.connect_rpc_scala.http.json
 
 import connectrpc.{Error, ErrorDetailsAny}
-import org.json4s.JsonAST.{JArray, JString, JValue}
-import org.json4s.MonadicJValue.*
-import org.json4s.{JNothing, JObject}
+import io.circe.Json
 
 object ConnectErrorFormat {
 
-  private val stringErrorCodes: Array[JString] = {
+  private val stringErrorCodes: Array[Json] = {
     val maxCode = connectrpc.Code.values.map(_.value).max
-    val codes   = new Array[JString](maxCode + 1)
+    val codes   = new Array[Json](maxCode + 1)
 
     connectrpc.Code.values.foreach { code =>
-      codes(code.value) = JString(code.name.substring("CODE_".length).toLowerCase)
+      codes(code.value) = Json.fromString(code.name.substring("CODE_".length).toLowerCase)
     }
 
     codes
   }
 
   val writer: Writer[Error] = { (printer, error) =>
-    JObject(
+    Json.obj(
       List.concat(
         Some("code" -> stringErrorCodes(error.code.value)),
-        error.message.map("message" -> JString(_)),
-        Option(error.details).filterNot(_.isEmpty).map(d => "details" -> JArray(d.map(printer.toJson).toList)),
-      )
+        error.message.map("message" -> Json.fromString(_)),
+        Option(error.details).filterNot(_.isEmpty).map(d =>
+          "details" -> Json.fromValues(d.map(printer.toJson))
+        ),
+      )*
     )
   }
 
-  val parser: Reader[Error] = {
-    case (parser, obj @ JObject(_)) =>
-      val code = obj \ "code" match
-        case JString(code) =>
-          connectrpc.Code
-            .fromName(s"CODE_${code.toUpperCase}")
-            .getOrElse(throw new IllegalArgumentException(s"Unknown error code: $code"))
-        case _ => throw new IllegalArgumentException(s"Error parsing Error: $obj")
+  val parser: Reader[Error] = { (parser, json) =>
+    json.asObject match {
+      case Some(obj) =>
+        val code = obj("code").flatMap(_.asString) match
+          case Some(code) =>
+            connectrpc.Code
+              .fromName(s"CODE_${code.toUpperCase}")
+              .getOrElse(throw new IllegalArgumentException(s"Unknown error code: $code"))
+          case None => throw new IllegalArgumentException(s"Error parsing Error: $json")
 
-      val message = obj \ "message" match
-        case JString(message) => Some(message)
-        case JNothing         => None
-        case _                => throw new IllegalArgumentException(s"Error parsing Error: $obj")
+        val message = obj("message") match
+          case Some(value) =>
+            value.asString match
+              case Some(message) => Some(message)
+              case None          => throw new IllegalArgumentException(s"Error parsing Error: $json")
+          case None => None
 
-      val details = obj \ "details" match
-        case JArray(details) => details.map(parser.fromJson[ErrorDetailsAny])
-        case JNothing        => Seq.empty
-        case _               => throw new IllegalArgumentException(s"Error parsing Error: $obj")
+        val details = obj("details") match
+          case Some(value) =>
+            value.asArray match
+              case Some(details) => details.map(parser.fromJson[ErrorDetailsAny])
+              case None          => throw new IllegalArgumentException(s"Error parsing Error: $json")
+          case None => Seq.empty
 
-      Error(
-        code = code,
-        message = message,
-        details = details,
-      )
-    case (_, other) =>
-      throw new IllegalArgumentException(s"Expected an object, got $other")
+        Error(
+          code = code,
+          message = message,
+          details = details,
+        )
+      case None =>
+        throw new IllegalArgumentException(s"Expected an object, got $json")
+    }
   }
 
 }

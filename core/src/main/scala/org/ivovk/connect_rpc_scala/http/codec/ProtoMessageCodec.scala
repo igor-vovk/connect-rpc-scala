@@ -2,7 +2,6 @@ package org.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Async
 import cats.implicits.*
-import com.fasterxml.jackson.databind.util.ByteBufferBackedInputStream
 import fs2.{Chunk, Stream}
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
@@ -28,7 +27,7 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
         stream.through(compressor.decompress(entity.encoding))
           .chunkAll
           .evalMap { chunk =>
-            Async[F].delay(cmp.parseFrom(ByteBufferBackedInputStream(chunk.toByteBuffer)))
+            Async[F].delay(cmp.parseFrom(chunk.toArray))
           }
           .compile.onlyOrError
     }

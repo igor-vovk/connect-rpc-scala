@@ -2,12 +2,12 @@ package org.ivovk.connect_rpc_scala.transcoding
 
 import cats.effect.IO
 import com.google.api.http.HttpRule
+import io.circe.Json
 import org.http4s.implicits.uri
 import org.http4s.{Method, Request, Uri}
 import org.ivovk.connect_rpc_scala.grpc.{MethodName, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, SubKeyJsonTransform}
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher.extractVariable
-import org.json4s.{JArray, JObject, JString}
 import org.scalatest.funsuite.AnyFunSuiteLike
 
 class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
@@ -69,7 +69,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "UpdateCountry"))
-    assert(result.get.pathJson == JObject("country_id" -> JString("Uganda")))
+    assert(result.get.pathJson == Json.obj("countryId" -> Json.fromString("Uganda")))
     assert(result.get.reqBodyTransform == AsIsJsonTransform)
   }
 
@@ -78,7 +78,12 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
-    assert(result.get.queryJson == JObject("limit" -> JString("10"), "offset" -> JString("5")))
+    assert(
+      result.get.queryJson == Json.obj(
+        "limit"  -> Json.fromString("10"),
+        "offset" -> Json.fromString("5"),
+      )
+    )
   }
 
   test("matches request with path parameter and extracts it") {
@@ -86,7 +91,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "GetCountry"))
-    assert(result.get.pathJson == JObject("country_id" -> JString("Uganda")))
+    assert(result.get.pathJson == Json.obj("countryId" -> Json.fromString("Uganda")))
   }
 
   test("extracts repeating query parameters") {
@@ -94,7 +99,11 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
     assert(result.isDefined)
     assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
-    assert(result.get.queryJson == JObject("limit" -> JArray(JString("10") :: JString("20") :: Nil)))
+    assert(
+      result.get.queryJson == Json.obj(
+        "limit" -> Json.arr(Json.fromString("10"), Json.fromString("20"))
+      )
+    )
   }
 
   test("extract variable from path segment") {

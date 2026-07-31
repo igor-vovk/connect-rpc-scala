@@ -6,11 +6,12 @@ import org.ivovk.connect_rpc_scala.http.json.{
   EndStreamMessageFormat,
   ErrorDetailsAnyFormat,
 }
-import scalapb.json4s.{FormatRegistry, JsonFormat, TypeRegistry}
-import scalapb.{json4s, GeneratedMessage => Message, GeneratedMessageCompanion => Companion}
+import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
+import scalapb_circe.{FormatRegistry, JsonFormat, Parser, Printer}
+import scalapb_json.TypeRegistry
 
 case class JsonSerdes[F[_]](
-  parser: json4s.Parser,
+  parser: Parser,
   codec: JsonMessageCodec[F],
   streamingCodec: JsonStreamingMessageCodec[F],
 )
@@ -18,7 +19,7 @@ case class JsonSerdes[F[_]](
 object JsonSerdesBuilder {
   def apply[F[_]: Sync](): JsonSerdesBuilder[F] =
     new JsonSerdesBuilder(
-      typeRegistry = TypeRegistry.default,
+      typeRegistry = TypeRegistry.empty,
       formatRegistry = JsonFormat.DefaultRegistry,
     )
 }
@@ -48,13 +49,8 @@ case class JsonSerdesBuilder[F[_]: Sync] private (
         EndStreamMessageFormat.parser,
       )
 
-    val parser = new json4s.Parser()
-      .withTypeRegistry(typeRegistry)
-      .withFormatRegistry(formatRegistry)
-
-    val printer = new json4s.Printer()
-      .withTypeRegistry(typeRegistry)
-      .withFormatRegistry(formatRegistry)
+    val parser  = new Parser(formatRegistry = formatRegistry, typeRegistry = typeRegistry)
+    val printer = new Printer(formatRegistry = formatRegistry, typeRegistry = typeRegistry)
 
     JsonSerdes[F](
       parser = parser,
