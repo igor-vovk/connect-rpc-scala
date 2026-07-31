@@ -49,8 +49,8 @@ case class JsonSerdesBuilder[F[_]: Sync] private (
         EndStreamMessageFormat.parser,
       )
 
-    val parser  = new Parser(formatRegistry = formatRegistry, typeRegistry = typeRegistry)
-    val printer = new Printer(formatRegistry = formatRegistry, typeRegistry = typeRegistry)
+    val parser  = new Parser(false, false, formatRegistry, typeRegistry)
+    val printer = new Printer(false, false, false, false, false, formatRegistry, typeRegistry)
 
     JsonSerdes[F](
       parser = parser,

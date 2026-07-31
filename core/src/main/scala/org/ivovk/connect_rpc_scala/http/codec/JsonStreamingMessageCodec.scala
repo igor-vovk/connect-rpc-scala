@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits.*
 import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import fs2.{Chunk, Stream}
+import io.circe.Printer as CircePrinter
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
@@ -11,8 +12,6 @@ import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 import scalapb_circe.{Parser, Printer}
 import scodec.bits.ByteVector
-
-import scala.io.Source
 
 class JsonStreamingMessageCodec[F[_]: Sync](
   parser: Parser,
@@ -63,10 +62,10 @@ class JsonStreamingMessageCodec[F[_]: Sync](
     val body = messages
       .evalMap { message =>
         Sync[F].delay {
-          val bytes = printer.toJson(message).noSpaces.getBytes(options.charset)
+          val bytes = CircePrinter.noSpaces.printToByteBuffer(printer.toJson(message), options.charset)
 
           if (logger.isTraceEnabled) {
-            logger.trace(s"<<< JSON: ${Source.fromBytes(bytes, options.charset.name).mkString}")
+            logger.trace(s"<<< JSON: ${options.charset.decode(bytes.asReadOnlyBuffer)}")
           }
 
           EnvelopedMessage(ByteVector.view(bytes))

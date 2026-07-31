@@ -3,7 +3,7 @@ package org.ivovk.connect_rpc_scala.http.codec
 import cats.effect.Sync
 import cats.implicits.*
 import fs2.{Chunk, Stream}
-import io.circe.Json
+import io.circe.{Json, Printer as CircePrinter}
 import io.circe.jawn.JawnParser
 import io.circe.parser.parse
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
@@ -15,8 +15,6 @@ import scalapb_circe.{Parser, Printer}
 
 import java.net.URLDecoder
 import java.nio.charset.{Charset, StandardCharsets}
-import scala.io.Source
-
 private[codec] object CirceJsonParser {
   private val parser = new JawnParser()
 
@@ -81,13 +79,13 @@ class JsonMessageCodec[F[_]: Sync](
     val body = message
       .evalMap { m =>
         Sync[F].delay {
-          val bytes = printer.toJson(m).noSpaces.getBytes(options.charset)
+          val bytes = CircePrinter.noSpaces.printToByteBuffer(printer.toJson(m), options.charset)
 
           if (logger.isTraceEnabled) {
-            logger.trace(s"<<< JSON: ${Source.fromBytes(bytes, options.charset.name).mkString}")
+            logger.trace(s"<<< JSON: ${options.charset.decode(bytes.asReadOnlyBuffer)}")
           }
 
-          Chunk.array(bytes)
+          Chunk.byteBuffer(bytes)
         }
       }
       .flatMap(Stream.chunk)
