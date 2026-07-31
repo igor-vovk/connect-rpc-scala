@@ -2,19 +2,19 @@ package org.ivovk.connect_rpc_scala.http.json
 
 import com.google.protobuf.ByteString
 import org.scalatest.funsuite.AnyFunSuite
-import scalapb.json4s
+import scalapb_circe.{JsonFormat, Parser, Printer}
 
 class JsonSerializationTest extends AnyFunSuite {
 
   test("ErrorDetailsAny serialization") {
-    val formatRegistry = json4s.JsonFormat.DefaultRegistry
+    val formatRegistry = JsonFormat.DefaultRegistry
       .registerMessageFormatter[connectrpc.ErrorDetailsAny](
         ErrorDetailsAnyFormat.writer,
         ErrorDetailsAnyFormat.parser,
       )
 
-    val parser  = new json4s.Parser().withFormatRegistry(formatRegistry)
-    val printer = new json4s.Printer().withFormatRegistry(formatRegistry)
+    val parser  = new Parser(formatRegistry = formatRegistry)
+    val printer = new Printer(formatRegistry = formatRegistry)
 
     val any  = connectrpc.ErrorDetailsAny("type", ByteString.copyFrom(Array[Byte](1, 2, 3)))
     val json = printer.print(any)
@@ -25,14 +25,14 @@ class JsonSerializationTest extends AnyFunSuite {
   }
 
   test("Error serialization") {
-    val formatRegistry = json4s.JsonFormat.DefaultRegistry
+    val formatRegistry = JsonFormat.DefaultRegistry
       .registerMessageFormatter[connectrpc.Error](
         ConnectErrorFormat.writer,
         ConnectErrorFormat.parser,
       )
 
-    val parser  = new json4s.Parser().withFormatRegistry(formatRegistry)
-    val printer = new json4s.Printer().withFormatRegistry(formatRegistry)
+    val parser  = new Parser(formatRegistry = formatRegistry)
+    val printer = new Printer(formatRegistry = formatRegistry)
 
     val error = connectrpc.Error(connectrpc.Code.FailedPrecondition, Some("message"), Seq.empty)
     val json  = printer.print(error)
@@ -43,14 +43,14 @@ class JsonSerializationTest extends AnyFunSuite {
   }
 
   test("EndStreamMessage serialization empty") {
-    val formatRegistry = json4s.JsonFormat.DefaultRegistry
+    val formatRegistry = JsonFormat.DefaultRegistry
       .registerMessageFormatter[connectrpc.EndStreamMessage](
         EndStreamMessageFormat.writer,
         EndStreamMessageFormat.parser,
       )
 
-    val parser  = new json4s.Parser().withFormatRegistry(formatRegistry)
-    val printer = new json4s.Printer().withFormatRegistry(formatRegistry)
+    val parser  = new Parser(formatRegistry = formatRegistry)
+    val printer = new Printer(formatRegistry = formatRegistry)
 
     val message = connectrpc.EndStreamMessage(error = None, metadata = Seq.empty)
     val json    = printer.print(message)
@@ -61,7 +61,7 @@ class JsonSerializationTest extends AnyFunSuite {
   }
 
   test("EndStreamMessage serialization with error") {
-    val formatRegistry = json4s.JsonFormat.DefaultRegistry
+    val formatRegistry = JsonFormat.DefaultRegistry
       .registerMessageFormatter[connectrpc.Error](
         ConnectErrorFormat.writer,
         ConnectErrorFormat.parser,
@@ -71,8 +71,8 @@ class JsonSerializationTest extends AnyFunSuite {
         EndStreamMessageFormat.parser,
       )
 
-    val parser  = new json4s.Parser().withFormatRegistry(formatRegistry)
-    val printer = new json4s.Printer().withFormatRegistry(formatRegistry)
+    val parser  = new Parser(formatRegistry = formatRegistry)
+    val printer = new Printer(formatRegistry = formatRegistry)
 
     val message = connectrpc.EndStreamMessage(
       error = Some(connectrpc.Error(connectrpc.Code.InvalidArgument, Some("invalid input"), Seq.empty)),
@@ -86,14 +86,14 @@ class JsonSerializationTest extends AnyFunSuite {
   }
 
   test("EndStreamMessage serialization with metadata") {
-    val formatRegistry = json4s.JsonFormat.DefaultRegistry
+    val formatRegistry = JsonFormat.DefaultRegistry
       .registerMessageFormatter[connectrpc.EndStreamMessage](
         EndStreamMessageFormat.writer,
         EndStreamMessageFormat.parser,
       )
 
-    val parser  = new json4s.Parser().withFormatRegistry(formatRegistry)
-    val printer = new json4s.Printer().withFormatRegistry(formatRegistry)
+    val parser  = new Parser(formatRegistry = formatRegistry)
+    val printer = new Printer(formatRegistry = formatRegistry)
 
     val message = connectrpc.EndStreamMessage(
       error = None,

@@ -61,7 +61,7 @@ lazy val core = project
       "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0",
       "com.thesamet.scalapb" %% "scalapb-runtime"      % Versions.scalapb % "protobuf",
       "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % Versions.scalapb,
-      "com.thesamet.scalapb" %% "scalapb-json4s"       % "0.12.2",
+      "io.github.scalapb-json" %% "scalapb-circe"      % "0.16.0",
       "co.fs2"               %% "fs2-core"             % Versions.fs2,
       "co.fs2"               %% "fs2-scodec"           % Versions.fs2,
       "co.fs2"               %% "fs2-io"               % Versions.fs2,
