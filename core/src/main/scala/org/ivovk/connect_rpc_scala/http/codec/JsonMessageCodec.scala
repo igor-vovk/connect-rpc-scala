@@ -3,6 +3,8 @@ package org.ivovk.connect_rpc_scala.http.codec
 import cats.effect.Sync
 import cats.implicits.*
 import fs2.{Chunk, Stream}
+import io.circe.Json
+import io.circe.jawn.JawnParser
 import io.circe.parser.parse
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
@@ -12,7 +14,20 @@ import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Compan
 import scalapb_circe.{Parser, Printer}
 
 import java.net.URLDecoder
+import java.nio.charset.{Charset, StandardCharsets}
 import scala.io.Source
+
+private[codec] object CirceJsonParser {
+  private val parser = new JawnParser()
+
+  def parse(chunk: Chunk[Byte], charset: Charset): Json = {
+    val result =
+      if charset == StandardCharsets.UTF_8 then parser.parseByteBuffer(chunk.toByteBuffer)
+      else parser.parseCharSequence(charset.decode(chunk.toByteBuffer))
+
+    result.fold(throw _, identity)
+  }
+}
 
 class JsonMessageCodec[F[_]: Sync](
   parser: Parser,
@@ -47,13 +62,12 @@ class JsonMessageCodec[F[_]: Sync](
           .evalMap { chunk =>
             if !chunk.isEmpty then
               Sync[F].delay {
-                val str = Source.fromBytes(chunk.toArray, entity.charset.name).mkString
-
                 if (logger.isTraceEnabled) {
+                  val str = entity.charset.decode(chunk.toByteBuffer).toString
                   logger.trace(s">>> JSON: $str")
                 }
 
-                val json = parse(str).fold(throw _, identity)
+                val json = CirceJsonParser.parse(chunk, entity.charset)
                 parser.fromJson(decodingTransform(json))
               }
             else Sync[F].pure(cmp.defaultInstance)

@@ -4,7 +4,6 @@ import cats.effect.Sync
 import cats.implicits.*
 import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import fs2.{Chunk, Stream}
-import io.circe.parser.parse
 import org.http4s.{InvalidMessageBodyFailure, MediaType}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.util.PipeSyntax.*
@@ -47,13 +46,12 @@ class JsonStreamingMessageCodec[F[_]: Sync](
       .evalMap { chunk =>
         if chunk.nonEmpty then
           Sync[F].delay {
-            val str  = Source.fromBytes(chunk.toArray, entity.charset.name).mkString
-            val json = parse(str).fold(throw _, identity)
-
             if (logger.isTraceEnabled) {
+              val str = entity.charset.decode(chunk.toByteBuffer).toString
               logger.trace(s">>> JSON: $str")
             }
 
+            val json = CirceJsonParser.parse(chunk, entity.charset)
             parser.fromJson(json)
           }
         else Sync[F].pure(cmp.defaultInstance)
