@@ -165,7 +165,7 @@ lazy val example_zio_client_server = project.in(file("examples/zio_client_server
       "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
       "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
       "dev.zio"       %% "zio"                 % "2.1.26",
-      "dev.zio"       %% "zio-interop-cats"    % "23.1.0.13",
+      "dev.zio"       %% "zio-interop-cats"    % "23.1.0.14",
       "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
     ),
   )
