@@ -6,5 +6,5 @@ addSbtPlugin("org.typelevel"  % "sbt-fs2-grpc"        % "3.1.2")
 addSbtPlugin("org.scalameta"  % "sbt-scalafmt"        % "2.6.2")
 addSbtPlugin("pl.project13.scala" % "sbt-jmh"          % "0.4.8")
 
-libraryDependencies += "com.thesamet.scalapb"          %% "compilerplugin"   % "0.11.20"
+libraryDependencies += "com.thesamet.scalapb"          %% "compilerplugin"   % "0.11.21"
 libraryDependencies += "com.thesamet.scalapb.zio-grpc" %% "zio-grpc-codegen" % "0.6.3"
