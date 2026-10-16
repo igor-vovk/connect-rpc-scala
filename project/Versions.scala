@@ -1,5 +1,5 @@
 object Versions {
-  val cedi      = "0.2.3"
+  val cedi      = "0.2.4"
   val fs2       = "3.13.0"
   val grpc      = "1.83.0"
   val http4s    = "0.23.36"
