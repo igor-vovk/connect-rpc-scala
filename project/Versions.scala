@@ -6,6 +6,6 @@ object Versions {
   val logback   = "1.6.1"
   val netty     = "4.2.16.Final"
   val scalapb   = _root_.scalapb.compiler.Version.scalapbVersion
-  val slf4j     = "2.0.18"
+  val slf4j     = "2.0.20"
   val scalatest = "3.2.20"
 }
