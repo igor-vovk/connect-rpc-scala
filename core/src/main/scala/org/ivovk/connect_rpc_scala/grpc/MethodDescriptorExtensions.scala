@@ -8,21 +8,21 @@ import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Compan
 
 object MethodDescriptorExtensions {
 
-  extension (md: MethodDescriptor[_, _]) {
+  extension (md: MethodDescriptor[?, ?]) {
 
     def extractRequestMessageCompanionObj(): Companion[Message] =
       md.getRequestMarshaller match
-        case m: scalapb.grpc.Marshaller[_]               => extractCompanionObj(m)
-        case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => extractCompanionObj(tm)
+        case m: scalapb.grpc.Marshaller[?]               => extractCompanionObj(m)
+        case tm: scalapb.grpc.TypeMappedMarshaller[?, ?] => extractCompanionObj(tm)
         case unsupported => throw new RuntimeException(s"Unsupported marshaller $unsupported")
 
     def extractResponseMessageCompanionObj(): Companion[Message] =
       md.getResponseMarshaller match
-        case m: scalapb.grpc.Marshaller[_]               => extractCompanionObj(m)
-        case tm: scalapb.grpc.TypeMappedMarshaller[_, _] => extractCompanionObj(tm)
+        case m: scalapb.grpc.Marshaller[?]               => extractCompanionObj(m)
+        case tm: scalapb.grpc.TypeMappedMarshaller[?, ?] => extractCompanionObj(tm)
         case unsupported => throw new RuntimeException(s"Unsupported marshaller $unsupported")
 
-    private def extractCompanionObj(m: MethodDescriptor.Marshaller[_]): Companion[Message] = {
+    private def extractCompanionObj(m: MethodDescriptor.Marshaller[?]): Companion[Message] = {
       val companionField = m.getClass.getDeclaredField("companion")
       if (!companionField.canAccess(m)) {
         companionField.setAccessible(true)

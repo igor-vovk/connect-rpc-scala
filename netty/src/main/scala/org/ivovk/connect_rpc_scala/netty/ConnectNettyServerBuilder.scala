@@ -67,9 +67,9 @@ object ConnectNettyServerBuilder {
 
 class ConnectNettyServerBuilder[F[_]: Async: Parallel] private[netty] (
   services: Seq[ServerServiceDefinition],
-  serverConfigurator: Endo[ServerBuilder[_]],
+  serverConfigurator: Endo[ServerBuilder[?]],
   enableLogging: Boolean,
-  channelConfigurator: Endo[ManagedChannelBuilder[_]],
+  channelConfigurator: Endo[ManagedChannelBuilder[?]],
   customJsonSerdes: Option[JsonSerdes[F]],
   incomingHeadersFilter: HeadersFilter,
   outgoingHeadersFilter: HeadersFilter,
@@ -86,7 +86,7 @@ class ConnectNettyServerBuilder[F[_]: Async: Parallel] private[netty] (
   private def copy(
     services: Seq[ServerServiceDefinition] = services,
     enableLogging: Boolean = enableLogging,
-    channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
+    channelConfigurator: Endo[ManagedChannelBuilder[?]] = channelConfigurator,
     customJsonSerdes: Option[JsonSerdes[F]] = customJsonSerdes,
     incomingHeadersFilter: HeadersFilter = incomingHeadersFilter,
     outgoingHeadersFilter: HeadersFilter = outgoingHeadersFilter,
@@ -113,7 +113,7 @@ class ConnectNettyServerBuilder[F[_]: Async: Parallel] private[netty] (
       port = port,
     )
 
-  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectNettyServerBuilder[F] =
+  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[?]]): ConnectNettyServerBuilder[F] =
     copy(channelConfigurator = method)
 
   def withJsonCodecConfigurator(method: Endo[JsonSerdesBuilder[F]]): ConnectNettyServerBuilder[F] =
