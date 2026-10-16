@@ -53,8 +53,8 @@ object ConnectHttp4sRouteBuilder {
 
 final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
   services: Seq[ServerServiceDefinition],
-  serverConfigurator: Endo[ServerBuilder[_]],
-  channelConfigurator: Endo[ManagedChannelBuilder[_]],
+  serverConfigurator: Endo[ServerBuilder[?]],
+  channelConfigurator: Endo[ManagedChannelBuilder[?]],
   customJsonSerdes: Option[JsonSerdes[F]],
   incomingHeadersFilter: HeadersFilter,
   outgoingHeadersFilter: HeadersFilter,
@@ -68,8 +68,8 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
 
   private def copy(
     services: Seq[ServerServiceDefinition] = services,
-    serverConfigurator: Endo[ServerBuilder[_]] = serverConfigurator,
-    channelConfigurator: Endo[ManagedChannelBuilder[_]] = channelConfigurator,
+    serverConfigurator: Endo[ServerBuilder[?]] = serverConfigurator,
+    channelConfigurator: Endo[ManagedChannelBuilder[?]] = channelConfigurator,
     customJsonSerdes: Option[JsonSerdes[F]] = customJsonSerdes,
     incomingHeadersFilter: HeadersFilter = incomingHeadersFilter,
     outgoingHeadersFilter: HeadersFilter = outgoingHeadersFilter,
@@ -95,10 +95,10 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
       additionalRoutes,
     )
 
-  def withServerConfigurator(method: Endo[ServerBuilder[_]]): ConnectHttp4sRouteBuilder[F] =
+  def withServerConfigurator(method: Endo[ServerBuilder[?]]): ConnectHttp4sRouteBuilder[F] =
     copy(serverConfigurator = method)
 
-  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[_]]): ConnectHttp4sRouteBuilder[F] =
+  def withChannelConfigurator(method: Endo[ManagedChannelBuilder[?]]): ConnectHttp4sRouteBuilder[F] =
     copy(channelConfigurator = method)
 
   def withJsonCodecConfigurator(method: Endo[JsonSerdesBuilder[F]]): ConnectHttp4sRouteBuilder[F] =

@@ -6,7 +6,7 @@ import cats.implicits.*
 import fs2.Stream
 import io.grpc.*
 import org.http4s.client.Client
-import org.http4s.{Header, Headers, HttpVersion, Method, Request, Uri}
+import org.http4s.{Header, Method, Request, Uri}
 import org.ivovk.connect_rpc_scala.connect.StatusCodeMappings
 import org.ivovk.connect_rpc_scala.grpc.GrpcHeaders
 import org.ivovk.connect_rpc_scala.grpc.MethodDescriptorExtensions.extractResponseMessageCompanionObj
@@ -34,8 +34,8 @@ class ConnectHttp4sChannelImpl[F[_]: Sync](
     md: MethodDescriptor[Req, Resp],
     callOptions: CallOptions,
   ) extends ClientCall[Req, Resp] {
-    private var responseListener: ClientCall.Listener[Resp] = _
-    private var headers: Metadata                           = _
+    private var responseListener: ClientCall.Listener[Resp] = scala.compiletime.uninitialized
+    private var headers: Metadata                           = scala.compiletime.uninitialized
     private var cancelCall: () => Future[Unit]              = () => Future.unit
 
     override def start(responseListener: ClientCall.Listener[Resp], headers: Metadata): Unit = {
