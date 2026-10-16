@@ -57,8 +57,8 @@ lazy val core = project
     ),
     commonDeps,
     libraryDependencies ++= Seq(
-      "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0" % "protobuf",
-      "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0",
+      "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.78.0-1" % "protobuf",
+      "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.78.0-1",
       "com.thesamet.scalapb"   %% "scalapb-runtime"      % Versions.scalapb % "protobuf",
       "com.thesamet.scalapb"   %% "scalapb-runtime-grpc" % Versions.scalapb,
       "io.github.scalapb-json" %% "scalapb-circe"        % "0.16.0",
