@@ -8,6 +8,7 @@ import io.grpc.{Status as GrpcStatus, *}
 import org.http4s.{Header, Headers, Response, Status}
 import org.ivovk.connect_rpc_scala.connect.ErrorHandling
 import org.ivovk.connect_rpc_scala.grpc.{ClientCalls, GrpcHeaders, MethodRegistry}
+import org.ivovk.connect_rpc_scala.grpc.ClientCalls.StreamingResult
 import org.ivovk.connect_rpc_scala.http.HeaderMapping.cachedAsciiKey
 import org.ivovk.connect_rpc_scala.http.MetadataToHeaders
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, EntityToDecode, MessageCodec}
@@ -50,7 +51,9 @@ class ConnectServerHandler[F[_]: Async](
       case MethodType.CLIENT_STREAMING =>
         handleClientStreaming(req, method).handleErrorWith(handleStreamingError)
       case MethodType.SERVER_STREAMING =>
-        handleServerStreaming(req, method).handleErrorWith(handleStreamingError)
+        handleStreaming(req, method).handleErrorWith(handleStreamingError)
+      case MethodType.BIDI_STREAMING =>
+        handleStreaming(req, method).handleErrorWith(handleStreamingError)
       case unsupported =>
         handleUnaryError(
           GrpcStatus.UNIMPLEMENTED.withDescription(s"Unsupported method type: $unsupported").asException()
@@ -173,7 +176,7 @@ class ConnectServerHandler[F[_]: Async](
     ).pure[F]
   }
 
-  private def handleServerStreaming(
+  private def handleStreaming(
     req: EntityToDecode[F],
     method: MethodRegistry.Entry,
   )(using MessageCodec[F], EncodeOptions): F[Response[F]] = {
@@ -182,38 +185,63 @@ class ConnectServerHandler[F[_]: Async](
         options.withDeadlineAfter(timeout, MILLISECONDS)
       }
 
-    ClientCalls
-      .serverStreamingCall(
-        channel,
-        method.descriptor,
-        callOptions,
-        req.headers,
-        req.as[GeneratedMessage](using method.requestMessageCompanion),
-      )
-      .map { response =>
-        val headers = headerMapping.toHeaders(response.headers)
+    val responseF = method.descriptor.getType match
+      case MethodType.SERVER_STREAMING =>
+        ClientCalls.serverStreamingCall(
+          channel,
+          method.descriptor,
+          callOptions,
+          req.headers,
+          req.as[GeneratedMessage](using method.requestMessageCompanion),
+        )
+      case MethodType.BIDI_STREAMING =>
+        ClientCalls.bidiStreamingCall(
+          channel,
+          method.descriptor,
+          callOptions,
+          req.headers,
+          req.as[GeneratedMessage](using method.requestMessageCompanion),
+        )
+      case other =>
+        GrpcStatus.UNIMPLEMENTED
+          .withDescription(s"Unsupported method type for streaming response handler: $other")
+          .asException()
+          .raiseError[F, ClientCalls.StreamingResponse[F, GeneratedMessage]]
 
-        if (logger.isTraceEnabled) {
-          logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+    responseF.map { response =>
+      val headers = headerMapping.toHeaders(response.headers)
+
+      if (logger.isTraceEnabled) {
+        logger.trace(s"<<< Headers: ${headers.redactSensitive()}")
+      }
+
+      val messages = response.messages
+        .map {
+          case StreamingResult.Message(message: GeneratedMessage) =>
+            System.err.println(s"ConnectServerHandler.handleStreaming: forwarding message $message")
+            message
+          case StreamingResult.Complete(trailers) =>
+            System.err.println(s"ConnectServerHandler.handleStreaming: complete trailers=$trailers")
+            connectrpc.EndStreamMessage(
+              metadata = streamingTrailersToMetadata(trailers)
+            )
+          case StreamingResult.Error(error) =>
+            val details = ErrorHandling.extractDetails(error)
+            System.err.println(
+              s"ConnectServerHandler.handleStreaming: error code=${details.error.code} trailers=${details.trailers}"
+            )
+
+            connectrpc.EndStreamMessage(
+              error = Some(details.error),
+              metadata = streamingTrailersToMetadata(details.trailers),
+            )
+        }
+        .pipeIf(logger.isTraceEnabled) {
+          _.debug(el => s"<<< Frame: $el", logger.trace)
         }
 
-        val messages = response.messages
-          .map {
-            case message: GeneratedMessage =>
-              message
-            case trailers: Metadata =>
-              val (responseMetadata, _) = streamingExtractMetadataAndHeaders(trailers)
-
-              connectrpc.EndStreamMessage(
-                metadata = responseMetadata
-              )
-          }
-          .pipeIf(logger.isTraceEnabled) {
-            _.debug(el => s"<<< Frame: $el", logger.trace)
-          }
-
-        mkStreamingResponse(headers, messages)
-      }
+      mkStreamingResponse(headers, messages)
+    }
   }
 
   private def streamingExtractMetadataAndHeaders(
@@ -237,5 +265,15 @@ class ConnectServerHandler[F[_]: Async](
 
     (responseMetadata.result(), headersToAdd.result())
   }
+
+  private def streamingTrailersToMetadata(
+    trailers: Metadata
+  ): Seq[connectrpc.MetadataEntry] =
+    trailers.keys.asScala.toSeq.map { key =>
+      connectrpc.MetadataEntry(
+        key = key.stripPrefix("trailer-"),
+        value = trailers.getAll(cachedAsciiKey(key)).asScala.toSeq,
+      )
+    }
 
 }

@@ -1,9 +1,9 @@
 # https://github.com/connectrpc/conformance/blob/main/docs/configuring_and_running_tests.md#configuration-files
 features:
-  versions: [ HTTP_VERSION_1 ]
+  versions: [ HTTP_VERSION_1, HTTP_VERSION_2 ]
   protocols: [ PROTOCOL_CONNECT ]
   codecs: [ CODEC_JSON ]
-  stream_types: [ STREAM_TYPE_SERVER_STREAM ]
+  stream_types: [ STREAM_TYPE_SERVER_STREAM, STREAM_TYPE_HALF_DUPLEX_BIDI_STREAM, STREAM_TYPE_FULL_DUPLEX_BIDI_STREAM ]
   supports_tls: false
   supports_trailers: false
   supports_connect_get: true

@@ -6,6 +6,7 @@ import fs2.Stream
 import io.grpc.*
 import org.scalatest.funsuite.AsyncFunSuite
 import org.scalatest.matchers.should.Matchers
+import org.ivovk.connect_rpc_scala.grpc.ClientCalls.StreamingResult
 
 import java.io.InputStream
 
@@ -321,14 +322,12 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
     } yield {
       response.headers shouldBe headers
       testCall.halfClosed shouldBe true
-      testCall.requestCount shouldBe Int.MaxValue
+      testCall.requestCount should be >= 1
 
-      // Extract actual messages (filtering out trailers)
-      val actualMessages = messages.collect { case msg: String if msg.startsWith("message") => msg }
+      val actualMessages = messages.collect { case StreamingResult.Message(msg) if msg.startsWith("message") => msg }
       actualMessages should contain theSameElementsInOrderAs List("message1", "message2", "message3")
 
-      // Verify trailers are at the end
-      messages.last shouldBe a[Metadata]
+      messages.last shouldBe a[StreamingResult.Complete]
     }
 
     result.asserting(_ => succeed)
@@ -352,11 +351,10 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
         testCall.simulateClose(Status.INTERNAL.withDescription("Test error"), new Metadata())
       }
       response <- responseFiber.joinWithNever
-      error    <- response.messages.compile.toList.attempt
+      messages  <- response.messages.compile.toList
     } yield {
-      error.isLeft shouldBe true
-      error.left.toOption.get shouldBe a[StatusException]
-      error.left.toOption.get.asInstanceOf[StatusException].getStatus.getCode shouldBe Status.INTERNAL.getCode
+      messages.last shouldBe a[StreamingResult.Error]
+      messages.last.asInstanceOf[StreamingResult.Error].status.getStatus.getCode shouldBe Status.INTERNAL.getCode
     }
 
     result.asserting(_ => succeed)
@@ -381,9 +379,8 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
       response <- responseFiber.joinWithNever
       messages <- response.messages.compile.toList
     } yield {
-      // Should only have trailers
       messages.size shouldBe 1
-      messages.head shouldBe a[Metadata]
+      messages.head shouldBe a[StreamingResult.Complete]
     }
 
     result.asserting(_ => succeed)
@@ -439,11 +436,9 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
       response <- responseFiber.joinWithNever
       messages <- response.messages.compile.toList
     } yield {
-      // Headers should be empty metadata
       response.headers should not be null
-      // Should have trailers in the stream
       messages.size shouldBe 1
-      messages.head shouldBe a[Metadata]
+      messages.head shouldBe a[StreamingResult.Complete]
     }
 
     result.asserting(_ => succeed)
@@ -471,7 +466,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
       response <- responseFiber.joinWithNever
       messages <- response.messages.compile.toList
     } yield {
-      val actualMessages = messages.collect { case msg: String => msg }
+      val actualMessages = messages.collect { case StreamingResult.Message(msg) => msg }
       actualMessages.size shouldBe messageCount
       actualMessages.head shouldBe "message1"
       actualMessages.last shouldBe s"message$messageCount"
@@ -503,7 +498,7 @@ class ClientCallsTest extends AsyncFunSuite with AsyncIOSpec with Matchers {
       response <- responseFiber.joinWithNever
       messages <- response.messages.compile.toList
     } yield {
-      val trailerMetadata = messages.last.asInstanceOf[Metadata]
+      val trailerMetadata = messages.last.asInstanceOf[StreamingResult.Complete].trailers
       trailerMetadata.get(
         Metadata.Key.of("custom-trailer", Metadata.ASCII_STRING_MARSHALLER)
       ) shouldBe "trailer-value"

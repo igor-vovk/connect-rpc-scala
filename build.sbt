@@ -33,6 +33,7 @@ lazy val Versions = new {
   val fs2       = "3.12.2"
   val grpc      = "1.78.0"
   val http4s    = "0.23.33"
+  val http4sNetty = "0.5.25"
   val logback   = "1.5.24"
   val netty     = "4.2.9.Final"
   val scalapb   = _root_.scalapb.compiler.Version.scalapbVersion
@@ -106,6 +107,7 @@ lazy val conformance = project
     libraryDependencies ++= Seq(
       "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
       "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
+      "org.http4s"    %% "http4s-netty-server" % Versions.http4sNetty,
       "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
     ),
   )

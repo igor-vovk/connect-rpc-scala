@@ -1,12 +1,12 @@
 package org.ivovk.connect_rpc_scala.conformance
 
 import cats.effect.{IO, IOApp}
-import com.comcast.ip4s.{host, port}
 import connectrpc.conformance.v1 as conformance
 import fs2.Stream
 import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import fs2.io.{stdin, stdout}
-import org.http4s.ember.server.EmberServerBuilder
+import io.grpc.ServerInterceptors
+import org.http4s.netty.server.NettyServerBuilder
 import org.http4s.server.middleware.Logger
 import org.ivovk.connect_rpc_scala.conformance.util.ProtoCodecs
 import org.ivovk.connect_rpc_scala.http4s.ConnectHttp4sRouteBuilder
@@ -36,8 +36,13 @@ object Http4sServerLauncher extends IOApp.Simple {
         .through(StreamDecoder.once(ProtoCodecs.decoderFor[conformance.ServerCompatRequest]).toPipeByte)
         .compile.onlyOrError.toResource
 
-      service <- conformance.ConformanceServiceFs2GrpcTrailers.bindServiceResource(
+      rawService <- conformance.ConformanceServiceFs2GrpcTrailers.bindServiceResource(
         ConformanceServiceImpl[IO]()
+      )
+
+      service = ServerInterceptors.intercept(
+        rawService,
+        ConformanceStreamingMetadataInterceptor()
       )
 
       app <- ConnectHttp4sRouteBuilder.forService[IO](service)
@@ -45,9 +50,21 @@ object Http4sServerLauncher extends IOApp.Simple {
           // Registering message types in TypeRegistry is required to pass com.google.protobuf.any.Any
           // JSON-serialization conformance tests
           _
+            .registerType[conformance.Header]
+            .registerType[conformance.Error]
+            .registerType[conformance.ConformancePayload]
+            .registerType[conformance.ConformancePayload.RequestInfo]
+            .registerType[conformance.ConformancePayload.ConnectGetInfo]
             .registerType[conformance.UnaryRequest]
+            .registerType[conformance.UnaryResponse]
             .registerType[conformance.IdempotentUnaryRequest]
+            .registerType[conformance.IdempotentUnaryResponse]
             .registerType[conformance.ClientStreamRequest]
+            .registerType[conformance.ClientStreamResponse]
+            .registerType[conformance.ServerStreamRequest]
+            .registerType[conformance.ServerStreamResponse]
+            .registerType[conformance.BidiStreamRequest]
+            .registerType[conformance.BidiStreamResponse]
         }
         .build
 
@@ -57,12 +74,10 @@ object Http4sServerLauncher extends IOApp.Simple {
         logAction = Some(str => IO(this.logger.trace(str))),
       )(app)
 
-      server <- EmberServerBuilder.default[IO]
-        .withHost(host"127.0.0.1")
-        .withPort(port"0") // random port
-        .withHttp2
+      server <- NettyServerBuilder[IO]
+        .bindAny("127.0.0.1")
         .withHttpApp(logger)
-        .build
+        .resource
 
       addr = server.address
 

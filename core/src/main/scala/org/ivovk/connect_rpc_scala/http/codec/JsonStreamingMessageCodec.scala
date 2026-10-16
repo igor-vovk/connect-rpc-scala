@@ -71,6 +71,7 @@ class JsonStreamingMessageCodec[F[_]](
     val body = messages
       .evalMap { message =>
         F.delay {
+          System.err.println(s"JsonStreamingMessageCodec.encode: message=$message")
           val bytes = {
             val json   = printer.toJson(message)
             val baos   = ByteArrayOutputStream(128)
@@ -92,6 +93,7 @@ class JsonStreamingMessageCodec[F[_]](
           EnvelopedMessage(ByteVector.view(bytes), isEndStream)
         }
       }
+      .evalTap(envelope => F.delay(System.err.println(s"JsonStreamingMessageCodec.encode: envelope=$envelope")))
       .debug(m => s"<<< Enveloped Message: $m", logger.trace)
       .through(StreamEncoder.many(EnvelopedMessage.codec).toPipeByte)
 

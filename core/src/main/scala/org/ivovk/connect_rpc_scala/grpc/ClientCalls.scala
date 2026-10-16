@@ -1,13 +1,13 @@
 package org.ivovk.connect_rpc_scala.grpc
 
-import cats.effect.{Async, Sync}
+import cats.effect.{Async, Deferred, Fiber, Sync}
+import cats.effect.syntax.all.*
 import cats.effect.std.{unsafe, Queue}
 import cats.implicits.*
-import fs2.Compiler.Target.forConcurrent
 import fs2.Stream
 import io.grpc.*
 
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
 
 object ClientCalls {
 
@@ -101,12 +101,16 @@ object ClientCalls {
 
   }
 
-  private type Trailers            = Metadata
-  private type StreamingMessage[T] = T | Trailers
+  sealed trait StreamingResult[+T]
+  object StreamingResult {
+    case class Message[T](value: T)                                   extends StreamingResult[T]
+    case class Complete(trailers: Metadata)                           extends StreamingResult[Nothing]
+    case class Error(status: StatusExceptionWithHeaders)              extends StreamingResult[Nothing]
+  }
 
   case class StreamingResponse[F[_], T](
     headers: Metadata,
-    messages: Stream[F, StreamingMessage[T]],
+    messages: Stream[F, StreamingResult[T]],
   )
 
   def serverStreamingCall[F[_]: Async, Req, Resp](
@@ -117,6 +121,15 @@ object ClientCalls {
     request: Stream[F, Req],
   ): F[StreamingResponse[F, Resp]] =
     serverStreamingCall2(channel, method, options, headers, request)._2
+
+  def bidiStreamingCall[F[_]: Async, Req, Resp](
+    channel: Channel,
+    method: MethodDescriptor[Req, Resp],
+    options: CallOptions,
+    headers: Metadata,
+    request: Stream[F, Req],
+  ): F[StreamingResponse[F, Resp]] =
+    bidiStreamingCall2(channel, method, options, headers, request)._2
 
   private def serverStreamingCall2[F[_], Req, Resp](
     channel: Channel,
@@ -130,18 +143,73 @@ object ClientCalls {
       s"Method type must be SERVER_STREAMING, but was ${method.getType}",
     )
 
+    streamingCall2(channel, method, options, headers, messages)
+  }
+
+  private def bidiStreamingCall2[F[_], Req, Resp](
+    channel: Channel,
+    method: MethodDescriptor[Req, Resp],
+    options: CallOptions,
+    headers: Metadata,
+    messages: Stream[F, Req],
+  )(using F: Async[F]): (ClientCall[Req, Resp], F[StreamingResponse[F, Resp]]) = {
+    require(
+      method.getType == MethodDescriptor.MethodType.BIDI_STREAMING,
+      s"Method type must be BIDI_STREAMING, but was ${method.getType}",
+    )
+
+    streamingCall2(channel, method, options, headers, messages)
+  }
+
+  private def streamingCall2[F[_], Req, Resp](
+    channel: Channel,
+    method: MethodDescriptor[Req, Resp],
+    options: CallOptions,
+    headers: Metadata,
+    messages: Stream[F, Req],
+  )(using F: Async[F]): (ClientCall[Req, Resp], F[StreamingResponse[F, Resp]]) = {
+    require(
+      method.getType == MethodDescriptor.MethodType.SERVER_STREAMING ||
+        method.getType == MethodDescriptor.MethodType.BIDI_STREAMING,
+      s"Method type must be SERVER_STREAMING or BIDI_STREAMING, but was ${method.getType}",
+    )
+
     val call = channel.newCall(method, options)
 
     val response = F.async[StreamingResponse[F, Resp]] { cb =>
       for {
-        listener <- StreamingResponseListener[F, Resp](cb)
+        requestFiberDeferred <- Deferred[F, Fiber[F, Throwable, Unit]]
+        listener             <- StreamingResponseListener[F, Resp](
+          cb,
+          () => call.request(1),
+          requestFiberDeferred,
+        )
         _        <- F.delay(call.start(listener, headers))
-        _        <- messages
-          .evalMap(req => F.delay(call.sendMessage(req)))
-          .onFinalize(F.delay(call.halfClose()))
-          .compile.drain
-        _ <- F.delay(call.request(Int.MaxValue))
-      } yield Some(F.delay(call.cancel("Cancelled", null)))
+        _        <- F.delay(call.request(1))
+        requestFiber <- messages
+          .evalMap(req => F.delay {
+            System.err.println(s"ClientCalls.streamingCall2: sendMessage $req")
+            call.sendMessage(req)
+          })
+          .compile
+          .drain
+          .attempt
+          .flatMap {
+            case Right(_) =>
+              F.delay {
+                System.err.println("ClientCalls.streamingCall2: halfClose")
+                call.halfClose()
+              }
+            case Left(e)  =>
+              F.delay {
+                System.err.println(s"ClientCalls.streamingCall2: request stream failed ${e.getMessage}")
+                call.cancel("Request stream failed", e)
+                listener.fail(e)
+              }
+          }
+          .start
+        _ <- requestFiberDeferred.complete(requestFiber)
+      } yield Some(requestFiber.cancel *> F.delay(call.cancel("Cancelled", null)))
     }
 
     (call, response)
@@ -152,50 +220,85 @@ object ClientCalls {
     private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
 
     def apply[F[_], Resp](
-      cb: Either[Throwable, StreamingResponse[F, Resp]] => Unit
+      cb: Either[Throwable, StreamingResponse[F, Resp]] => Unit,
+      requestNext: () => Unit,
+      requestFiberDeferred: Deferred[F, Fiber[F, Throwable, Unit]],
     )(using F: Async[F]): F[StreamingResponseListener[F, Resp]] =
-      for queue <- Queue.unsafeUnbounded[F, Option[Either[Throwable, StreamingMessage[Resp]]]]
-      yield new StreamingResponseListener[F, Resp](cb, queue, logger)
+      for queue <- Queue.unsafeUnbounded[F, Option[Either[Throwable, StreamingResult[Resp]]]]
+      yield new StreamingResponseListener[F, Resp](
+        cb,
+        queue,
+        requestNext,
+        requestFiberDeferred,
+        logger,
+      )
   }
 
   private class StreamingResponseListener[F[_], Resp] private (
     cb: Either[Throwable, StreamingResponse[F, Resp]] => Unit,
-    queue: unsafe.UnboundedQueue[F, Option[Either[Throwable, StreamingMessage[Resp]]]],
+    queue: unsafe.UnboundedQueue[F, Option[Either[Throwable, StreamingResult[Resp]]]],
+    requestNext: () => Unit,
+    requestFiberDeferred: Deferred[F, Fiber[F, Throwable, Unit]],
     logger: org.slf4j.Logger,
   )(
     using F: Sync[F]
   ) extends ClientCall.Listener[Resp] {
 
-    private val countDownLatch = new CountDownLatch(1)
+    private val callbackTriggered = AtomicBoolean(false)
+    private val streamCompleted   = AtomicBoolean(false)
+    private var headers: Metadata = new Metadata()
 
     private def executeCallback(headers: Metadata): Unit = {
-      if countDownLatch.getCount > 0 then countDownLatch.countDown()
-      else return
+      if !callbackTriggered.compareAndSet(false, true) then return
 
-      val stream = Stream.fromQueueNoneTerminated(queue).evalMap(F.fromEither)
+      val stream = Stream.fromQueueNoneTerminated(queue)
+        .evalMap(F.fromEither)
+        .onFinalize(requestFiberDeferred.get.flatMap(_.cancel))
 
       cb(Right(StreamingResponse(headers, stream)))
     }
 
+    private def finish(result: Either[Throwable, StreamingResult[Resp]]): Unit = {
+      if !streamCompleted.compareAndSet(false, true) then return
+
+      queue.unsafeOffer(Some(result))
+      queue.unsafeOffer(None)
+      executeCallback(headers)
+    }
+
+    def fail(error: Throwable): Unit =
+      finish(Left(error))
+
     override def onHeaders(headers: Metadata): Unit = {
       logger.trace(s"<<< onHeaders: $headers")
+      System.err.println(s"ClientCalls.StreamingResponseListener.onHeaders: $headers")
 
+      this.headers = headers
       executeCallback(headers)
     }
 
     override def onMessage(message: Resp): Unit = {
       logger.trace(s"<<< onMessage: $message")
+      System.err.println(s"ClientCalls.StreamingResponseListener.onMessage: $message")
 
-      queue.unsafeOffer(Some(Right(message)))
+      queue.unsafeOffer(Some(Right(StreamingResult.Message(message))))
+      requestNext()
     }
 
     override def onClose(status: Status, trailers: Metadata): Unit = {
       logger.trace(s"<<< onClose: status=$status, trailers=$trailers")
+      System.err.println(s"ClientCalls.StreamingResponseListener.onClose: status=$status trailers=$trailers")
 
-      queue.unsafeOffer(Some(Either.cond(status.isOk, trailers, StatusException(status, trailers))))
-      queue.unsafeOffer(None)
+      val terminal =
+        if status.isOk then Right(StreamingResult.Complete(trailers))
+        else
+          Right(
+            StreamingResult.Error(
+              new StatusExceptionWithHeaders(status, headers, trailers)
+            )
+          )
 
-      executeCallback(new Metadata()) // in case onHeaders was not called
+      finish(terminal)
     }
 
   }
