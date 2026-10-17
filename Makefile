@@ -37,15 +37,6 @@ test-conformance-http4s-client: build-conformance
 						--build-arg mode=client
 	@code=$$(cat out/exit_code | tr -d '\n'); echo "Exiting with code: $$code"; exit $$code
 
-.PHONY: test-conformance-netty-server
-test-conformance-netty-server: build-conformance
-	@echo "Running conformance tests for netty server"
-	$(DOCKER_BUILD_CMD) --build-arg launcher=NettyServerLauncher \
-						--build-arg config=suite-netty.yaml \
-						--build-arg parallel_args="--parallel 1"
-	@code=$$(cat out/exit_code | tr -d '\n'); echo "Exiting with code: $$code"; exit $$code
-
 .PHONY: test-conformance-stable
 test-conformance-stable: test-conformance-http4s-server \
-						 test-conformance-http4s-client \
-						 test-conformance-netty-server
+						 test-conformance-http4s-client

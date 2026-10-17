@@ -104,42 +104,33 @@ The diagram above shows how `connect-rpc-scala` fits into the overall architectu
 * Under the hood generated code uses gRPC abstractions, such as `Channel`, `ServiceDefinition`, `Stub`, etc.
 * The `connect-rpc-scala` library implements those gRPC abstractions, unblocking reuse of the same
   application code for both gRPC & ConnectRPC protocol servers (see the Use Cases section).
-* Under the hood the library uses `http4s` or `netty` clients/servers to expose protobuf-based services as REST APIs.
+* Under the hood the library uses `http4s` clients/servers to expose protobuf-based services as REST APIs.
 
-The library provides two frontends:
+The `connect-rpc-scala-http4s` module provides routes that can be attached to an [http4s](https://http4s.org) server
+using `ConnectHttp4sRouteBuilder`. Choose the HTTP server backend through http4s.
 
-* (preferred) `connect-rpc-scala-http4s` — based on [http4s](https://http4s.org) server.
-  Stable, was added first. Use `ConnectHttp4sRouteBuilder` class to build routes that then can be attached to http4s
-  server.
-* `connect-rpc-scala-netty` — based on [Netty](https://netty.io) server.
-  Lower-level, not-ready-for-production *yet*, but has some advantages, making it a candidate to go to production in the
-  future:
-    - Better performance
-    - Ability to reuse Netty from `grpc-netty-shaded` dependency, used by GRPC itself
-    - Use `ConnectNettyServerBuilder` to build a Netty server.
+Features:
 
-Feature comparison:
-
-|                       | __http4s frontend__               | __Netty frontend__                |
-|-----------------------|-----------------------------------|-----------------------------------|
-| __Status__            | production ready                  | alpha                             |
-|                       |                                   |                                   |
-| __ConnectRPC server__ | ✅                                 | ✅                                 |
-| - JSON encoding       | ✅ (fully conformant)              | ✅ (fully conformant)              |
-| - Protobuf encoding   | ⌛ partial /<br/> 13/85 tests pass | ⌛ partial /<br/> 12/85 tests pass |
-| - Unary requests      | ✅                                 | ✅                                 |
-| - Streaming requests  | partial (see _Streaming support_) | ➖                                 |
-| - GET-requests        | ✅                                 | ✅                                 |
-| - Compression         | identity/gzip                     | identity/gzip                     |
-|                       |                                   |                                   |
-| __ConnectRPC client__ | ✅                                 | planned                           |
-| - JSON encoding       | ✅ (fully conformant)              |                                   |
-| - Protobuf encoding   | ⌛ partial /<br/> 26/56 tests pass |                                   |
-| - Unary requests      | ✅                                 |                                   |
-| - Streaming requests  | planned                           | planned                           |
-| - Compression         | identity                          |                                   |
-|                       |                                   |                                   |
-| __gRPC Transcoding__  | ✅ (see _Transcoding support_)     | planned                           |
+|                       | __http4s frontend__               |
+|-----------------------|-----------------------------------|
+| __Status__            | production ready                  |
+|                       |                                   |
+| __ConnectRPC server__ | ✅                                 |
+| - JSON encoding       | ✅ (fully conformant)              |
+| - Protobuf encoding   | ⌛ partial /<br/> 13/85 tests pass |
+| - Unary requests      | ✅                                 |
+| - Streaming requests  | partial (see _Streaming support_) |
+| - GET-requests        | ✅                                 |
+| - Compression         | identity/gzip                     |
+|                       |                                   |
+| __ConnectRPC client__ | ✅                                 |
+| - JSON encoding       | ✅ (fully conformant)              |
+| - Protobuf encoding   | ⌛ partial /<br/> 26/56 tests pass |
+| - Unary requests      | ✅                                 |
+| - Streaming requests  | planned                           |
+| - Compression         | identity                          |
+|                       |                                   |
+| __gRPC Transcoding__  | ✅ (see _Transcoding support_)     |
 
 Streaming support:
 
@@ -174,7 +165,7 @@ The library works with all ScalaPB code-generators:
 Check [examples](https://github.com/igor-vovk/connect-rpc-scala/tree/main/examples) directory for some examples of using
 the library.
 
-In case of http4s frontend, you will also need one of `http4s` server implementations, Ember in this case:
+You will also need one of the `http4s` server implementations, Ember in this case:
 
 ```scala
 libraryDependencies ++= Seq(
@@ -183,14 +174,6 @@ libraryDependencies ++= Seq(
   // implementations, here we use Ember, but you can use Blaze or Jetty as well:
   "org.http4s" %% "http4s-ember-server" % "0.23.30",
   "org.http4s" %% "http4s-ember-client" % "0.23.30", // if you wish to connect to other services using Connect protocol
-)
-```
-
-Netty frontend (server only, no client support yet) can be installed by adding the following dependency:
-
-```scala
-libraryDependencies ++= Seq(
-  "me.ivovk" %% "connect-rpc-scala-netty" % "<version>",
 )
 ```
 

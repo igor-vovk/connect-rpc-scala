@@ -73,18 +73,8 @@ lazy val http4s = project
     ),
   )
 
-lazy val netty = project
-  .dependsOn(core)
-  .settings(
-    name := "connect-rpc-scala-netty",
-    commonDeps,
-    libraryDependencies ++= Seq(
-      "io.netty" % "netty-all" % Versions.netty
-    ),
-  )
-
 lazy val conformance = project
-  .dependsOn(http4s, netty)
+  .dependsOn(http4s)
   .enablePlugins(Fs2Grpc, JavaAppPackaging)
   .settings(
     noPublish,
@@ -162,7 +152,6 @@ lazy val root = (project in file("."))
   .aggregate(
     core,
     http4s,
-    netty,
     conformance,
     benchmarks,
     examples,
