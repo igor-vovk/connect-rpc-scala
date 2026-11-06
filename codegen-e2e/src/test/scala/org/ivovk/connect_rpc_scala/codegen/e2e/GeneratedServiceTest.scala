@@ -58,8 +58,9 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
   }
 
   test("generated client calls generated service over http4s transport") {
-    ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(CalculatorServiceImpl)).build
-      .use { app =>
+    ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(CalculatorServiceImpl)).buildRoutes
+      .use { routes =>
+        val app       = routes.connectRoutes.orNotFound
         val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
         val client    = CalculatorServiceConnect.Client[IO](transport)
 
@@ -86,8 +87,9 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
   }
 
   test("generated google.api.http rule serves a transcoded JSON endpoint") {
-    ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(CalculatorServiceImpl)).build
-      .use { app =>
+    ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(CalculatorServiceImpl)).buildRoutes
+      .use { routes =>
+        val app     = routes.transcodingRoutes.orNotFound
         val request = Request[IO](Method.POST, uri"/v1/add")
           .withEntity("""{"left": 20, "right": 22}""")
           .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
