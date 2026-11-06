@@ -4,7 +4,6 @@ import cats.Endo
 import cats.effect.{Async, Resource}
 import cats.implicits.*
 import org.http4s.{HttpApp, HttpRoutes, Uri}
-import org.ivovk.connect_rpc_scala.http.{HeaderMapping, HeadersFilter}
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerdes, JsonSerdesBuilder}
 import org.ivovk.connect_rpc_scala.http4s.server.{ConnectRoutes, Routes, TranscodingRoutes, UnaryHandler}
 import org.ivovk.connect_rpc_scala.service.ServiceDefinition
@@ -24,8 +23,6 @@ object ConnectHttp4sRouteBuilder {
     new ConnectHttp4sRouteBuilder(
       services = services,
       jsonSerdes = JsonSerdesBuilder[F]().build,
-      incomingHeadersFilter = HeaderMapping.DefaultIncomingHeadersFilter,
-      outgoingHeadersFilter = HeaderMapping.DefaultOutgoingHeadersFilter,
       pathPrefix = Uri.Path.Root,
       treatTrailersAsHeaders = true,
       additionalRoutes = None,
@@ -35,8 +32,6 @@ object ConnectHttp4sRouteBuilder {
 final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
   services: Seq[ServiceDefinition[F]],
   jsonSerdes: JsonSerdes[F],
-  incomingHeadersFilter: HeadersFilter,
-  outgoingHeadersFilter: HeadersFilter,
   pathPrefix: Uri.Path,
   treatTrailersAsHeaders: Boolean,
   additionalRoutes: Option[HttpRoutes[F]],
@@ -45,8 +40,6 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
   private def copy(
     services: Seq[ServiceDefinition[F]] = services,
     jsonSerdes: JsonSerdes[F] = jsonSerdes,
-    incomingHeadersFilter: String => Boolean = incomingHeadersFilter,
-    outgoingHeadersFilter: String => Boolean = outgoingHeadersFilter,
     pathPrefix: Uri.Path = pathPrefix,
     treatTrailersAsHeaders: Boolean = treatTrailersAsHeaders,
     additionalRoutes: Option[HttpRoutes[F]] = additionalRoutes,
@@ -54,8 +47,6 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     new ConnectHttp4sRouteBuilder(
       services,
       jsonSerdes,
-      incomingHeadersFilter,
-      outgoingHeadersFilter,
       pathPrefix,
       treatTrailersAsHeaders,
       additionalRoutes,
@@ -65,12 +56,6 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     configure: Endo[JsonSerdesBuilder[F]]
   ): ConnectHttp4sRouteBuilder[F] =
     copy(jsonSerdes = configure(JsonSerdesBuilder[F]()).build)
-
-  def withIncomingHeadersFilter(filter: String => Boolean): ConnectHttp4sRouteBuilder[F] =
-    copy(incomingHeadersFilter = filter)
-
-  def withOutgoingHeadersFilter(filter: String => Boolean): ConnectHttp4sRouteBuilder[F] =
-    copy(outgoingHeadersFilter = filter)
 
   def withPathPrefix(path: Uri.Path): ConnectHttp4sRouteBuilder[F] =
     copy(pathPrefix = path)
@@ -87,11 +72,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     }
 
   def buildRoutes: Resource[F, Routes[F]] = {
-    val unaryHandler = UnaryHandler(
-      incomingHeadersFilter,
-      outgoingHeadersFilter,
-      treatTrailersAsHeaders,
-    )
+    val unaryHandler  = UnaryHandler(treatTrailersAsHeaders)
     val connectRoutes =
       ConnectRoutes(services, jsonSerdes, pathPrefix, unaryHandler).routes
     val transcodingRoutes =

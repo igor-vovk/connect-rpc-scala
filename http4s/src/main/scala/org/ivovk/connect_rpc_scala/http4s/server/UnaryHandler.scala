@@ -14,16 +14,13 @@ import java.nio.charset.Charset
 import scala.concurrent.duration.*
 
 private[http4s] final class UnaryHandler[F[_]: Async](
-  incomingHeadersFilter: String => Boolean,
-  outgoingHeadersFilter: String => Boolean,
-  treatTrailersAsHeaders: Boolean,
+  treatTrailersAsHeaders: Boolean
 ) {
 
   def connectHeaders(request: Request[F]): ConnectHeaders =
     ConnectHeaders.create(
       request.headers.headers.iterator
         .map(header => header.name.toString -> header.value)
-        .filter((name, _) => incomingHeadersFilter(name))
         .toSeq
     )
 
@@ -117,10 +114,8 @@ private[http4s] final class UnaryHandler[F[_]: Async](
 
   private def toHttp4sHeaders(headers: ConnectHeaders, trailing: Boolean): Headers = {
     val raw = headers.entries.toSeq.flatMap { (name, values) =>
-      if outgoingHeadersFilter(name) then {
-        val outputName = if trailing then s"trailer-$name" else name
-        values.map(value => Header.Raw(CIString(outputName), value))
-      } else Seq.empty
+      val outputName = if trailing then s"trailer-$name" else name
+      values.map(value => Header.Raw(CIString(outputName), value))
     }
     new Headers(raw.toList)
   }
