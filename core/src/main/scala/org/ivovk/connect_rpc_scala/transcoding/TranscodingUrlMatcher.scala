@@ -70,7 +70,7 @@ object TranscodingUrlMatcher {
       }
       .to(ArraySeq)
 
-  def apply[F[_]](
+  def create[F[_]](
     methods: Seq[UnaryMethod[F]],
     pathPrefix: List[String] = Nil,
   ): TranscodingUrlMatcher[F] = {

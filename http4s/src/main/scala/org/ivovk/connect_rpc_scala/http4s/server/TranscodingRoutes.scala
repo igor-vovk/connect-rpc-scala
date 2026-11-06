@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala.http4s
+package org.ivovk.connect_rpc_scala.http4s.server
 
 import cats.data.OptionT
 import cats.effect.Async
@@ -9,14 +9,14 @@ import org.ivovk.connect_rpc_scala.service.MergingBuilder.*
 import org.ivovk.connect_rpc_scala.service.ServiceDefinition
 import org.ivovk.connect_rpc_scala.transcoding.{MatchedRequest, TranscodingUrlMatcher}
 
-private[http4s] final class ConnectHttp4sTranscodingRoutes[F[_]: Async](
+private[http4s] final class TranscodingRoutes[F[_]: Async](
   services: Seq[ServiceDefinition[F]],
   jsonSerdes: JsonSerdes[F],
   pathPrefix: Uri.Path,
-  unaryHandler: ConnectHttp4sUnaryHandler[F],
+  unaryHandler: UnaryHandler[F],
 ) {
 
-  private val matcher = TranscodingUrlMatcher[F](
+  private val matcher = TranscodingUrlMatcher.create[F](
     services.flatMap(_.methods),
     pathPrefix.segments.map(_.encoded).toList,
   )

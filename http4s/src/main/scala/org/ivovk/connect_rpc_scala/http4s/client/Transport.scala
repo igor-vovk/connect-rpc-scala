@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala.http4s
+package org.ivovk.connect_rpc_scala.http4s.client
 
 import cats.effect.Async
 import cats.effect.syntax.all.*
@@ -12,8 +12,9 @@ import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
 
 import java.nio.charset.Charset
+import java.util.Locale
 
-private[http4s] final class ConnectHttp4sUnaryTransport[F[_]: Async](
+private[http4s] final class Transport[F[_]: Async](
   httpClient: Client[F],
   messageCodec: MessageCodec[F],
   baseUri: Uri,
@@ -86,16 +87,19 @@ private[http4s] final class ConnectHttp4sUnaryTransport[F[_]: Async](
   }
 
   private def toHttp4sHeaders(headers: ConnectHeaders): Headers = {
-    val raw = headers.entries.toSeq.flatMap { case (name, values) =>
+    val raw = headers.entries.toSeq.flatMap { (name, values) =>
       values.map(value => Header.Raw(CIString(name), value))
     }
     new Headers(raw.toList)
   }
 
+  private val TrailerPrefix       = "trailer-"
+  private val TrailerPrefixLength = TrailerPrefix.length
+
   private def fromHttp4sHeaders(headers: Headers): (ConnectHeaders, ConnectHeaders) = {
     val pairs              = headers.headers.map(header => header.name.toString -> header.value)
-    val (trailers, normal) = pairs.partition(_._1.toLowerCase(java.util.Locale.ROOT).startsWith("trailer-"))
-    val connectTrailers    = trailers.map { case (name, value) => name.drop("trailer-".length) -> value }
+    val (trailers, normal) = pairs.partition(_._1.toLowerCase(Locale.ROOT).startsWith(TrailerPrefix))
+    val connectTrailers    = trailers.map((name, value) => name.drop(TrailerPrefixLength) -> value)
     ConnectHeaders.create(normal) -> ConnectHeaders.create(connectTrailers)
   }
 

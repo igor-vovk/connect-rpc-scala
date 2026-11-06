@@ -29,7 +29,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
       (request: connectrpc.Error, _: ConnectRequestContext) => IO.pure(ConnectResponse(request)),
     )
 
-  private val matcher = TranscodingUrlMatcher[IO](
+  private val matcher = TranscodingUrlMatcher.create[IO](
     Seq(
       method("CreateCountry", HttpRule().withPost("/countries").withBody("message")),
       method("ListCountries", HttpRule().withGet("/countries/list")),

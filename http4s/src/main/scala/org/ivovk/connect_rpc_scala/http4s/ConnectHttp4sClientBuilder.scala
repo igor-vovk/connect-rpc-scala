@@ -5,6 +5,7 @@ import cats.effect.Async
 import org.http4s.Uri
 import org.http4s.client.Client
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerdesBuilder, MessageCodec, ProtoMessageCodec}
+import org.ivovk.connect_rpc_scala.http4s.client.Transport
 import org.ivovk.connect_rpc_scala.service.UnaryTransport
 
 object ConnectHttp4sClientBuilder {
@@ -35,5 +36,5 @@ final class ConnectHttp4sClientBuilder[F[_]: Async] private (
     copy(new ProtoMessageCodec[F])
 
   def build(baseUri: Uri): UnaryTransport[F] =
-    ConnectHttp4sUnaryTransport(client, messageCodec, baseUri)
+    Transport(client, messageCodec, baseUri)
 }

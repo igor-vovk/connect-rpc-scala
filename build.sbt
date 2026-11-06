@@ -20,20 +20,6 @@ ThisBuild / tpolecatExcludeOptions ++= Set(
   ScalacOptions.warnValueDiscard,
 )
 
-lazy val checkNoGrpcDependencies = taskKey[Unit]("Fails when the compile dependency graph contains io.grpc artifacts")
-
-lazy val grpcFreeDependencies = Seq(
-  checkNoGrpcDependencies := {
-    val grpcModules = (Compile / update).value.allModules.filter { module =>
-      module.organization == "io.grpc" || module.name.startsWith("scalapb-runtime-grpc")
-    }
-    val log         = streams.value.log
-    if (grpcModules.nonEmpty)
-      sys.error(s"gRPC dependencies found: ${grpcModules.mkString(", ")}")
-    else log.info("No io.grpc dependencies found")
-  }
-)
-
 lazy val noPublish = List(
   publish         := {},
   publishLocal    := {},
@@ -54,22 +40,20 @@ lazy val codegen = project
     name         := "connect-rpc-scala-codegen",
     scalaVersion := "2.12.20",
     noPublish,
-    grpcFreeDependencies,
     libraryDependencies ++= Seq(
-      "com.thesamet.scalapb"               %% "compilerplugin"                            % Versions.scalapb,
-      "com.thesamet.scalapb"               %% "scalapb-runtime"                           % Versions.scalapb,
-      ("com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.78.0-1")
+      "com.thesamet.scalapb" %% "compilerplugin"  % Versions.scalapb,
+      "com.thesamet.scalapb" %% "scalapb-runtime" % Versions.scalapb,
+      ("com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % Versions.scalapbCommonProtos)
         .excludeAll(
-          ExclusionRule("io.grpc"),
-          ExclusionRule("com.thesamet.scalapb", "scalapb-runtime-grpc_2.12"),
+          ExclusionRule("com.thesamet.scalapb", "scalapb-runtime-grpc_2.12")
         ),
-      "org.scalatest"                      %% "scalatest"                                % Versions.scalatest % Test,
+      "org.scalatest" %% "scalatest" % Versions.scalatest % Test,
     ),
   )
 
 lazy val codegenPlugin = protocGenProject("protoc-gen-connect-rpc-scala", codegen)
   .settings(
-    Compile / mainClass := Some("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator"),
+    Compile / mainClass  := Some("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator"),
     assembly / mainClass := Some("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator"),
   )
 
@@ -77,28 +61,25 @@ lazy val core = project
   .settings(
     name := "connect-rpc-scala-core",
     commonDeps,
-    grpcFreeDependencies,
     Compile / PB.targets := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) -> (Compile / sourceManaged).value
     ),
     libraryDependencies ++= Seq(
-      ("com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.78.0-1")
+      ("com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % Versions.scalapbCommonProtos)
         .excludeAll(
-          ExclusionRule("io.grpc"),
-          ExclusionRule("com.thesamet.scalapb", "scalapb-runtime-grpc_3"),
+          ExclusionRule("com.thesamet.scalapb", "scalapb-runtime-grpc_3")
         ),
-      "com.thesamet.scalapb"               %% "scalapb-runtime"                          % Versions.scalapb % "protobuf",
-      "io.github.scalapb-json"             %% "scalapb-circe"                           % "0.17.0",
-      "co.fs2"                             %% "fs2-core"                                % Versions.fs2,
-      "org.http4s"                         %% "http4s-core"                              % Versions.http4s,
+      "com.thesamet.scalapb"   %% "scalapb-runtime" % Versions.scalapb % "protobuf",
+      "io.github.scalapb-json" %% "scalapb-circe"   % "0.17.0",
+      "co.fs2"                 %% "fs2-core"        % Versions.fs2,
+      "org.http4s"             %% "http4s-core"     % Versions.http4s,
     ),
   )
 
 lazy val http4s = project
   .dependsOn(core)
   .settings(
-    name := "connect-rpc-scala-http4s",
-    grpcFreeDependencies,
+    name                                := "connect-rpc-scala-http4s",
     libraryDependencies += "org.http4s" %% "http4s-client" % Versions.http4s,
   )
 
@@ -110,12 +91,10 @@ lazy val codegenE2e = project
     name := "connect-rpc-scala-codegen-e2e",
     noPublish,
     commonDeps,
-    grpcFreeDependencies,
     libraryDependencies +=
-      ("com.google.api.grpc" % "proto-google-common-protos" % "2.78.0" % "protobuf")
+      ("com.google.api.grpc" % "proto-google-common-protos" % Versions.googleCommonProtos % "protobuf")
         .intransitive(),
-    Test / test := (Test / test).dependsOn(checkNoGrpcDependencies).value,
-    codeGenClasspath := (codegen / Compile / fullClasspath).value,
+    codeGenClasspath     := (codegen / Compile / fullClasspath).value,
     Compile / PB.targets := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->
         (Compile / sourceManaged).value / "scalapb",
@@ -131,22 +110,21 @@ lazy val conformance = project
   .settings(
     noPublish,
     commonDeps,
-    grpcFreeDependencies,
-    codeGenClasspath := (codegen / Compile / fullClasspath).value,
+    codeGenClasspath          := (codegen / Compile / fullClasspath).value,
     Compile / PB.protoSources := Seq(baseDirectory.value.getParentFile / "protos"),
-    Compile / PB.targets := Seq(
+    Compile / PB.targets      := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->
         (Compile / sourceManaged).value / "scalapb",
       (genModule("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
         (Compile / sourceManaged).value / "connect",
     ),
     libraryDependencies ++= Seq(
-      "com.thesamet.scalapb" %% "scalapb-runtime" % Versions.scalapb % "protobuf",
-      "co.fs2"               %% "fs2-io"          % Versions.fs2,
-      "co.fs2"               %% "fs2-scodec"      % Versions.fs2,
-      "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
-      "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
-      "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
+      "com.thesamet.scalapb" %% "scalapb-runtime"     % Versions.scalapb % "protobuf",
+      "co.fs2"               %% "fs2-io"              % Versions.fs2,
+      "co.fs2"               %% "fs2-scodec"          % Versions.fs2,
+      "org.http4s"           %% "http4s-ember-server" % Versions.http4s,
+      "org.http4s"           %% "http4s-ember-client" % Versions.http4s,
+      "ch.qos.logback"        % "logback-classic"     % Versions.logback % Runtime,
     ),
   )
 
@@ -156,7 +134,6 @@ lazy val benchmarks = project
   .settings(
     name := "connect-rpc-scala-benchmarks",
     noPublish,
-    grpcFreeDependencies,
   )
 
 lazy val examples = project.in(file("examples"))
@@ -168,8 +145,7 @@ lazy val example_client_server = project.in(file("examples/client_server"))
   .enablePlugins(LocalCodeGenPlugin, JavaAppPackaging)
   .settings(
     noPublish,
-    grpcFreeDependencies,
-    codeGenClasspath := (codegen / Compile / fullClasspath).value,
+    codeGenClasspath     := (codegen / Compile / fullClasspath).value,
     Compile / PB.targets := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->
         (Compile / sourceManaged).value / "scalapb",

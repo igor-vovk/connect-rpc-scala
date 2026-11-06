@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala.http4s
+package org.ivovk.connect_rpc_scala.http4s.server
 
 import cats.data.OptionT
 import cats.effect.Async
@@ -10,18 +10,18 @@ import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.http.codec.*
 import org.ivovk.connect_rpc_scala.service.{ServiceDefinition, UnaryMethod}
 
-private[http4s] final class ConnectHttp4sConnectRoutes[F[_]: Async](
+private[http4s] final class ConnectRoutes[F[_]: Async](
   services: Seq[ServiceDefinition[F]],
   jsonSerdes: JsonSerdes[F],
   pathPrefix: Uri.Path,
-  unaryHandler: ConnectHttp4sUnaryHandler[F],
+  unaryHandler: UnaryHandler[F],
 ) {
 
   private val protoCodec = new ProtoMessageCodec[F]
 
   private val methodsByPath: Map[(String, String), UnaryMethod[F]] = {
     val methods = services.flatMap(service => service.methods.map(method => (service.name, method)))
-    val result  = methods.map { case (serviceName, method) =>
+    val result  = methods.map { (serviceName, method) =>
       (serviceName -> method.descriptor.methodName) -> method
     }.toMap
 

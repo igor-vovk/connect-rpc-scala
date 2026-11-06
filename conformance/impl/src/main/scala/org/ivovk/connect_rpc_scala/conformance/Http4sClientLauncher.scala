@@ -12,6 +12,7 @@ import org.http4s.ember.client.EmberClientBuilder
 import org.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, ProtoCodecs}
 import org.ivovk.connect_rpc_scala.http4s.ConnectHttp4sClientBuilder
 import org.ivovk.connect_rpc_scala.service.*
+import org.ivovk.connect_rpc_scala.util.PipeSyntax.pipeIf
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
@@ -33,15 +34,14 @@ object Http4sClientLauncher extends IOApp.Simple {
           httpClient <- EmberClientBuilder.default[IO]
             .withTimeout(30.seconds)
             .build
-        yield {
-          val builder = ConnectHttp4sClientBuilder(httpClient).withJsonCodecConfigurator(
+        yield ConnectHttp4sClientBuilder(httpClient)
+          .withJsonCodecConfigurator(
             _
               .registerType[conformance.UnaryRequest]
               .registerType[conformance.IdempotentUnaryRequest]
           )
-          val transport = if spec.codec.isProto then builder.enableBinaryFormat() else builder
-          transport.build(baseUri)
-        }
+          .pipeIf(spec.codec.isProto)(_.enableBinaryFormat())
+          .build(baseUri)
 
         resources.use(transport => runTestCase(transport, spec))
       }

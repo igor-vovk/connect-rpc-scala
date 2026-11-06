@@ -6,6 +6,7 @@ import cats.implicits.*
 import org.http4s.{HttpApp, HttpRoutes, Uri}
 import org.ivovk.connect_rpc_scala.http.{HeaderMapping, HeadersFilter}
 import org.ivovk.connect_rpc_scala.http.codec.{JsonSerdes, JsonSerdesBuilder}
+import org.ivovk.connect_rpc_scala.http4s.server.{ConnectRoutes, Routes, TranscodingRoutes, UnaryHandler}
 import org.ivovk.connect_rpc_scala.service.ServiceDefinition
 
 object ConnectHttp4sRouteBuilder {
@@ -85,17 +86,17 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
       additionalRoutes.fold(routes.routes)(routes.routes <+> _).orNotFound
     }
 
-  def buildRoutes: Resource[F, ConnectHttp4sRoutes[F]] = {
-    val unaryHandler = ConnectHttp4sUnaryHandler(
+  def buildRoutes: Resource[F, Routes[F]] = {
+    val unaryHandler = UnaryHandler(
       incomingHeadersFilter,
       outgoingHeadersFilter,
       treatTrailersAsHeaders,
     )
     val connectRoutes =
-      ConnectHttp4sConnectRoutes(services, jsonSerdes, pathPrefix, unaryHandler).routes
+      ConnectRoutes(services, jsonSerdes, pathPrefix, unaryHandler).routes
     val transcodingRoutes =
-      ConnectHttp4sTranscodingRoutes(services, jsonSerdes, pathPrefix, unaryHandler).routes
+      TranscodingRoutes(services, jsonSerdes, pathPrefix, unaryHandler).routes
 
-    Resource.pure(ConnectHttp4sRoutes(connectRoutes, transcodingRoutes))
+    Resource.pure(Routes(connectRoutes, transcodingRoutes))
   }
 }

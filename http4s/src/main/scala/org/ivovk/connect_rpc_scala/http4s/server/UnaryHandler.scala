@@ -1,4 +1,4 @@
-package org.ivovk.connect_rpc_scala.http4s
+package org.ivovk.connect_rpc_scala.http4s.server
 
 import cats.effect.Async
 import cats.effect.syntax.all.*
@@ -13,7 +13,7 @@ import scalapb.GeneratedMessage
 import java.nio.charset.Charset
 import scala.concurrent.duration.*
 
-private[http4s] final class ConnectHttp4sUnaryHandler[F[_]: Async](
+private[http4s] final class UnaryHandler[F[_]: Async](
   incomingHeadersFilter: String => Boolean,
   outgoingHeadersFilter: String => Boolean,
   treatTrailersAsHeaders: Boolean,
@@ -116,7 +116,7 @@ private[http4s] final class ConnectHttp4sUnaryHandler[F[_]: Async](
     toHttp4sHeaders(headers, trailing = !treatTrailersAsHeaders)
 
   private def toHttp4sHeaders(headers: ConnectHeaders, trailing: Boolean): Headers = {
-    val raw = headers.entries.toSeq.flatMap { case (name, values) =>
+    val raw = headers.entries.toSeq.flatMap { (name, values) =>
       if outgoingHeadersFilter(name) then {
         val outputName = if trailing then s"trailer-$name" else name
         values.map(value => Header.Raw(CIString(outputName), value))

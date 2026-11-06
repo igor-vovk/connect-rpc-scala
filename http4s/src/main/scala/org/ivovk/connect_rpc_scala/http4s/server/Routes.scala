@@ -1,10 +1,10 @@
-package org.ivovk.connect_rpc_scala.http4s
+package org.ivovk.connect_rpc_scala.http4s.server
 
 import cats.Monad
 import cats.implicits.*
 import org.http4s.HttpRoutes
 
-final case class ConnectHttp4sRoutes[F[_]: Monad](
+final case class Routes[F[_]: Monad](
   connectRoutes: HttpRoutes[F],
   transcodingRoutes: HttpRoutes[F],
 ) {
