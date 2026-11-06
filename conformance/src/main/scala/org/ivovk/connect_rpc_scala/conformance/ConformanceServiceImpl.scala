@@ -18,42 +18,50 @@ private case class UnaryHandlerResponse(
   trailers: ConnectHeaders,
 )
 
-class ConformanceServiceImpl[F[_]: Async] {
+class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceConnect.Service[F] {
 
-  def unary(request: ConnectRequest[UnaryRequest]): F[ConnectResponse[UnaryResponse]] =
+  override def unary(
+    request: UnaryRequest,
+    ctx: ConnectRequestContext,
+  ): F[ConnectResponse[UnaryResponse]] =
     handleUnary(
-      request.message.getResponseDefinition,
+      request.getResponseDefinition,
       request,
+      ctx,
     ).map { result =>
       ConnectResponse(UnaryResponse(result.payload.some), result.headers, result.trailers)
     }
 
-  def idempotentUnary(
-    request: ConnectRequest[IdempotentUnaryRequest]
+  override def idempotentUnary(
+    request: IdempotentUnaryRequest,
+    ctx: ConnectRequestContext,
   ): F[ConnectResponse[IdempotentUnaryResponse]] =
     handleUnary(
-      request.message.getResponseDefinition,
+      request.getResponseDefinition,
       request,
+      ctx,
     ).map { result =>
       ConnectResponse(IdempotentUnaryResponse(result.payload.some), result.headers, result.trailers)
     }
 
-  def unimplemented(
-    request: ConnectRequest[UnimplementedRequest]
+  override def unimplemented(
+    request: UnimplementedRequest,
+    _ctx: ConnectRequestContext,
   ): F[ConnectResponse[UnimplementedResponse]] =
     ConnectException(
       connectrpc.Code.Unimplemented,
-      s"Method ${request.message.companion.scalaDescriptor.fullName} is not implemented",
+      s"Method ${request.companion.scalaDescriptor.fullName} is not implemented",
     ).raiseError
 
   private def handleUnary[A <: GeneratedMessage](
     responseDefinition: UnaryResponseDefinition,
-    request: ConnectRequest[A],
+    request: A,
+    ctx: ConnectRequestContext,
   ): F[UnaryHandlerResponse] = {
     val requestInfo = ConformancePayload.RequestInfo(
-      requestHeaders = ConformanceHeadersConv.toHeaderSeq(request.headers),
-      timeoutMs = request.timeout.map(_.toMillis),
-      requests = Seq(Any.pack(request.message)),
+      requestHeaders = ConformanceHeadersConv.toHeaderSeq(ctx.headers),
+      timeoutMs = ctx.timeout.map(_.toMillis),
+      requests = Seq(Any.pack(request)),
     )
 
     val headers  = ConformanceHeadersConv.toConnectHeaders(responseDefinition.responseHeaders)

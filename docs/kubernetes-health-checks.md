@@ -32,10 +32,16 @@ Implement and bind the generated service:
 
 ```scala
 object HealthService extends HealthServiceConnect.Service[IO] {
-  override def alive(request: ConnectRequest[AliveRequest]): IO[ConnectResponse[AliveResponse]] =
+  override def alive(
+    request: AliveRequest,
+    ctx: ConnectRequestContext,
+  ): IO[ConnectResponse[AliveResponse]] =
     IO.pure(ConnectResponse(AliveResponse()))
 
-  override def ready(request: ConnectRequest[ReadyRequest]): IO[ConnectResponse[ReadyResponse]] =
+  override def ready(
+    request: ReadyRequest,
+    ctx: ConnectRequestContext,
+  ): IO[ConnectResponse[ReadyResponse]] =
     checkDependencies.as(ConnectResponse(ReadyResponse()))
 }
 

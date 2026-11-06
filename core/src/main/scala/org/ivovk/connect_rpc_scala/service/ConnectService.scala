@@ -26,8 +26,7 @@ object ConnectHeaders {
   private def normalize(name: String): String = name.toLowerCase(Locale.ROOT)
 }
 
-final case class ConnectRequest[A](
-  message: A,
+final case class ConnectRequestContext(
   headers: ConnectHeaders = ConnectHeaders.empty,
   timeout: Option[FiniteDuration] = None,
 )
@@ -44,8 +43,8 @@ final case class ConnectException(
   details: Seq[connectrpc.ErrorDetailsAny] = Seq.empty,
   headers: ConnectHeaders = ConnectHeaders.empty,
   trailers: ConnectHeaders = ConnectHeaders.empty,
-  cause: Throwable = null,
-) extends RuntimeException(message, cause)
+  cause: Option[Throwable] = None,
+) extends RuntimeException(message, cause.orNull)
 
 final case class UnaryMethodDescriptor[
   Request <: GeneratedMessage,
@@ -66,7 +65,10 @@ sealed trait UnaryMethod[F[_]] {
 
   def descriptor: UnaryMethodDescriptor[RequestMessage, ResponseMessage]
 
-  def invoke(request: ConnectRequest[RequestMessage]): F[ConnectResponse[ResponseMessage]]
+  def invoke(
+    request: RequestMessage,
+    ctx: ConnectRequestContext,
+  ): F[ConnectResponse[ResponseMessage]]
 }
 
 object UnaryMethod {
@@ -77,7 +79,7 @@ object UnaryMethod {
     Response <: GeneratedMessage,
   ](
     methodDescriptor: UnaryMethodDescriptor[Request, Response],
-    handler: ConnectRequest[Request] => F[ConnectResponse[Response]],
+    handler: (Request, ConnectRequestContext) => F[ConnectResponse[Response]],
   ): UnaryMethod[F] =
     new UnaryMethod[F] {
       override type RequestMessage  = Request
@@ -85,8 +87,11 @@ object UnaryMethod {
 
       override val descriptor: UnaryMethodDescriptor[Request, Response] = methodDescriptor
 
-      override def invoke(request: ConnectRequest[Request]): F[ConnectResponse[Response]] =
-        handler(request)
+      override def invoke(
+        request: Request,
+        ctx: ConnectRequestContext,
+      ): F[ConnectResponse[Response]] =
+        handler(request, ctx)
     }
 }
 
@@ -104,6 +109,7 @@ trait UnaryTransport[F[_]] {
     Response <: GeneratedMessage,
   ](
     descriptor: UnaryMethodDescriptor[Request, Response],
-    request: ConnectRequest[Request],
+    request: Request,
+    ctx: ConnectRequestContext,
   ): F[ConnectResponse[Response]]
 }

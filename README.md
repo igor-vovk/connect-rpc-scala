@@ -6,8 +6,8 @@
 http4s. ScalaPB still generates the message classes, while this project's generator owns the service definitions.
 The runtime does not depend on grpc-java, ScalaPB's gRPC runtime, fs2-grpc, or zio-grpc.
 
-Streaming RPCs are intentionally not supported yet. The generator rejects a service containing a client-streaming or
-server-streaming method with a descriptive error.
+Streaming RPCs are intentionally not supported yet. The generator skips streaming methods while still generating the
+unary methods in the same service; a streaming-only service produces no Connect API.
 
 ## Features
 
@@ -95,8 +95,11 @@ the generator creates `CalculatorServiceConnect.Service[F]`, `bind`, method desc
 
 ```scala
 object Calculator extends CalculatorServiceConnect.Service[IO] {
-  override def add(request: ConnectRequest[AddRequest]): IO[ConnectResponse[AddResponse]] =
-    IO.pure(ConnectResponse(AddResponse(request.message.left + request.message.right)))
+  override def add(
+    request: AddRequest,
+    ctx: ConnectRequestContext,
+  ): IO[ConnectResponse[AddResponse]] =
+    IO.pure(ConnectResponse(AddResponse(request.left + request.right)))
 }
 ```
 
@@ -136,7 +139,7 @@ val result: Resource[IO, ConnectResponse[AddResponse]] =
   EmberClientBuilder.default[IO].build.evalMap { httpClient =>
     val transport = ConnectHttp4sClientBuilder(httpClient).build(uri"http://localhost:8080")
     val client = CalculatorServiceConnect.Client[IO](transport)
-    client.add(ConnectRequest(AddRequest(20, 22)))
+    client.add(AddRequest(20, 22), ConnectRequestContext())
   }
 ```
 

@@ -61,7 +61,7 @@ object Http4sClientLauncher extends IOApp.Simple {
     logger.info(">>> Running conformance test: {}", spec.testName)
 
     require(
-      spec.service.contains(ConformanceServiceDefinition.ServiceName),
+      spec.service.contains(ConformanceServiceConnect.serviceName),
       s"Invalid service name: ${spec.service}.",
     )
 
@@ -80,7 +80,8 @@ object Http4sClientLauncher extends IOApp.Simple {
       else {
         val call = transport.unary(
           descriptor,
-          ConnectRequest(requests.head, headers, spec.timeoutMs.map(_.millis)),
+          requests.head,
+          ConnectRequestContext(headers, spec.timeoutMs.map(_.millis)),
         )
         val cancelAfter = spec.getCancel.getAfterCloseSendMs
         val response    =
@@ -133,11 +134,11 @@ object Http4sClientLauncher extends IOApp.Simple {
 
     spec.method match {
       case Some("Unary") =>
-        runUnaryRequest(ConformanceServiceDefinition.Unary)(_.payload.toSeq)
+        runUnaryRequest(ConformanceServiceConnect.METHOD_UNARY)(_.payload.toSeq)
       case Some("IdempotentUnary") =>
-        runUnaryRequest(ConformanceServiceDefinition.IdempotentUnary)(_.payload.toSeq)
+        runUnaryRequest(ConformanceServiceConnect.METHOD_IDEMPOTENTUNARY)(_.payload.toSeq)
       case Some("Unimplemented") =>
-        runUnaryRequest(ConformanceServiceDefinition.Unimplemented)(_ => Seq.empty)
+        runUnaryRequest(ConformanceServiceConnect.METHOD_UNIMPLEMENTED)(_ => Seq.empty)
       case Some(other) =>
         ClientCompatResponse(spec.testName)
           .withError(ClientErrorResult(s"Unsupported method (streaming is not implemented): $other."))

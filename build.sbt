@@ -126,13 +126,17 @@ lazy val codegenE2e = project
 
 lazy val conformance = project
   .dependsOn(http4s)
-  .enablePlugins(JavaAppPackaging)
+  .enablePlugins(LocalCodeGenPlugin, JavaAppPackaging)
   .settings(
     noPublish,
     commonDeps,
     grpcFreeDependencies,
+    codeGenClasspath := (codegen / Compile / fullClasspath).value,
     Compile / PB.targets := Seq(
-      scalapb.gen(grpc = false, scala3Sources = true) -> (Compile / sourceManaged).value
+      scalapb.gen(grpc = false, scala3Sources = true) ->
+        (Compile / sourceManaged).value / "scalapb",
+      (genModule("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
+        (Compile / sourceManaged).value / "connect",
     ),
     libraryDependencies ++= Seq(
       "com.thesamet.scalapb" %% "scalapb-runtime" % Versions.scalapb % "protobuf",

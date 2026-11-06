@@ -7,7 +7,7 @@ import org.http4s.implicits.uri
 import org.http4s.{Method, Request, Uri}
 import org.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, SubKeyJsonTransform}
 import org.ivovk.connect_rpc_scala.service.{
-  ConnectRequest,
+  ConnectRequestContext,
   ConnectResponse,
   UnaryMethod,
   UnaryMethodDescriptor,
@@ -26,7 +26,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
         responseCompanion = connectrpc.Error,
         httpRule = Some(rule),
       ),
-      (request: ConnectRequest[connectrpc.Error]) => IO.pure(ConnectResponse(request.message)),
+      (request: connectrpc.Error, _: ConnectRequestContext) => IO.pure(ConnectResponse(request)),
     )
 
   private val matcher = TranscodingUrlMatcher[IO](

@@ -194,7 +194,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
         bodyMessage.merge(pathMessage).merge(queryMessage).build
       }
       .adaptError { case error => decodeError(error) }
-      .flatMap(message => invoke(method, ConnectRequest(message, headers, timeout(headers))))
+      .flatMap(message => invoke(method, message, ConnectRequestContext(headers, timeout(headers))))
       .flatMap(result => encodeResult(result, jsonSerdes.codec))
       .handleErrorWith(error => errorResponse(error, jsonSerdes.codec))
   }
@@ -211,17 +211,18 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     entity.as[method.RequestMessage](using summon, codec)
       .compile.onlyOrError
       .adaptError { case error => decodeError(error) }
-      .flatMap(message => invoke(method, ConnectRequest(message, headers, timeout(headers))))
+      .flatMap(message => invoke(method, message, ConnectRequestContext(headers, timeout(headers))))
       .flatMap(result => encodeResult(result, codec))
       .handleErrorWith(error => errorResponse(error, codec))
   }
 
   private def invoke(
     method: UnaryMethod[F],
-    request: ConnectRequest[method.RequestMessage],
+    request: method.RequestMessage,
+    ctx: ConnectRequestContext,
   ): F[ConnectResponse[method.ResponseMessage]] = {
-    val response = method.invoke(request)
-    request.timeout.fold(response) { duration =>
+    val response = method.invoke(request, ctx)
+    ctx.timeout.fold(response) { duration =>
       response.timeoutTo(
         duration,
         ConnectException(connectrpc.Code.DeadlineExceeded, "Request deadline exceeded").raiseError,

@@ -56,18 +56,19 @@ private final class ConnectHttp4sUnaryTransport[F[_]: Async](
     ResponseMessage <: GeneratedMessage,
   ](
     descriptor: UnaryMethodDescriptor[RequestMessage, ResponseMessage],
-    request: ConnectRequest[RequestMessage],
+    request: RequestMessage,
+    ctx: ConnectRequestContext,
   ): F[ConnectResponse[ResponseMessage]] = {
     val entity = messageCodec.encode(
-      Stream.emit(request.message),
+      Stream.emit(request),
       EncodeOptions(Charset.defaultCharset(), ContentCoding.identity),
     )
     val uri     = descriptor.procedure.stripPrefix("/").split('/').foldLeft(baseUri)(_.addPath(_))
-    val headers = toHttp4sHeaders(request.headers)
+    val headers = toHttp4sHeaders(ctx.headers)
       .put(entity.headers.map(Header.ToRaw.keyValuesToRaw).toSeq*)
       .put(Header.Raw(CIString("x-user-agent"), "connect-rpc-scala-http4s"))
       .put(
-        request.timeout.map(timeout => Header.Raw(CIString("connect-timeout-ms"), timeout.toMillis.toString))
+        ctx.timeout.map(timeout => Header.Raw(CIString("connect-timeout-ms"), timeout.toMillis.toString))
       )
     val httpRequest = Request[F](
       method = Method.POST,
@@ -109,7 +110,7 @@ private final class ConnectHttp4sUnaryTransport[F[_]: Async](
           }
     }
 
-    request.timeout.fold(response) { duration =>
+    ctx.timeout.fold(response) { duration =>
       response.timeoutTo(
         duration,
         ConnectException(connectrpc.Code.DeadlineExceeded, "Request deadline exceeded").raiseError,

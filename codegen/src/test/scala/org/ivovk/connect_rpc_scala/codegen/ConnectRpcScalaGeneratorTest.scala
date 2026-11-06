@@ -11,10 +11,12 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import protocgen.CodeGenRequest
 
+import scala.collection.JavaConverters._
+
 class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
 
   test("generates unary service definitions without io.grpc") {
-    val response = generate(clientStreaming = false, serverStreaming = false)
+    val response = generate(method("Call"))
 
     response.hasError shouldBe false
     response.getFileCount shouldBe 1
@@ -24,27 +26,46 @@ class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
     response.getFile(0).getContent should not include "io.grpc"
   }
 
-  test("rejects streaming methods explicitly") {
-    val response = generate(clientStreaming = false, serverStreaming = true)
+  test("generates unary methods and skips streaming methods in the same service") {
+    val response = generate(
+      method("Call"),
+      method("ServerStream", serverStreaming = true),
+      method("ClientStream", clientStreaming = true),
+    )
 
-    response.hasError shouldBe true
-    response.getError should include("Streaming RPCs are not supported yet")
-    response.getError should include("test.ExampleService.Call")
+    response.hasError shouldBe false
+    response.getFileCount shouldBe 1
+    response.getFile(0).getContent should include("METHOD_CALL")
+    response.getFile(0).getContent should not include "ServerStream"
+    response.getFile(0).getContent should not include "ClientStream"
   }
 
-  private def generate(clientStreaming: Boolean, serverStreaming: Boolean) = {
-    val requestMessage  = DescriptorProto.newBuilder().setName("Request").build()
-    val responseMessage = DescriptorProto.newBuilder().setName("Response").build()
-    val method          = MethodDescriptorProto.newBuilder()
-      .setName("Call")
+  test("does not generate a service that contains only streaming methods") {
+    val response = generate(method("BidiStream", clientStreaming = true, serverStreaming = true))
+
+    response.hasError shouldBe false
+    response.getFileCount shouldBe 0
+  }
+
+  private def method(
+    name: String,
+    clientStreaming: Boolean = false,
+    serverStreaming: Boolean = false,
+  ): MethodDescriptorProto =
+    MethodDescriptorProto.newBuilder()
+      .setName(name)
       .setInputType(".test.Request")
       .setOutputType(".test.Response")
       .setClientStreaming(clientStreaming)
       .setServerStreaming(serverStreaming)
       .build()
-    val service = ServiceDescriptorProto.newBuilder()
+
+  private def generate(methods: MethodDescriptorProto*) = {
+    val requestMessage  = DescriptorProto.newBuilder().setName("Request").build()
+    val responseMessage = DescriptorProto.newBuilder().setName("Response").build()
+    val service         = ServiceDescriptorProto.newBuilder()
       .setName("ExampleService")
-      .addMethod(method)
+      .addAllMethod(methods.asJava)
       .build()
     val file = FileDescriptorProto.newBuilder()
       .setName("example.proto")
