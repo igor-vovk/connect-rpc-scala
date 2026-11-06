@@ -36,9 +36,7 @@ object Http4sServerLauncher extends IOApp.Simple {
         .through(StreamDecoder.once(ProtoCodecs.decoderFor[conformance.ServerCompatRequest]).toPipeByte)
         .compile.onlyOrError.toResource
 
-      service <- conformance.ConformanceServiceFs2GrpcTrailers.bindServiceResource(
-        ConformanceServiceImpl[IO]()
-      )
+      service = ConformanceServiceDefinition.bind(ConformanceServiceImpl[IO]())
 
       app <- ConnectHttp4sRouteBuilder.forService[IO](service)
         .withJsonCodecConfigurator {
@@ -47,7 +45,6 @@ object Http4sServerLauncher extends IOApp.Simple {
           _
             .registerType[conformance.UnaryRequest]
             .registerType[conformance.IdempotentUnaryRequest]
-            .registerType[conformance.ClientStreamRequest]
         }
         .build
 

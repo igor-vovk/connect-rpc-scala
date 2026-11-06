@@ -2,9 +2,8 @@ addSbtPlugin("org.typelevel"  % "sbt-tpolecat"        % "0.5.7")
 addSbtPlugin("com.github.sbt" % "sbt-ci-release"      % "1.12.1")
 addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.13.0")
 addSbtPlugin("com.thesamet"   % "sbt-protoc"          % "1.0.8")
-addSbtPlugin("org.typelevel"  % "sbt-fs2-grpc"        % "3.1.2")
+addSbtPlugin("com.thesamet"   % "sbt-protoc-gen-project" % "0.2.0")
 addSbtPlugin("org.scalameta"  % "sbt-scalafmt"        % "2.6.2")
 addSbtPlugin("pl.project13.scala" % "sbt-jmh"          % "0.4.8")
 
 libraryDependencies += "com.thesamet.scalapb"          %% "compilerplugin"   % "0.11.21"
-libraryDependencies += "com.thesamet.scalapb.zio-grpc" %% "zio-grpc-codegen" % "0.6.3"

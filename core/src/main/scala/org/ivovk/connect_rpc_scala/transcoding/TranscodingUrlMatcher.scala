@@ -5,10 +5,9 @@ import com.google.api.http.{CustomHttpPattern, HttpRule}
 import io.circe.Json
 import org.http4s.{Method, Uri}
 import org.ivovk.connect_rpc_scala
-import org.ivovk.connect_rpc_scala.grpc.MethodRegistry
-import org.ivovk.connect_rpc_scala.http.Paths.{Path, Segment}
 import org.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, JsonTransform, SubKeyJsonTransform}
 import org.ivovk.connect_rpc_scala.http.json.JsonProcessing.*
+import org.ivovk.connect_rpc_scala.service.UnaryMethod
 import org.ivovk.connect_rpc_scala.util.SeqOps.*
 import scalapb.descriptors.ScalaType
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
@@ -16,38 +15,38 @@ import scalapb_json.{NameUtils, ScalapbJsonCommon}
 
 import scala.collection.immutable.ArraySeq
 
-case class MatchedRequest(
-  method: MethodRegistry.Entry,
+case class MatchedRequest[F[_]](
+  method: UnaryMethod[F],
   pathJson: Json,
   queryJson: Json,
   reqBodyTransform: JsonTransform,
 )
 
 object TranscodingUrlMatcher {
-  case class Entry(
-    method: MethodRegistry.Entry,
+  case class Entry[F[_]](
+    method: UnaryMethod[F],
     httpMethod: Option[Method],
-    pattern: Path,
+    pattern: List[String],
     reqBodyTransform: JsonTransform,
   )
 
-  sealed trait RouteTree
+  sealed trait RouteTree[F[_]]
 
-  case class RootNode(
-    children: IndexedSeq[RouteTree]
-  ) extends RouteTree
+  case class RootNode[F[_]](
+    children: IndexedSeq[RouteTree[F]]
+  ) extends RouteTree[F]
 
-  case class Node(
+  case class Node[F[_]](
     isVariable: Boolean,
-    segment: Segment,
-    children: IndexedSeq[RouteTree],
-  ) extends RouteTree
+    segment: String,
+    children: IndexedSeq[RouteTree[F]],
+  ) extends RouteTree[F]
 
-  case class Leaf(
-    entry: Entry
-  ) extends RouteTree
+  case class Leaf[F[_]](
+    entry: Entry[F]
+  ) extends RouteTree[F]
 
-  private def mkTree(entries: Seq[Entry]): IndexedSeq[RouteTree] =
+  private def mkTree[F[_]](entries: Seq[Entry[F]]): IndexedSeq[RouteTree[F]] =
     entries
       .groupByPreservingOrdering(_.pattern.headOption)
       .flatMap { (maybeSegment, entries) =>
@@ -72,18 +71,18 @@ object TranscodingUrlMatcher {
       .to(ArraySeq)
 
   def apply[F[_]](
-    methods: Seq[MethodRegistry.Entry],
-    pathPrefix: Path = Nil,
+    methods: Seq[UnaryMethod[F]],
+    pathPrefix: List[String] = Nil,
   ): TranscodingUrlMatcher[F] = {
     val entries = methods.flatMap { method =>
-      method.httpRule.fold(List.empty[Entry]) { httpRule =>
+      method.descriptor.httpRule.fold(List.empty[Entry[F]]) { httpRule =>
         val additionalBindings = httpRule.additionalBindings.toList
 
         (httpRule :: additionalBindings).map { rule =>
           val (httpMethod, pattern) = extractMethodAndPattern(rule)
           val bodyTransform         = extractRequestBodyTransform(
             rule,
-            method.requestMessageCompanion,
+            method.descriptor.requestCompanion,
           )
 
           Entry(
@@ -101,7 +100,7 @@ object TranscodingUrlMatcher {
     )
   }
 
-  private def extractMethodAndPattern(rule: HttpRule): (Option[Method], Path) = {
+  private def extractMethodAndPattern(rule: HttpRule): (Option[Method], List[String]) = {
     val (method, str) = rule.pattern match
       case HttpRule.Pattern.Get(value) =>
         (Method.GET.some, value)
@@ -123,7 +122,7 @@ object TranscodingUrlMatcher {
     (method, path)
   }
 
-  private[connect_rpc_scala] def extractVariable(segment: Segment): Option[String] = {
+  private[connect_rpc_scala] def extractVariable(segment: String): Option[String] = {
     val length = segment.length
 
     if length > 2 && segment(0) == '{' && segment(length - 1) == '}' then
@@ -133,14 +132,14 @@ object TranscodingUrlMatcher {
 
   private def extractRequestBodyTransform(
     rule: HttpRule,
-    requestCompanion: Companion[Message],
+    requestCompanion: Companion[? <: Message],
   ): JsonTransform =
     rule.body match
       case "*" | ""  => AsIsJsonTransform
       case fieldName => SubKeyJsonTransform(toJsonFieldPath(requestCompanion, fieldName))
 
   private def toJsonFieldPath(
-    requestCompanion: Companion[Message],
+    requestCompanion: Companion[? <: Message],
     fieldPath: String,
   ): String = {
     val initialDescriptor = Option(requestCompanion).map(_.scalaDescriptor)
@@ -167,21 +166,21 @@ object TranscodingUrlMatcher {
 }
 
 class TranscodingUrlMatcher[F[_]](
-  tree: TranscodingUrlMatcher.RootNode
+  tree: TranscodingUrlMatcher.RootNode[F]
 ) {
 
   import TranscodingUrlMatcher.*
 
   def matchRequest(
     method: Method,
-    path: Path,
+    path: List[String],
     query: Seq[(String, Option[String])] = Seq.empty,
-  ): Option[MatchedRequest] = {
+  ): Option[MatchedRequest[F]] = {
     def doMatch(
-      node: RouteTree,
-      path: Path,
+      node: RouteTree[F],
+      path: List[String],
       pathVars: List[JsonField],
-    ): Option[MatchedRequest] =
+    ): Option[MatchedRequest[F]] =
       node match {
         case Node(isVariable, patternSegment, children) if path.nonEmpty =>
           val pathSegment = path.head
@@ -194,7 +193,7 @@ class TranscodingUrlMatcher[F[_]](
           else if pathSegment == patternSegment then children.colFirst(doMatch(_, pathTail, pathVars))
           else none
         case Leaf(entry) if path.isEmpty && entry.httpMethod.forall(_ == method) =>
-          val companion  = entry.method.requestMessageCompanion
+          val companion  = entry.method.descriptor.requestCompanion
           val pathParams = pathVars.map { (k, v) =>
             toJsonFieldPath(companion, k) -> v
           }

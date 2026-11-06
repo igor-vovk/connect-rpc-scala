@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package codegen.e2e;
+
+import "google/api/annotations.proto";
+
+service CalculatorService {
+  rpc Add(AddRequest) returns (AddResponse) {
+    option (google.api.http) = {
+      post: "/v1/add"
+      body: "*"
+    };
+  }
+}
+
+message AddRequest {
+  int32 left = 1;
+  int32 right = 2;
+}
+
+message AddResponse {
+  int32 result = 1;
+}

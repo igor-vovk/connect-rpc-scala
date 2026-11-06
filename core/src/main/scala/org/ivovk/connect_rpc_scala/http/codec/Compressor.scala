@@ -4,13 +4,9 @@ import cats.Endo
 import cats.effect.Sync
 import fs2.Pipe
 import fs2.compression.Compression
-import io.grpc.Status
 import org.http4s.ContentCoding
 import org.http4s.util.StringWriter
-
-object Compressor {
-  val supportedEncodings: Set[ContentCoding] = Set(ContentCoding.gzip, ContentCoding.identity)
-}
+import org.ivovk.connect_rpc_scala.service.ConnectException
 
 class Compressor[F[_]: Sync] {
 
@@ -23,7 +19,7 @@ class Compressor[F[_]: Sync] {
       case ContentCoding.identity =>
         in
       case other =>
-        throw Status.INVALID_ARGUMENT.withDescription(s"Unsupported encoding: $other").asException()
+        throw ConnectException(connectrpc.Code.InvalidArgument, s"Unsupported encoding: $other")
     }
 
   def compress(encoding: ContentCoding): Endo[EncodedEntity[F]] = entity =>
@@ -42,7 +38,7 @@ class Compressor[F[_]: Sync] {
       case ContentCoding.identity =>
         entity
       case other =>
-        throw Status.INVALID_ARGUMENT.withDescription(s"Unsupported encoding: $other").asException()
+        throw ConnectException(connectrpc.Code.InvalidArgument, s"Unsupported encoding: $other")
     }
 
 }

@@ -17,11 +17,8 @@ class HeaderMappingTest extends AnyFunSuiteLike {
   }
 
   test("Default outgoing headers filter") {
-    // Filter out headers that start with "grpc-"
-    assert(DefaultOutgoingHeadersFilter("grpc-status") === false)
-
-    // Valid headers
     assert(DefaultOutgoingHeadersFilter("Content-Type") === true)
+    assert(DefaultOutgoingHeadersFilter("custom-header") === true)
   }
 
 }

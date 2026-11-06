@@ -12,12 +12,6 @@ object MediaTypes {
   @targetName("applicationProto")
   val `application/proto`: MediaType = MediaType.unsafeParse("application/proto")
 
-  @targetName("applicationConnectJson")
-  val `application/connect+json`: MediaType = MediaType.unsafeParse("application/connect+json")
-
-  @targetName("applicationConnectProto")
-  val `application/connect+proto`: MediaType = MediaType.unsafeParse("application/connect+proto")
-
   def parse(s: String): ParseResult[MediaType] = s match {
     case "application/json"  => Right(`application/json`)
     case "application/proto" => Right(`application/proto`)

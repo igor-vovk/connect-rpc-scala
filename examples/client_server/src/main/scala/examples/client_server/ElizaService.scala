@@ -1,14 +1,14 @@
 package examples.client_server
 
 import cats.effect.Sync
-import examples.v1.eliza.{ElizaServiceFs2Grpc, SayRequest, SayResponse}
-import io.grpc.Metadata
+import examples.v1.eliza.{ElizaServiceConnect, SayRequest, SayResponse}
+import org.ivovk.connect_rpc_scala.service.{ConnectRequest, ConnectResponse}
 
-class ElizaService[F[_]: Sync] extends ElizaServiceFs2Grpc[F, Metadata] {
+class ElizaService[F[_]: Sync] extends ElizaServiceConnect.Service[F] {
 
-  def say(request: SayRequest, ctx: Metadata): F[SayResponse] =
+  override def say(request: ConnectRequest[SayRequest]): F[ConnectResponse[SayResponse]] =
     Sync[F].delay {
-      SayResponse(s"You've said: ${request.sentence}")
+      ConnectResponse(SayResponse(s"You've said: ${request.message.sentence}"))
     }
 
 }

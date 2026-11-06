@@ -1,31 +1,15 @@
 package org.ivovk.connect_rpc_scala.conformance.util
 
 import connectrpc.conformance.v1.Header
-import io.grpc.Metadata
-import org.ivovk.connect_rpc_scala.syntax.all.{asciiKey, given}
-
-import scala.jdk.CollectionConverters.given
+import org.ivovk.connect_rpc_scala.service.ConnectHeaders
 
 object ConformanceHeadersConv {
 
-  def toHeaderSeq(metadata: Metadata): Seq[Header] =
-    metadata.keys().asScala
-      .map { key =>
-        Header(key, metadata.getAll(asciiKey[String](key)).asScala.toSeq)
-      }
-      .toSeq
+  def toHeaderSeq(headers: ConnectHeaders): Seq[Header] =
+    headers.values.toSeq.map { case (name, values) => Header(name, values) }
 
-  def toMetadata(headers: Seq[Header]): Metadata = {
-    val metadata = new Metadata()
-
-    headers.foreach { h =>
-      val key = asciiKey[String](h.name)
-
-      h.value.foreach { v =>
-        metadata.put(key, v)
-      }
-    }
-
-    metadata
-  }
+  def toConnectHeaders(headers: Seq[Header]): ConnectHeaders =
+    ConnectHeaders.fromPairs(
+      headers.flatMap(header => header.value.map(value => header.name -> value))
+    )
 }
