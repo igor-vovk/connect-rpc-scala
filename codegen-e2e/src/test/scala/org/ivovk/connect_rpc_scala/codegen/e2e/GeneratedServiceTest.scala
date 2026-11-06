@@ -86,6 +86,30 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
+  test("client sends the configured user agent as a standard header") {
+    val userAgent = "connect-rpc-scala-test/1.0"
+    val service   = new CalculatorServiceConnect.Service[IO] {
+      override def add(
+        request: AddRequest,
+        ctx: ConnectRequestContext,
+      ): IO[ConnectResponse[AddResponse]] =
+        IO {
+          ctx.headers.get("user-agent") shouldBe Some(List(userAgent))
+          ConnectResponse(AddResponse(request.left + request.right))
+        }
+    }
+
+    ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(service)).build.use { app =>
+      val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app))
+        .withUserAgent(userAgent)
+        .build(uri"http://localhost")
+
+      CalculatorServiceConnect.Client[IO](transport)
+        .add(AddRequest(20, 22), ConnectRequestContext())
+        .map(_.message shouldBe AddResponse(42))
+    }.unsafeRunSync()
+  }
+
   test("generated google.api.http rule serves a transcoded JSON endpoint") {
     ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(CalculatorServiceImpl)).buildRoutes
       .use { routes =>

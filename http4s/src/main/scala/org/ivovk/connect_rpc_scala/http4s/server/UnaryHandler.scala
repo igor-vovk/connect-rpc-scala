@@ -4,10 +4,10 @@ import cats.effect.Async
 import cats.effect.syntax.all.*
 import cats.implicits.*
 import fs2.Stream
-import org.http4s.{ContentCoding, Header, Headers, Request, Response, Status}
+import org.http4s.{ContentCoding, Header, Headers, Response, Status}
 import org.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
+import org.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import org.ivovk.connect_rpc_scala.service.*
-import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
 
 import java.nio.charset.Charset
@@ -16,13 +16,6 @@ import scala.concurrent.duration.*
 private[http4s] final class UnaryHandler[F[_]: Async](
   treatTrailersAsHeaders: Boolean
 ) {
-
-  def connectHeaders(request: Request[F]): ConnectHeaders =
-    ConnectHeaders.create(
-      request.headers.headers.iterator
-        .map(header => header.name.toString -> header.value)
-        .toSeq
-    )
 
   def invokeAndEncode(
     method: UnaryMethod[F],
@@ -50,7 +43,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     }
 
     val status  = Status.fromInt(httpStatus(exception.code)).fold(throw _, identity)
-    val headers = toHttp4sHeaders(exception.headers ++ exception.trailers)
+    val headers = toHttp4s(exception.headers ++ exception.trailers)
     val body    = connectrpc.Error(
       code = exception.code,
       message = Option(exception.getMessage).filter(_.nonEmpty),
@@ -77,7 +70,10 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     result: ConnectResponse[? <: GeneratedMessage],
     codec: MessageCodec[F],
   ): F[Response[F]] = {
-    val responseHeaders = toHttp4sHeaders(result.headers) ++ toHttp4sTrailers(result.trailers)
+    val trailerHeaders =
+      if treatTrailersAsHeaders then toHttp4s(result.trailers)
+      else toHttp4sTrailers(result.trailers)
+    val responseHeaders = toHttp4s(result.headers) ++ trailerHeaders
     encodeResponse(Status.Ok, responseHeaders, result.message, codec)
   }
 
@@ -105,20 +101,6 @@ private[http4s] final class UnaryHandler[F[_]: Async](
       .flatMap(_.headOption)
       .flatMap(_.toLongOption)
       .map(_.millis)
-
-  private def toHttp4sHeaders(headers: ConnectHeaders): Headers =
-    toHttp4sHeaders(headers, trailing = false)
-
-  private def toHttp4sTrailers(headers: ConnectHeaders): Headers =
-    toHttp4sHeaders(headers, trailing = !treatTrailersAsHeaders)
-
-  private def toHttp4sHeaders(headers: ConnectHeaders, trailing: Boolean): Headers = {
-    val raw = headers.entries.toSeq.flatMap { (name, values) =>
-      val outputName = if trailing then s"trailer-$name" else name
-      values.map(value => Header.Raw(CIString(outputName), value))
-    }
-    new Headers(raw.toList)
-  }
 
   private def httpStatus(code: connectrpc.Code): Int = code match {
     case connectrpc.Code.Canceled           => 499

@@ -5,19 +5,21 @@ import cats.effect.syntax.all.*
 import cats.implicits.*
 import fs2.Stream
 import org.http4s.client.Client
-import org.http4s.{ContentCoding, Header, Headers, Method, Request, Uri}
+import org.http4s.headers.`User-Agent`
+import org.http4s.{ContentCoding, Header, Method, ProductId, Request, Uri}
 import org.ivovk.connect_rpc_scala.http.codec.*
+import org.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.{toConnectWithTrailers, toHttp4s}
+import org.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
 import org.ivovk.connect_rpc_scala.service.*
-import org.typelevel.ci.CIString
 import scalapb.GeneratedMessage
 
 import java.nio.charset.Charset
-import java.util.Locale
 
 private[http4s] final class Transport[F[_]: Async](
   httpClient: Client[F],
   messageCodec: MessageCodec[F],
   baseUri: Uri,
+  userAgent: String,
 ) extends UnaryTransport[F] {
 
   override def unary[
@@ -33,11 +35,11 @@ private[http4s] final class Transport[F[_]: Async](
       EncodeOptions(Charset.defaultCharset(), ContentCoding.identity),
     )
     val uri     = descriptor.procedure.stripPrefix("/").split('/').foldLeft(baseUri)(_.addPath(_))
-    val headers = toHttp4sHeaders(ctx.headers)
-      .put(entity.headers.map(Header.ToRaw.keyValuesToRaw).toSeq*)
-      .put(Header.Raw(CIString("x-user-agent"), "connect-rpc-scala-http4s"))
+    val headers = toHttp4s(ctx.headers)
+      .put(entity.headers.map(Header.ToRaw.keyValuesToRaw).toSeq)
       .put(
-        ctx.timeout.map(timeout => Header.Raw(CIString("connect-timeout-ms"), timeout.toMillis.toString))
+        `User-Agent`(ProductId(userAgent)),
+        ctx.timeout.map(`Connect-Timeout-Ms`(_)),
       )
     val httpRequest = Request[F](
       method = Method.POST,
@@ -47,13 +49,13 @@ private[http4s] final class Transport[F[_]: Async](
     )
 
     val response = httpClient.run(httpRequest).use { response =>
-      val (connectHeaders, connectTrailers) = fromHttp4sHeaders(response.headers)
-      val responseEntity                    = EntityToDecode[F](response.body, connectHeaders)
+      val (headers, trailers) = toConnectWithTrailers(response.headers)
+      val responseEntity      = EntityToDecode[F](response.body, headers)
 
       if response.status.isSuccess then
         responseEntity.as[ResponseMessage](using descriptor.responseCompanion, messageCodec)
           .compile.onlyOrError
-          .map(message => ConnectResponse(message, connectHeaders, connectTrailers))
+          .map(message => ConnectResponse(message, headers, trailers))
       else
         responseEntity.as[connectrpc.Error](using connectrpc.Error, messageCodec)
           .compile.onlyOrError
@@ -65,15 +67,15 @@ private[http4s] final class Transport[F[_]: Async](
                   if error.code.isUnspecified then codeByHttpStatus(response.status.code) else error.code,
                 message = error.getMessage,
                 details = error.details,
-                headers = connectHeaders,
-                trailers = connectTrailers,
+                headers = headers,
+                trailers = trailers,
               ).raiseError
             case Left(decodeFailure) =>
               ConnectException(
                 code = codeByHttpStatus(response.status.code),
                 message = Option(decodeFailure.getMessage).getOrElse(response.status.reason),
-                headers = connectHeaders,
-                trailers = connectTrailers,
+                headers = headers,
+                trailers = trailers,
               ).withCause(decodeFailure).raiseError
           }
     }
@@ -84,23 +86,6 @@ private[http4s] final class Transport[F[_]: Async](
         ConnectException(connectrpc.Code.DeadlineExceeded, "Request deadline exceeded").raiseError,
       )
     }
-  }
-
-  private def toHttp4sHeaders(headers: ConnectHeaders): Headers = {
-    val raw = headers.entries.toSeq.flatMap { (name, values) =>
-      values.map(value => Header.Raw(CIString(name), value))
-    }
-    new Headers(raw.toList)
-  }
-
-  private val TrailerPrefix       = "trailer-"
-  private val TrailerPrefixLength = TrailerPrefix.length
-
-  private def fromHttp4sHeaders(headers: Headers): (ConnectHeaders, ConnectHeaders) = {
-    val pairs              = headers.headers.map(header => header.name.toString -> header.value)
-    val (trailers, normal) = pairs.partition(_._1.toLowerCase(Locale.ROOT).startsWith(TrailerPrefix))
-    val connectTrailers    = trailers.map((name, value) => name.drop(TrailerPrefixLength) -> value)
-    ConnectHeaders.create(normal) -> ConnectHeaders.create(connectTrailers)
   }
 
   private def codeByHttpStatus(status: Int): connectrpc.Code = status match {

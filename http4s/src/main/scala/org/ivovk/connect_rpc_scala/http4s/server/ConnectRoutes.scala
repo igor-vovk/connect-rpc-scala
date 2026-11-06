@@ -8,6 +8,7 @@ import org.http4s.Status.UnsupportedMediaType
 import org.http4s.{HttpRoutes, Method, Request, Response, Uri}
 import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.http.codec.*
+import org.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.toConnect
 import org.ivovk.connect_rpc_scala.service.{ServiceDefinition, UnaryMethod}
 
 private[http4s] final class ConnectRoutes[F[_]: Async](
@@ -50,7 +51,8 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
     }
 
   private def handle(request: Request[F], method: UnaryMethod[F]): F[Response[F]] = {
-    val isGet = request.method == Method.GET
+    val isGet = request.method.isSafe
+
     codecFor(request, isGet) match {
       case None        => unsupportedMediaType(request, isGet)
       case Some(codec) =>
@@ -60,7 +62,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
 
         decodeAndInvoke(
           method,
-          EntityToDecode(message, unaryHandler.connectHeaders(request)),
+          EntityToDecode(message, toConnect(request.headers)),
           codec,
         )
     }

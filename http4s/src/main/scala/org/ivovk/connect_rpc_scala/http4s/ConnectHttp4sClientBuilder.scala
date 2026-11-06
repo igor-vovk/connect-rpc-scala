@@ -10,11 +10,14 @@ import org.ivovk.connect_rpc_scala.service.UnaryTransport
 
 object ConnectHttp4sClientBuilder {
 
+  private val DefaultUserAgent = "connect-rpc-scala-http4s"
+
   def apply[F[_]: Async](client: Client[F]): ConnectHttp4sClientBuilder[F] = {
     val messageCodec = JsonSerdesBuilder[F]().build.codec
     new ConnectHttp4sClientBuilder(
       client = client,
       messageCodec = messageCodec,
+      userAgent = DefaultUserAgent,
     )
   }
 }
@@ -22,19 +25,31 @@ object ConnectHttp4sClientBuilder {
 final class ConnectHttp4sClientBuilder[F[_]: Async] private (
   client: Client[F],
   messageCodec: MessageCodec[F],
+  userAgent: String,
 ) {
 
-  private def copy(newMessageCodec: MessageCodec[F]): ConnectHttp4sClientBuilder[F] =
-    new ConnectHttp4sClientBuilder(client, newMessageCodec)
+  private def copy(
+    messageCodec: MessageCodec[F] = this.messageCodec,
+    userAgent: String = this.userAgent,
+  ): ConnectHttp4sClientBuilder[F] =
+    new ConnectHttp4sClientBuilder(client, messageCodec, userAgent)
 
   def withJsonCodecConfigurator(
     configure: Endo[JsonSerdesBuilder[F]]
   ): ConnectHttp4sClientBuilder[F] =
-    copy(configure(JsonSerdesBuilder[F]()).build.codec)
+    copy(messageCodec = configure(JsonSerdesBuilder[F]()).build.codec)
+
+  def withUserAgent(userAgent: String): ConnectHttp4sClientBuilder[F] =
+    copy(userAgent = userAgent)
 
   def enableBinaryFormat(): ConnectHttp4sClientBuilder[F] =
-    copy(new ProtoMessageCodec[F])
+    copy(messageCodec = new ProtoMessageCodec[F])
 
   def build(baseUri: Uri): UnaryTransport[F] =
-    Transport(client, messageCodec, baseUri)
+    Transport(
+      httpClient = client,
+      messageCodec = messageCodec,
+      baseUri = baseUri,
+      userAgent = userAgent,
+    )
 }
