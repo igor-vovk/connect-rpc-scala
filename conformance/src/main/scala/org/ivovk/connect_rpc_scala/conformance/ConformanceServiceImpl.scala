@@ -81,7 +81,7 @@ class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceConnect.Serv
         )
         ConnectException(
           code = connectrpc.Code.fromValue(error.code.value),
-          message = error.message.getOrElse(""),
+          message = error.getMessage,
           details = Seq(detail),
           headers = headers,
           trailers = trailers,

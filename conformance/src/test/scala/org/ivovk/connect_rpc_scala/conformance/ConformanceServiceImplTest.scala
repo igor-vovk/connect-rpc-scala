@@ -22,7 +22,7 @@ class ConformanceServiceImplTest extends AnyFunSuite with Matchers {
     )
     val message = UnaryRequest(Some(responseDefinition), ByteString.copyFromUtf8("request"))
     val context = ConnectRequestContext(
-      ConnectHeaders.fromPairs(Seq("request-header" -> "request-value")),
+      ConnectHeaders.create(Seq("request-header" -> "request-value")),
       Some(250.millis),
     )
 

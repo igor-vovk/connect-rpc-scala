@@ -255,7 +255,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     }
 
     val status  = Status.fromInt(httpStatus(exception.code)).fold(throw _, identity)
-    val headers = toHttp4sHeaders(exception.headers) ++ toHttp4sTrailers(exception.trailers)
+    val headers = toHttp4sHeaders(exception.headers ++ exception.trailers)
     val body    = connectrpc.Error(
       code = exception.code,
       message = Option(exception.getMessage).filter(_.nonEmpty),
@@ -299,7 +299,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
   }
 
   private def connectHeaders(request: Request[F]): ConnectHeaders =
-    ConnectHeaders.fromPairs(
+    ConnectHeaders.create(
       request.headers.headers.iterator
         .map(header => header.name.toString -> header.value)
         .filter((name, _) => incomingHeadersFilter(name))

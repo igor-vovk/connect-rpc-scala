@@ -128,7 +128,7 @@ private final class ConnectHttp4sUnaryTransport[F[_]: Async](
     val pairs              = headers.headers.map(header => header.name.toString -> header.value)
     val (trailers, normal) = pairs.partition(_._1.toLowerCase(java.util.Locale.ROOT).startsWith("trailer-"))
     val connectTrailers    = trailers.map { case (name, value) => name.drop("trailer-".length) -> value }
-    ConnectHeaders.fromPairs(normal) -> ConnectHeaders.fromPairs(connectTrailers)
+    ConnectHeaders.create(normal) -> ConnectHeaders.create(connectTrailers)
   }
 
   private def codeByHttpStatus(status: Int): connectrpc.Code = status match {
