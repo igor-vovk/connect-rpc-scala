@@ -1,5 +1,5 @@
 # Define common variables
-DOCKER_BUILD_CMD = docker build -f conformance-build/Dockerfile . --progress=plain --output out/
+DOCKER_BUILD_CMD = docker build -f conformance/build/Dockerfile . --progress=plain --output out/
 
 .PHONY: build-conformance
 build-conformance:

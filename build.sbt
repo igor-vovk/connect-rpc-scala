@@ -125,6 +125,7 @@ lazy val codegenE2e = project
   )
 
 lazy val conformance = project
+  .in(file("conformance/impl"))
   .dependsOn(http4s)
   .enablePlugins(LocalCodeGenPlugin, JavaAppPackaging)
   .settings(
@@ -132,6 +133,7 @@ lazy val conformance = project
     commonDeps,
     grpcFreeDependencies,
     codeGenClasspath := (codegen / Compile / fullClasspath).value,
+    Compile / PB.protoSources := Seq(baseDirectory.value.getParentFile / "protos"),
     Compile / PB.targets := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->
         (Compile / sourceManaged).value / "scalapb",
