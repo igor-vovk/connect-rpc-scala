@@ -6,19 +6,31 @@ import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 import java.util.Locale
 import scala.concurrent.duration.FiniteDuration
 
-final case class ConnectHeaders private (values: Map[String, Vector[String]]) {
+sealed trait ConnectHeaders {
 
-  def get(name: String): Option[Vector[String]] =
-    values.get(ConnectHeaders.normalize(name))
+  def entries: Iterable[(String, Seq[String])]
 
-  def add(name: String, value: String): ConnectHeaders = {
-    val normalized = ConnectHeaders.normalize(name)
-    copy(values = values.updatedWith(normalized)(existing => Some(existing.getOrElse(Vector.empty) :+ value)))
-  }
+  def get(name: String): Option[Seq[String]]
+
+  def add(name: String, value: String): ConnectHeaders
 }
 
 object ConnectHeaders {
-  val empty: ConnectHeaders = ConnectHeaders(Map.empty)
+
+  private final case class Impl(values: Map[String, List[String]]) extends ConnectHeaders {
+
+    override def entries: Iterable[(String, Seq[String])] = values
+
+    override def get(name: String): Option[Seq[String]] =
+      values.get(normalize(name))
+
+    override def add(name: String, value: String): ConnectHeaders = {
+      val normalized = normalize(name)
+      Impl(values.updatedWith(normalized)(existing => Some(existing.getOrElse(List.empty) :+ value)))
+    }
+  }
+
+  val empty: ConnectHeaders = Impl(Map.empty)
 
   def fromPairs(headers: Iterable[(String, String)]): ConnectHeaders =
     headers.foldLeft(empty) { case (result, (name, value)) => result.add(name, value) }

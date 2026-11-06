@@ -119,7 +119,7 @@ private final class ConnectHttp4sUnaryTransport[F[_]: Async](
   }
 
   private def toHttp4sHeaders(headers: ConnectHeaders): Headers = {
-    val raw = headers.values.toSeq.flatMap { case (name, values) =>
+    val raw = headers.entries.toSeq.flatMap { case (name, values) =>
       values.map(value => Header.Raw(CIString(name), value))
     }
     new Headers(raw.toList)

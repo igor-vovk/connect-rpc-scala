@@ -6,7 +6,7 @@ import org.ivovk.connect_rpc_scala.service.ConnectHeaders
 object ConformanceHeadersConv {
 
   def toHeaderSeq(headers: ConnectHeaders): Seq[Header] =
-    headers.values.toSeq.map { case (name, values) => Header(name, values) }
+    headers.entries.toSeq.map { case (name, values) => Header(name, values) }
 
   def toConnectHeaders(headers: Seq[Header]): ConnectHeaders =
     ConnectHeaders.fromPairs(

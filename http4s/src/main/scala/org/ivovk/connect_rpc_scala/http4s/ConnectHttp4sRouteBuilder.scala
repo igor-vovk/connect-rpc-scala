@@ -330,7 +330,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     toHttp4sHeaders(headers, trailing = !treatTrailersAsHeaders)
 
   private def toHttp4sHeaders(headers: ConnectHeaders, trailing: Boolean): Headers = {
-    val raw = headers.values.toSeq.flatMap { case (name, values) =>
+    val raw = headers.entries.toSeq.flatMap { case (name, values) =>
       if outgoingHeadersFilter(name) then {
         val outputName = if trailing then s"trailer-$name" else name
         values.map(value => Header.Raw(CIString(outputName), value))
