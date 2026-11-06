@@ -105,8 +105,7 @@ private final class ConnectHttp4sUnaryTransport[F[_]: Async](
                 message = Option(decodeFailure.getMessage).getOrElse(response.status.reason),
                 headers = connectHeaders,
                 trailers = connectTrailers,
-                cause = Some(decodeFailure),
-              ).raiseError
+              ).withCause(decodeFailure).raiseError
           }
     }
 

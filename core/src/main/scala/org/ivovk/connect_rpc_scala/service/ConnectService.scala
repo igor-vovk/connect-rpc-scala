@@ -22,8 +22,13 @@ final case class ConnectException(
   details: Seq[connectrpc.ErrorDetailsAny] = Seq.empty,
   headers: ConnectHeaders = ConnectHeaders.empty,
   trailers: ConnectHeaders = ConnectHeaders.empty,
-  cause: Option[Throwable] = None,
-) extends RuntimeException(message, cause.orNull)
+) extends RuntimeException(message) {
+
+  private[connect_rpc_scala] def withCause(cause: Throwable): ConnectException = {
+    initCause(cause)
+    this
+  }
+}
 
 final case class UnaryMethodDescriptor[
   Request <: GeneratedMessage,

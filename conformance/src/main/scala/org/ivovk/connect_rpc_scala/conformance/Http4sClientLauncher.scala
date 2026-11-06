@@ -110,8 +110,7 @@ object Http4sClientLauncher extends IOApp.Simple {
                 ConnectException(
                   connectrpc.Code.Unknown,
                   Option(other.getMessage).getOrElse("Unknown error"),
-                  cause = Some(other),
-                )
+                ).withCause(other)
             }
             logger.info("Error during conformance test {}: {}", spec.testName, connectError)
 

@@ -234,8 +234,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     ConnectException(
       connectrpc.Code.InvalidArgument,
       Option(error.getMessage).getOrElse("Unable to decode the request"),
-      cause = Some(error),
-    )
+    ).withCause(error)
 
   private def encodeResult(
     result: ConnectResponse[? <: GeneratedMessage],
@@ -252,8 +251,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
         ConnectException(
           connectrpc.Code.Internal,
           Option(other.getMessage).getOrElse("Internal error"),
-          cause = Some(other),
-        )
+        ).withCause(other)
     }
 
     val status  = Status.fromInt(httpStatus(exception.code)).fold(throw _, identity)
