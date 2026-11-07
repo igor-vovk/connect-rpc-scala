@@ -17,7 +17,7 @@ import scala.concurrent.duration.*
 object Dependencies {
 
   def create(): Resource[IO, Dependencies] =
-    Allocator.create[IO]().map(Dependencies(using _))
+    Allocator.builder[IO].create(Dependencies())
 
 }
 
