@@ -3,6 +3,8 @@ package examples.client_server
 import cats.effect.{IO, Resource}
 import com.comcast.ip4s.*
 import examples.v1.eliza.ElizaServiceConnect
+import me.ivovk.cedi.Allocator
+import me.ivovk.cedi.syntax.*
 import org.http4s.HttpApp
 import org.http4s.client.Client
 import org.http4s.ember.client.EmberClientBuilder
@@ -15,16 +17,18 @@ import scala.concurrent.duration.*
 object Dependencies {
 
   def create(): Resource[IO, Dependencies] =
-    for
-      httpApp <- ConnectHttp4sRouteBuilder
-        .forService(ElizaServiceConnect.bind(ElizaService[IO]()))
-        .build
-      client <- EmberClientBuilder.default[IO].build
-    yield Dependencies(httpApp, client)
+    Allocator.create[IO]().map(Dependencies(using _))
 
 }
 
-class Dependencies(httpServerApp: HttpApp[IO], httpClient: Client[IO]) {
+class Dependencies(using AllocatorIO) {
+
+  lazy val elizaService: ElizaServiceConnect.Service[IO] = new ElizaService[IO]
+
+  lazy val httpServerApp: HttpApp[IO] = allocate:
+    ConnectHttp4sRouteBuilder
+      .forService[IO](ElizaServiceConnect.bind(elizaService))
+      .build
 
   lazy val connectRpcServer: Resource[IO, org.http4s.server.Server] =
     EmberServerBuilder.default[IO]
@@ -34,7 +38,12 @@ class Dependencies(httpServerApp: HttpApp[IO], httpClient: Client[IO]) {
       .withShutdownTimeout(1.second)
       .build
 
+  lazy val httpClient: Client[IO] = allocate:
+    EmberClientBuilder.default[IO].build
+
   lazy val elizaClient: ElizaServiceConnect.Client[IO] =
-    ElizaServiceConnect.Client(ConnectHttp4sClientBuilder(httpClient).build(uri"http://localhost:8080/"))
+    ElizaServiceConnect.Client(
+      ConnectHttp4sClientBuilder[IO](httpClient).build(uri"http://localhost:8080/")
+    )
 
 }

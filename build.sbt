@@ -79,7 +79,8 @@ lazy val core = project
 lazy val http4s = project
   .dependsOn(core)
   .settings(
-    name                                := "connect-rpc-scala-http4s",
+    name := "connect-rpc-scala-http4s",
+    commonDeps,
     libraryDependencies += "org.http4s" %% "http4s-client" % Versions.http4s,
   )
 
@@ -137,7 +138,7 @@ lazy val benchmarks = project
   )
 
 lazy val examples = project.in(file("examples"))
-  .aggregate(example_client_server)
+  .aggregate(example_client_server, example_zio_client_server)
   .settings(noPublish)
 
 lazy val example_client_server = project.in(file("examples/client_server"))
@@ -153,6 +154,28 @@ lazy val example_client_server = project.in(file("examples/client_server"))
         (Compile / sourceManaged).value / "connect",
     ),
     libraryDependencies ++= Seq(
+      "me.ivovk"      %% "cedi"                % Versions.cedi,
+      "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
+      "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
+      "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,
+    ),
+  )
+
+lazy val example_zio_client_server = project.in(file("examples/zio_client_server"))
+  .dependsOn(http4s)
+  .enablePlugins(LocalCodeGenPlugin, JavaAppPackaging)
+  .settings(
+    noPublish,
+    codeGenClasspath     := (codegen / Compile / fullClasspath).value,
+    Compile / PB.targets := Seq(
+      scalapb.gen(grpc = false, scala3Sources = true) ->
+        (Compile / sourceManaged).value / "scalapb",
+      (genModule("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
+        (Compile / sourceManaged).value / "connect",
+    ),
+    libraryDependencies ++= Seq(
+      "dev.zio"       %% "zio"                 % Versions.zio,
+      "dev.zio"       %% "zio-interop-cats"    % Versions.zioInteropCats,
       "org.http4s"    %% "http4s-ember-server" % Versions.http4s,
       "org.http4s"    %% "http4s-ember-client" % Versions.http4s,
       "ch.qos.logback" % "logback-classic"     % Versions.logback % Runtime,

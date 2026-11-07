@@ -13,6 +13,19 @@ service CalculatorService {
   }
 }
 
+service TranscodingService {
+  rpc Get(GetRequest) returns (GetResponse) {
+    option (google.api.http) = {get: "/v1/get/{key}"};
+  }
+
+  rpc AddNested(NestedAddRequest) returns (AddResponse) {
+    option (google.api.http) = {
+      post: "/v1/nested"
+      body: "input"
+    };
+  }
+}
+
 message AddRequest {
   int32 left = 1;
   int32 right = 2;
@@ -20,4 +33,16 @@ message AddRequest {
 
 message AddResponse {
   int32 result = 1;
+}
+
+message GetRequest {
+  string key = 1;
+}
+
+message GetResponse {
+  string value = 1;
+}
+
+message NestedAddRequest {
+  AddRequest input = 1;
 }
