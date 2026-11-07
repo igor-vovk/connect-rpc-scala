@@ -2,7 +2,6 @@ package examples.client_server
 
 import cats.effect.{IO, IOApp}
 import examples.v1.eliza.SayRequest
-import org.ivovk.connect_rpc_scala.service.ConnectRequestContext
 import org.typelevel.log4cats.slf4j.*
 
 object Main extends IOApp.Simple {
@@ -16,8 +15,8 @@ object Main extends IOApp.Simple {
         serverFiber <- deps.connectRpcServer.useForever.start
 
         // Call the Eliza service
-        clientResponse <- deps.elizaClient.say(SayRequest("Hello, Eliza!"), ConnectRequestContext())
-        _              <- logger.info(s"Received response: ${clientResponse.message.sentence}")
+        clientResponse <- deps.elizaClient.say(SayRequest("Hello, Eliza!"))
+        _              <- logger.info(s"Received response: ${clientResponse.sentence}")
 
         // Stop the server
         _ <- serverFiber.cancel

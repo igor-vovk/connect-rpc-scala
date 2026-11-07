@@ -1,7 +1,7 @@
 # Connect client-server example
 
-This example generates a unary service API from protobuf, serves it through http4s, and calls it with the generated
-Connect client.
+This example generates a request/response-only unary service API from protobuf, serves it through http4s, and calls it
+with the generated simple Connect client.
 
 Dependencies and resource allocation are wired using [Cedi](https://github.com/igor-vovk/cedi).
 

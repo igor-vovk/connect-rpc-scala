@@ -1,19 +1,39 @@
 package org.ivovk.connect_rpc_scala.codegen
 
+import com.google.api.http.HttpRule
+import com.google.protobuf.ByteString
 import com.google.protobuf.DescriptorProtos.{
   DescriptorProto,
   FileDescriptorProto,
   MethodDescriptorProto,
+  MethodOptions,
   ServiceDescriptorProto,
 }
+import com.google.protobuf.UnknownFieldSet
 import com.google.protobuf.compiler.PluginProtos.CodeGeneratorRequest
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import protocgen.CodeGenRequest
 
 import scala.collection.JavaConverters._
+import scala.io.Source
 
 class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
+
+  test("matches the generated service golden file") {
+    val response = generate(
+      method(
+        "Call",
+        httpRule = Some(HttpRule(body = "*").withPost("/v1/add")),
+      ),
+      method("HealthCheck"),
+    )
+
+    response.hasError shouldBe false
+    response.getFileCount shouldBe 1
+    response.getFile(0).getName shouldBe "test/example/ExampleServiceConnect.scala"
+    response.getFile(0).getContent shouldBe golden("ExampleServiceConnect.scala")
+  }
 
   test("generates unary service definitions without io.grpc") {
     val response = generate(method("Call"))
@@ -51,14 +71,27 @@ class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
     name: String,
     clientStreaming: Boolean = false,
     serverStreaming: Boolean = false,
-  ): MethodDescriptorProto =
-    MethodDescriptorProto.newBuilder()
+    httpRule: Option[HttpRule] = None,
+  ): MethodDescriptorProto = {
+    val builder = MethodDescriptorProto.newBuilder()
       .setName(name)
       .setInputType(".test.Request")
       .setOutputType(".test.Response")
       .setClientStreaming(clientStreaming)
       .setServerStreaming(serverStreaming)
-      .build()
+
+    httpRule.foreach { rule =>
+      val field = UnknownFieldSet.Field.newBuilder()
+        .addLengthDelimited(ByteString.copyFrom(rule.toByteArray))
+        .build()
+      val unknownFields = UnknownFieldSet.newBuilder()
+        .addField(72295728, field)
+        .build()
+      builder.setOptions(MethodOptions.newBuilder().setUnknownFields(unknownFields))
+    }
+
+    builder.build()
+  }
 
   private def generate(methods: MethodDescriptorProto*) = {
     val requestMessage  = DescriptorProto.newBuilder().setName("Request").build()
@@ -81,5 +114,11 @@ class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
       .build()
 
     ConnectRpcScalaGenerator.process(CodeGenRequest(request)).toCodeGeneratorResponse
+  }
+
+  private def golden(name: String): String = {
+    val source = Source.fromResource(s"golden/$name")
+    try source.mkString.replace("\r\n", "\n")
+    finally source.close()
   }
 }

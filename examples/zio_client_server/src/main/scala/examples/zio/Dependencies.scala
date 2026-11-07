@@ -42,8 +42,8 @@ final class Dependencies private (httpApp: HttpApp[Task], httpClient: Client[Tas
       .build
       .toScopedZIO
 
-  val elizaClient: ElizaServiceConnect.Client[Task] =
-    ElizaServiceConnect.Client(
+  val elizaClient: ElizaServiceConnect.SimpleClient[Task] =
+    ElizaServiceConnect.SimpleClient(
       ConnectHttp4sClientBuilder(httpClient).build(uri"http://localhost:8080/")
     )
 }

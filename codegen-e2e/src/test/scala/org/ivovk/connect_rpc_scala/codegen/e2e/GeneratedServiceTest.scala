@@ -18,6 +18,11 @@ import scala.concurrent.duration.*
 
 class GeneratedServiceTest extends AnyFunSuite with Matchers {
 
+  private object SimpleCalculatorServiceImpl extends CalculatorServiceConnect.SimpleService[IO] {
+    override def add(request: AddRequest): IO[AddResponse] =
+      IO.pure(AddResponse(request.left + request.right))
+  }
+
   private object CalculatorServiceImpl extends CalculatorServiceConnect.Service[IO] {
     override def add(
       request: AddRequest,
@@ -29,7 +34,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
   private object FailingCalculatorServiceImpl extends CalculatorServiceConnect.Service[IO] {
     override def add(
       request: AddRequest,
-      _ctx: ConnectRequestContext,
+      ctx: ConnectRequestContext,
     ): IO[ConnectResponse[AddResponse]] =
       IO.raiseError(
         ConnectException(
@@ -42,7 +47,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
   private object SlowCalculatorServiceImpl extends CalculatorServiceConnect.Service[IO] {
     override def add(
       request: AddRequest,
-      _ctx: ConnectRequestContext,
+      ctx: ConnectRequestContext,
     ): IO[ConnectResponse[AddResponse]] =
       IO.pure(request).flatMap(_ => IO.never)
   }
@@ -67,6 +72,19 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         client.add(AddRequest(11, 31), ConnectRequestContext()).map { response =>
           response.message shouldBe AddResponse(42)
         }
+      }
+      .unsafeRunSync()
+  }
+
+  test("generated simple client calls a simple service without protocol context") {
+    ConnectHttp4sRouteBuilder.forService(
+      CalculatorServiceConnect.bind(SimpleCalculatorServiceImpl)
+    ).build
+      .use { app =>
+        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
+        val client    = CalculatorServiceConnect.SimpleClient[IO](transport)
+
+        client.add(AddRequest(11, 31)).map(_ shouldBe AddResponse(42))
       }
       .unsafeRunSync()
   }

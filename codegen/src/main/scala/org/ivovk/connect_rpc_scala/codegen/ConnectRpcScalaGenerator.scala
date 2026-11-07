@@ -80,6 +80,14 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
       content ++= "    )\n\n"
     }
 
+    content ++= "  trait SimpleService[F[_]] {\n"
+    methods.foreach { method =>
+      val requestType  = method.inputType.scalaType
+      val responseType = method.outputType.scalaType
+      content ++= s"    def ${method.name}(request: $requestType): F[$responseType]\n"
+    }
+    content ++= "  }\n\n"
+
     content ++= "  trait Service[F[_]] {\n"
     methods.foreach { method =>
       val requestType  = method.inputType.scalaType
@@ -88,6 +96,23 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
         s"    def ${method.name}(request: $requestType, ctx: ConnectRequestContext): F[ConnectResponse[$responseType]]\n"
     }
     content ++= "  }\n\n"
+
+    content ++= "  def bind[F[_]: _root_.cats.Functor](service: SimpleService[F]): ServiceDefinition[F] =\n"
+    content ++= "    ServiceDefinition(\n"
+    content ++= "      name = serviceName,\n"
+    content ++= "      methods = Seq(\n"
+    methods.zipWithIndex.foreach { case (method, index) =>
+      val requestType  = method.inputType.scalaType
+      val responseType = method.outputType.scalaType
+      val comma        = if (index == methods.size - 1) "" else ","
+      content ++= s"        UnaryMethod[F, $requestType, $responseType](\n"
+      content ++= s"          ${descriptorName(method.getName)},\n"
+      content ++=
+        s"          (request, _) => _root_.cats.Functor[F].map(service.${method.name}(request))(ConnectResponse(_)),\n"
+      content ++= s"        )$comma\n"
+    }
+    content ++= "      ),\n"
+    content ++= "    )\n\n"
 
     content ++= "  def bind[F[_]](service: Service[F]): ServiceDefinition[F] =\n"
     content ++= "    ServiceDefinition(\n"
@@ -102,6 +127,19 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     }
     content ++= "      ),\n"
     content ++= "    )\n\n"
+
+    content ++= "  final class SimpleClient[F[_]: _root_.cats.Functor](transport: UnaryTransport[F])\n"
+    content ++= "      extends SimpleService[F] {\n"
+    methods.foreach { method =>
+      val requestType  = method.inputType.scalaType
+      val responseType = method.outputType.scalaType
+      content ++= s"    override def ${method.name}(request: $requestType): F[$responseType] =\n"
+      content ++= "      _root_.cats.Functor[F].map(\n"
+      content ++=
+        s"        transport.unary(${descriptorName(method.getName)}, request, ConnectRequestContext())\n"
+      content ++= "      )(_.message)\n\n"
+    }
+    content ++= "  }\n\n"
 
     content ++= "  final class Client[F[_]](transport: UnaryTransport[F]) extends Service[F] {\n"
     methods.foreach { method =>

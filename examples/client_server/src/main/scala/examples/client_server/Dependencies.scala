@@ -23,7 +23,7 @@ object Dependencies {
 
 class Dependencies(using AllocatorIO) {
 
-  lazy val elizaService: ElizaServiceConnect.Service[IO] = new ElizaService[IO]
+  lazy val elizaService: ElizaServiceConnect.SimpleService[IO] = new ElizaService[IO]
 
   lazy val httpServerApp: HttpApp[IO] = allocate:
     ConnectHttp4sRouteBuilder
@@ -41,8 +41,8 @@ class Dependencies(using AllocatorIO) {
   lazy val httpClient: Client[IO] = allocate:
     EmberClientBuilder.default[IO].build
 
-  lazy val elizaClient: ElizaServiceConnect.Client[IO] =
-    ElizaServiceConnect.Client(
+  lazy val elizaClient: ElizaServiceConnect.SimpleClient[IO] =
+    ElizaServiceConnect.SimpleClient(
       ConnectHttp4sClientBuilder[IO](httpClient).build(uri"http://localhost:8080/")
     )
 
