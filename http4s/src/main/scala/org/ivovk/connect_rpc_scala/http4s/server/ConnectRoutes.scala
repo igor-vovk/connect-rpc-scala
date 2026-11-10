@@ -83,7 +83,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
       .compile.onlyOrError
       .adaptError { case error => unaryHandler.decodeError(error) }
       .flatMap(message => unaryHandler.invokeAndEncode(method, message, entity.headers, codec))
-      .handleErrorWith(error => unaryHandler.errorResponse(error, codec))
+      .handleErrorWith(unaryHandler.errorResponse)
   }
 
   private def codecFor(request: Request[F], isGet: Boolean): Option[MessageCodec[F]] = {

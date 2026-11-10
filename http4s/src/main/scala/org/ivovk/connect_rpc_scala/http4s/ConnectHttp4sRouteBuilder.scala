@@ -72,7 +72,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     }
 
   def buildRoutes: Resource[F, Routes[F]] = {
-    val unaryHandler  = UnaryHandler(treatTrailersAsHeaders)
+    val unaryHandler  = UnaryHandler(treatTrailersAsHeaders, jsonSerdes.codec)
     val connectRoutes =
       ConnectRoutes(services, jsonSerdes, pathPrefix, unaryHandler).routes
     val transcodingRoutes =

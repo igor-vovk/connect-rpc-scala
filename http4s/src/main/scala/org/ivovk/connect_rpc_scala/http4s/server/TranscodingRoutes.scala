@@ -52,6 +52,6 @@ private[http4s] final class TranscodingRoutes[F[_]: Async](
       }
       .adaptError { case error => unaryHandler.decodeError(error) }
       .flatMap(message => unaryHandler.invokeAndEncode(method, message, headers, jsonSerdes.codec))
-      .handleErrorWith(error => unaryHandler.errorResponse(error, jsonSerdes.codec))
+      .handleErrorWith(unaryHandler.errorResponse)
   }
 }

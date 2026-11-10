@@ -14,7 +14,8 @@ import java.nio.charset.Charset
 import scala.concurrent.duration.*
 
 private[http4s] final class UnaryHandler[F[_]: Async](
-  treatTrailersAsHeaders: Boolean
+  treatTrailersAsHeaders: Boolean,
+  jsonCodec: MessageCodec[F],
 ) {
 
   def invokeAndEncode(
@@ -32,7 +33,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
       Option(error.getMessage).getOrElse("Unable to decode the request"),
     ).withCause(error)
 
-  def errorResponse(error: Throwable, codec: MessageCodec[F]): F[Response[F]] = {
+  def errorResponse(error: Throwable): F[Response[F]] = {
     val exception = error match {
       case connect: ConnectException => connect
       case other                     =>
@@ -49,7 +50,8 @@ private[http4s] final class UnaryHandler[F[_]: Async](
       message = Option(exception.getMessage).filter(_.nonEmpty),
       details = exception.details,
     )
-    encodeResponse(status, headers, body, codec)
+
+    encodeResponse(status, headers, body, jsonCodec)
   }
 
   private def invoke(
@@ -74,6 +76,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
       if treatTrailersAsHeaders then toHttp4s(result.trailers)
       else toHttp4sTrailers(result.trailers)
     val responseHeaders = toHttp4s(result.headers) ++ trailerHeaders
+
     encodeResponse(Status.Ok, responseHeaders, result.message, codec)
   }
 

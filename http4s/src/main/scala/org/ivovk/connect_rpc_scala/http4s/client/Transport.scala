@@ -18,6 +18,7 @@ import java.nio.charset.Charset
 private[http4s] final class Transport[F[_]: Async](
   httpClient: Client[F],
   messageCodec: MessageCodec[F],
+  jsonCodec: MessageCodec[F],
   baseUri: Uri,
   userAgent: String,
 ) extends UnaryTransport[F] {
@@ -39,7 +40,7 @@ private[http4s] final class Transport[F[_]: Async](
       .put(entity.headers.map(Header.ToRaw.keyValuesToRaw).toSeq)
       .put(
         `User-Agent`(ProductId(userAgent)),
-        ctx.timeout.map(`Connect-Timeout-Ms`(_)),
+        ctx.timeout.map(`Connect-Timeout-Ms`.apply),
       )
     val httpRequest = Request[F](
       method = Method.POST,
@@ -57,7 +58,7 @@ private[http4s] final class Transport[F[_]: Async](
           .compile.onlyOrError
           .map(message => ConnectResponse(message, headers, trailers))
       else
-        responseEntity.as[connectrpc.Error](using connectrpc.Error, messageCodec)
+        responseEntity.as[connectrpc.Error](using connectrpc.Error, jsonCodec)
           .compile.onlyOrError
           .attempt
           .flatMap {

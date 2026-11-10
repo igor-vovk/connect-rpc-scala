@@ -31,7 +31,7 @@ message ReadyResponse {}
 Implement and bind the generated service:
 
 ```scala
-object HealthService extends HealthServiceConnect.Service[IO] {
+object HealthService extends HealthServiceConnect.Service[IO, ConnectRequestContext] {
   override def alive(
     request: AliveRequest,
     ctx: ConnectRequestContext,

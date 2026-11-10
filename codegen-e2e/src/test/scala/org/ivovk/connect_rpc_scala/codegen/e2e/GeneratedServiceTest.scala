@@ -4,9 +4,12 @@ import cats.data.Kleisli
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import codegen.e2e.calculator.{AddRequest, AddResponse, CalculatorServiceConnect}
+import com.google.protobuf.ByteString
+import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.implicits.*
-import org.http4s.{Header, HttpApp, Method, Request}
+import org.http4s.{Header, HttpApp, Method, Request, Response, Status}
+import org.ivovk.connect_rpc_scala.http.MediaTypes
 import org.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import org.ivovk.connect_rpc_scala.service.*
 import org.scalatest.funsuite.AnyFunSuite
@@ -216,6 +219,56 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         }
       }
       .unsafeRunSync()
+  }
+
+  test("server encodes errors as JSON for protobuf requests") {
+    ConnectHttp4sRouteBuilder.forService(
+      CalculatorServiceConnect.bind(FailingCalculatorServiceImpl)
+    ).build
+      .use { app =>
+        val request = Request[IO](
+          Method.POST,
+          uri"/codegen.e2e.CalculatorService/Add",
+        ).withBodyStream(Stream.emits(AddRequest(20, 22).toByteArray).covary[IO])
+          .putHeaders(Header.Raw(CIString("Content-Type"), "application/proto"))
+
+        app.run(request).flatMap { response =>
+          response.bodyText.compile.string.map { body =>
+            response.status shouldBe Status.BadRequest
+            response.contentType.map(_.mediaType) shouldBe Some(MediaTypes.`application/json`)
+            body shouldBe
+              """{"code":"invalid_argument","message":"Cannot add 20 and 22"}"""
+          }
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("binary client decodes JSON Connect errors") {
+    val errorBody =
+      """{"code":"invalid_argument","message":"Binary failure","details":[{"type":"example.Detail","value":"AQID"}]}"""
+    val errorApp: HttpApp[IO] = Kleisli(_ =>
+      IO.pure(
+        Response[IO](Status.BadRequest)
+          .withEntity(errorBody)
+          .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
+      )
+    )
+    val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(errorApp))
+      .enableBinaryFormat()
+      .build(uri"http://localhost")
+
+    val error = intercept[ConnectException] {
+      CalculatorServiceConnect.Client[IO](transport)
+        .add(AddRequest(20, 22), ConnectRequestContext())
+        .unsafeRunSync()
+    }
+
+    error.code shouldBe connectrpc.Code.InvalidArgument
+    error.getMessage shouldBe "Binary failure"
+    error.details shouldBe Seq(
+      connectrpc.ErrorDetailsAny("example.Detail", ByteString.copyFrom(Array[Byte](1, 2, 3)))
+    )
   }
 
   test("client sends the configured user agent as a standard header") {

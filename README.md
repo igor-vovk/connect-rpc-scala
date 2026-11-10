@@ -90,11 +90,11 @@ message AddResponse {
 }
 ```
 
-the generator creates `CalculatorServiceConnect.Service[F]`, `bind`, method descriptors, and
+the generator creates `CalculatorServiceConnect.Service[F, Context]`, `bind`, method descriptors, and
 `CalculatorServiceConnect.Client[F]`:
 
 ```scala
-object Calculator extends CalculatorServiceConnect.Service[IO] {
+object Calculator extends CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
   override def add(
     request: AddRequest,
     ctx: ConnectRequestContext,

@@ -13,10 +13,11 @@ object ConnectHttp4sClientBuilder {
   private val DefaultUserAgent = "connect-rpc-scala-http4s"
 
   def apply[F[_]: Async](client: Client[F]): ConnectHttp4sClientBuilder[F] = {
-    val messageCodec = JsonSerdesBuilder[F]().build.codec
+    val jsonCodec = JsonSerdesBuilder[F]().build.codec
     new ConnectHttp4sClientBuilder(
       client = client,
-      messageCodec = messageCodec,
+      messageCodec = jsonCodec,
+      jsonCodec = jsonCodec,
       userAgent = DefaultUserAgent,
     )
   }
@@ -25,19 +26,23 @@ object ConnectHttp4sClientBuilder {
 final class ConnectHttp4sClientBuilder[F[_]: Async] private (
   client: Client[F],
   messageCodec: MessageCodec[F],
+  jsonCodec: MessageCodec[F],
   userAgent: String,
 ) {
 
   private def copy(
     messageCodec: MessageCodec[F] = this.messageCodec,
+    jsonCodec: MessageCodec[F] = this.jsonCodec,
     userAgent: String = this.userAgent,
   ): ConnectHttp4sClientBuilder[F] =
-    new ConnectHttp4sClientBuilder(client, messageCodec, userAgent)
+    new ConnectHttp4sClientBuilder(client, messageCodec, jsonCodec, userAgent)
 
   def withJsonCodecConfigurator(
     configure: Endo[JsonSerdesBuilder[F]]
-  ): ConnectHttp4sClientBuilder[F] =
-    copy(messageCodec = configure(JsonSerdesBuilder[F]()).build.codec)
+  ): ConnectHttp4sClientBuilder[F] = {
+    val jsonCodec = configure(JsonSerdesBuilder[F]()).build.codec
+    copy(messageCodec = jsonCodec, jsonCodec = jsonCodec)
+  }
 
   def withUserAgent(userAgent: String): ConnectHttp4sClientBuilder[F] =
     copy(userAgent = userAgent)
@@ -49,6 +54,7 @@ final class ConnectHttp4sClientBuilder[F[_]: Async] private (
     Transport(
       httpClient = client,
       messageCodec = messageCodec,
+      jsonCodec = jsonCodec,
       baseUri = baseUri,
       userAgent = userAgent,
     )
