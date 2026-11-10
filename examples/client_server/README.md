@@ -1,11 +1,12 @@
-# ConnectRPC client-server communication example
+# Connect client-server example
 
-This example demonstrates launching a ConnectRPC server and establishing communication with it via a ConnectRPC client.
+This example generates a request/response-only unary service API from protobuf, serves it through http4s, and calls it
+with the generated simple Connect client.
 
-Dependencies are wired using [Cedi](https://github.com/igor-vovk/cedi) library.
+Dependencies and resource allocation are wired using [Cedi](https://github.com/igor-vovk/cedi).
 
-To run the app execute the following command in the root of the project:
+Run it from the repository root:
 
-```bash
+```shell
 sbt example_client_server/run
 ```

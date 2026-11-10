@@ -1,12 +1,11 @@
 package examples.client_server
 
 import cats.effect.Sync
-import examples.v1.eliza.{ElizaServiceFs2Grpc, SayRequest, SayResponse}
-import io.grpc.Metadata
+import examples.v1.eliza.{ElizaServiceConnect, SayRequest, SayResponse}
 
-class ElizaService[F[_]: Sync] extends ElizaServiceFs2Grpc[F, Metadata] {
+class ElizaService[F[_]: Sync] extends ElizaServiceConnect.SimpleService[F] {
 
-  def say(request: SayRequest, ctx: Metadata): F[SayResponse] =
+  override def say(request: SayRequest): F[SayResponse] =
     Sync[F].delay {
       SayResponse(s"You've said: ${request.sentence}")
     }

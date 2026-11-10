@@ -1,5 +1,5 @@
 # Define common variables
-DOCKER_BUILD_CMD = docker build -f conformance-build/Dockerfile . --progress=plain --output out/
+DOCKER_BUILD_CMD = docker build -f conformance/build/Dockerfile . --progress=plain --output out/
 
 .PHONY: build-conformance
 build-conformance:
@@ -18,14 +18,6 @@ test-conformance-http4s-server-nonstable: build-conformance
 	@echo "Running conformance tests for http4s server (non-stable)"
 	$(DOCKER_BUILD_CMD) --build-arg launcher=Http4sServerLauncher \
 						--build-arg config=suite-http4s-nonstable.yaml \
-						--build-arg parallel_args="--parallel 1"
-	@code=$$(cat out/exit_code | tr -d '\n'); echo "Exiting with code: $$code"; exit $$code
-
-.PHONY: test-conformance-http4s-server-streaming
-test-conformance-http4s-server-streaming: build-conformance
-	@echo "Running conformance tests for http4s server (streaming)"
-	$(DOCKER_BUILD_CMD) --build-arg launcher=Http4sServerLauncher \
-						--build-arg config=suite-http4s-streaming.yaml \
 						--build-arg parallel_args="--parallel 1"
 	@code=$$(cat out/exit_code | tr -d '\n'); echo "Exiting with code: $$code"; exit $$code
 

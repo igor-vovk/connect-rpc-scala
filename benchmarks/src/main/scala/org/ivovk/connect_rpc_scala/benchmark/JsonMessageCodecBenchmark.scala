@@ -5,7 +5,6 @@ import cats.effect.unsafe.IORuntime
 import com.google.protobuf.ByteString
 import connectrpc.{Code, Error, ErrorDetailsAny}
 import fs2.Stream
-import io.grpc.Metadata
 import org.http4s.ContentCoding
 import org.ivovk.connect_rpc_scala.http.codec.{
   EncodeOptions,
@@ -13,6 +12,7 @@ import org.ivovk.connect_rpc_scala.http.codec.{
   JsonMessageCodec,
   JsonSerdesBuilder,
 }
+import org.ivovk.connect_rpc_scala.service.ConnectHeaders
 import org.openjdk.jmh.annotations.{
   Benchmark,
   BenchmarkMode,
@@ -65,7 +65,7 @@ class JsonMessageCodecBenchmark {
     )
 
     val bytes = serializeBody()
-    encoded = EntityToDecode(Stream.emits(bytes), new Metadata())
+    encoded = EntityToDecode(Stream.emits(bytes), ConnectHeaders.empty)
   }
 
   @Benchmark

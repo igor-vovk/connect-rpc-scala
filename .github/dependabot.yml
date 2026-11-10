@@ -12,7 +12,7 @@ updates:
       day: "friday"
 
   - package-ecosystem: "docker"
-    directory: "/conformance-build"
+    directory: "/conformance/build"
     schedule:
       interval: "weekly"
       day: "friday"

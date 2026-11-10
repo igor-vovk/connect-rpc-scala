@@ -1,82 +1,49 @@
 package examples.zio
 
-import com.comcast.ip4s.{host, port}
-import examples.v1.eliza.ZioEliza
+import com.comcast.ip4s.*
+import examples.v1.eliza.ElizaServiceConnect
 import fs2.io.net.Network
-import io.grpc.{ManagedChannel, ServerServiceDefinition, StatusException}
 import org.http4s.HttpApp
-import org.http4s.client.Client as HttpClient
+import org.http4s.client.Client
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.implicits.uri
-import org.http4s.server.Server as HttpServer
-import org.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sChannelBuilder, ConnectHttp4sRouteBuilder}
-import scalapb.zio_grpc.ZChannel
-import zio.*
+import org.http4s.server.Server
+import org.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import zio.interop.catz.*
+import zio.{Scope, Task, ZIO}
 
 import scala.concurrent.duration.*
 
 object Dependencies {
 
-  given Network[Task] = Network.forAsync[Task]
+  private given Network[Task] = Network.forAsync[Task]
 
-  // Layer for the Eliza service implementation
-  val elizaServiceImpl: ULayer[ZioEliza.GElizaService[Any, StatusException]] =
-    ZLayer.succeed(new ElizaService().asGeneric)
-
-  // Layer for the gRPC server service definition
-  val elizaServiceGrpcServerDefinition
-    : RLayer[ZioEliza.GElizaService[Any, StatusException], ServerServiceDefinition] =
-    ZLayer.fromZIO {
-      ZIO.service[ZioEliza.GElizaService[Any, StatusException]].flatMap { elizaServiceImpl =>
-        ZioEliza.GElizaService.genericBindable.bind(elizaServiceImpl)
-      }
-    }
-
-  // Layer for the http4s app
-  val httpServerApp: RLayer[ServerServiceDefinition, HttpApp[Task]] = ZLayer.scoped {
-    ZIO.service[ServerServiceDefinition].flatMap { elizaServiceGrpcServerDefinition =>
-      ConnectHttp4sRouteBuilder.forService[Task](elizaServiceGrpcServerDefinition).build.toScopedZIO
-    }
-  }
-
-  // Layer for the http4s server
-  val connectRpcServer: RLayer[HttpApp[Task], HttpServer] = ZLayer.scoped {
-    ZIO.service[HttpApp[Task]].flatMap { httpApp =>
-      EmberServerBuilder.default[Task]
-        .withHost(host"0.0.0.0")
-        .withPort(port"8080")
-        .withHttpApp(httpApp)
-        .withShutdownTimeout(1.second)
+  def create: ZIO[Scope, Throwable, Dependencies] =
+    for {
+      httpApp <- ConnectHttp4sRouteBuilder
+        .forService(ElizaServiceConnect.bind(new ElizaService))
         .build
         .toScopedZIO
-    }
-  }
+      httpClient <- EmberClientBuilder.default[Task].build.toScopedZIO
+    } yield new Dependencies(httpApp, httpClient)
+}
 
-  // Layer for the http4s client
-  val httpClient: Layer[Throwable, HttpClient[Task]] = ZLayer.scoped(
-    EmberClientBuilder.default[Task].build.toScopedZIO
-  )
+final class Dependencies private (httpApp: HttpApp[Task], httpClient: Client[Task]) {
 
-  // Layer for the connect-rpc channel
-  val connectRpcChannel: RLayer[HttpClient[Task], ManagedChannel] = ZLayer.scoped {
-    ZIO.service[HttpClient[Task]].flatMap { httpClient =>
-      ConnectHttp4sChannelBuilder[Task](httpClient)
-        .build(uri"http://localhost:8080/")
-        .map(_.toManagedChannel)
-        .toScopedZIO
-    }
-  }
+  import Dependencies.given
 
-  // Layer for the Eliza client
-  val elizaClient: RLayer[ManagedChannel, ZioEliza.ElizaServiceClient] = ZLayer.scoped {
-    ZIO.service[ManagedChannel].flatMap { connectRpcChannel =>
-      ZioEliza.ElizaServiceClient.scoped(
-        ZIO.acquireRelease(
-          ZIO.attempt(new ZChannel(connectRpcChannel, None, Seq.empty))
-        )(_.shutdown().ignore)
-      )
-    }
-  }
+  def connectRpcServer: ZIO[Scope, Throwable, Server] =
+    EmberServerBuilder.default[Task]
+      .withHost(host"0.0.0.0")
+      .withPort(port"8080")
+      .withHttpApp(httpApp)
+      .withShutdownTimeout(1.second)
+      .build
+      .toScopedZIO
+
+  val elizaClient: ElizaServiceConnect.SimpleClient[Task] =
+    ElizaServiceConnect.SimpleClient(
+      ConnectHttp4sClientBuilder(httpClient).build(uri"http://localhost:8080/")
+    )
 }

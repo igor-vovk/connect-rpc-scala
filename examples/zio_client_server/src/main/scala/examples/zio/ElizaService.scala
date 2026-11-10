@@ -1,12 +1,11 @@
 package examples.zio
 
-import examples.v1.eliza.{SayRequest, SayResponse, ZioEliza}
-import io.grpc.StatusException
-import zio.{IO, ZIO}
+import examples.v1.eliza.{ElizaServiceConnect, SayRequest, SayResponse}
+import zio.{Task, ZIO}
 
-class ElizaService extends ZioEliza.ElizaService {
+final class ElizaService extends ElizaServiceConnect.SimpleService[Task] {
 
-  override def say(request: SayRequest): IO[StatusException, SayResponse] =
+  override def say(request: SayRequest): Task[SayResponse] =
     ZIO.succeed {
       SayResponse(s"You've said: ${request.sentence}")
     }

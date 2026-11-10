@@ -5,44 +5,41 @@ import com.google.api.http.HttpRule
 import io.circe.Json
 import org.http4s.implicits.uri
 import org.http4s.{Method, Request, Uri}
-import org.ivovk.connect_rpc_scala.grpc.{MethodName, MethodRegistry}
 import org.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, SubKeyJsonTransform}
+import org.ivovk.connect_rpc_scala.service.{
+  ConnectRequestContext,
+  ConnectResponse,
+  UnaryMethod,
+  UnaryMethodDescriptor,
+}
 import org.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher.extractVariable
 import org.scalatest.funsuite.AnyFunSuiteLike
 
 class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
 
-  private val matcher = TranscodingUrlMatcher[IO](
+  private def method(name: String, rule: HttpRule): UnaryMethod[IO] =
+    UnaryMethod(
+      UnaryMethodDescriptor(
+        serviceName = "CountriesService",
+        methodName = name,
+        requestCompanion = connectrpc.Error,
+        responseCompanion = connectrpc.Error,
+        httpRule = Some(rule),
+      ),
+      (request: connectrpc.Error, _: ConnectRequestContext) => IO.pure(ConnectResponse(request)),
+    )
+
+  private val matcher = TranscodingUrlMatcher.create[IO](
     Seq(
-      MethodRegistry.Entry(
-        MethodName("CountriesService", "CreateCountry"),
-        null,
-        Some(HttpRule().withPost("/countries").withBody("country")),
-        null,
-      ),
-      MethodRegistry.Entry(
-        MethodName("CountriesService", "ListCountries"),
-        null,
-        Some(HttpRule().withGet("/countries/list")),
-        null,
-      ),
-      MethodRegistry.Entry(
-        MethodName("CountriesService", "GetCountry"),
-        null,
-        Some(HttpRule().withGet("/countries/{country_id}")),
-        null,
-      ),
-      MethodRegistry.Entry(
-        MethodName("CountriesService", "UpdateCountry"),
-        null,
-        Some(HttpRule().withPut("/countries/{country_id}").withBody("*")),
-        null,
-      ),
+      method("CreateCountry", HttpRule().withPost("/countries").withBody("message")),
+      method("ListCountries", HttpRule().withGet("/countries/list")),
+      method("GetCountry", HttpRule().withGet("/countries/{message}")),
+      method("UpdateCountry", HttpRule().withPut("/countries/{message}").withBody("*")),
     ),
     "api" :: Nil,
   )
 
-  private def matching(request: Request[IO]): Option[MatchedRequest] =
+  private def matching(request: Request[IO]): Option[MatchedRequest[IO]] =
     matcher.matchRequest(
       request.method,
       request.uri.path.segments.map(_.encoded).toList,
@@ -53,23 +50,23 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
     val result = matching(Request[IO](Method.GET, uri"/api/countries/list"))
 
     assert(result.isDefined)
-    assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
+    assert(result.get.method.descriptor.methodName == "ListCountries")
   }
 
   test("matches request with POST method and body transform") {
     val result = matching(Request[IO](Method.POST, uri"/api/countries"))
 
     assert(result.isDefined)
-    assert(result.get.method.name == MethodName("CountriesService", "CreateCountry"))
-    assert(result.get.reqBodyTransform == SubKeyJsonTransform("country"))
+    assert(result.get.method.descriptor.methodName == "CreateCountry")
+    assert(result.get.reqBodyTransform == SubKeyJsonTransform("message"))
   }
 
   test("matches request with PUT method") {
     val result = matching(Request[IO](Method.PUT, uri"/api/countries/Uganda"))
 
     assert(result.isDefined)
-    assert(result.get.method.name == MethodName("CountriesService", "UpdateCountry"))
-    assert(result.get.pathJson == Json.obj("countryId" -> Json.fromString("Uganda")))
+    assert(result.get.method.descriptor.methodName == "UpdateCountry")
+    assert(result.get.pathJson == Json.obj("message" -> Json.fromString("Uganda")))
     assert(result.get.reqBodyTransform == AsIsJsonTransform)
   }
 
@@ -77,7 +74,7 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
     val result = matching(Request[IO](Method.GET, uri"/api/countries/list?limit=10&offset=5"))
 
     assert(result.isDefined)
-    assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
+    assert(result.get.method.descriptor.methodName == "ListCountries")
     assert(
       result.get.queryJson == Json.obj(
         "limit"  -> Json.fromString("10"),
@@ -90,15 +87,15 @@ class TranscodingUrlMatcherTest extends AnyFunSuiteLike {
     val result = matching(Request[IO](Method.GET, uri"/api/countries/Uganda"))
 
     assert(result.isDefined)
-    assert(result.get.method.name == MethodName("CountriesService", "GetCountry"))
-    assert(result.get.pathJson == Json.obj("countryId" -> Json.fromString("Uganda")))
+    assert(result.get.method.descriptor.methodName == "GetCountry")
+    assert(result.get.pathJson == Json.obj("message" -> Json.fromString("Uganda")))
   }
 
   test("extracts repeating query parameters") {
     val result = matching(Request[IO](Method.GET, uri"/api/countries/list?limit=10&limit=20"))
 
     assert(result.isDefined)
-    assert(result.get.method.name == MethodName("CountriesService", "ListCountries"))
+    assert(result.get.method.descriptor.methodName == "ListCountries")
     assert(
       result.get.queryJson == Json.obj(
         "limit" -> Json.arr(Json.fromString("10"), Json.fromString("20"))
