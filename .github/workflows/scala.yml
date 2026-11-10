@@ -42,3 +42,5 @@ jobs:
       - uses: ./.github/actions/setup-scala
 
       - uses: scalacenter/sbt-dependency-submission@v3
+        with:
+          configs-ignore: scala-tool scala-doc-tool
