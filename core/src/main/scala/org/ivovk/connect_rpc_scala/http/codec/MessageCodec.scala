@@ -5,7 +5,7 @@ import org.http4s.{ContentCoding, MediaType}
 import org.ivovk.connect_rpc_scala.service.ConnectHeaders
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
-import java.nio.charset.Charset
+import java.nio.charset.{Charset, StandardCharsets}
 import scala.annotation.threadUnsafe
 
 case class EncodeOptions(
@@ -32,7 +32,7 @@ case class EntityToDecode[F[_]](
       .flatMap(_.split(';').iterator.map(_.trim).find(_.startsWith("charset=")))
       .map(_.stripPrefix("charset="))
       .map(Charset.forName)
-      .getOrElse(Charset.defaultCharset())
+      .getOrElse(StandardCharsets.UTF_8)
 
   @threadUnsafe
   lazy val encoding: ContentCoding =

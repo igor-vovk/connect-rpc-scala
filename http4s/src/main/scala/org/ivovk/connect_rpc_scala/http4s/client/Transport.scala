@@ -13,12 +13,11 @@ import org.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
 import org.ivovk.connect_rpc_scala.service.*
 import scalapb.GeneratedMessage
 
-import java.nio.charset.Charset
+import java.nio.charset.StandardCharsets
 
 private[http4s] final class Transport[F[_]: Async](
   httpClient: Client[F],
-  messageCodec: MessageCodec[F],
-  jsonCodec: MessageCodec[F],
+  codecs: ClientCodecs[F],
   baseUri: Uri,
   userAgent: String,
 ) extends UnaryTransport[F] {
@@ -31,9 +30,9 @@ private[http4s] final class Transport[F[_]: Async](
     request: RequestMessage,
     ctx: ConnectRequestContext,
   ): F[ConnectResponse[ResponseMessage]] = {
-    val entity = messageCodec.encode(
+    val entity = codecs.chosen.encode(
       Stream.emit(request),
-      EncodeOptions(Charset.defaultCharset(), ContentCoding.identity),
+      EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity),
     )
     val uri     = descriptor.procedure.stripPrefix("/").split('/').foldLeft(baseUri)(_.addPath(_))
     val headers = ctx.headers.toHttp4s
@@ -54,11 +53,11 @@ private[http4s] final class Transport[F[_]: Async](
       val responseEntity      = EntityToDecode[F](response.body, headers)
 
       if response.status.isSuccess then
-        responseEntity.as[ResponseMessage](using descriptor.responseCompanion, messageCodec)
+        responseEntity.as[ResponseMessage](using descriptor.responseCompanion, codecs.chosen)
           .compile.onlyOrError
           .map(message => ConnectResponse(message, headers, trailers))
       else
-        responseEntity.as[connectrpc.Error](using connectrpc.Error, jsonCodec)
+        responseEntity.as[connectrpc.Error](using connectrpc.Error, codecs.json)
           .compile.onlyOrError
           .attempt
           .flatMap {

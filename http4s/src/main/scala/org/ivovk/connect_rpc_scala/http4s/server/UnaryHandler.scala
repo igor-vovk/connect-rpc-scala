@@ -10,7 +10,7 @@ import org.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import org.ivovk.connect_rpc_scala.service.*
 import scalapb.GeneratedMessage
 
-import java.nio.charset.Charset
+import java.nio.charset.StandardCharsets
 import scala.concurrent.duration.*
 
 private[http4s] final class UnaryHandler[F[_]: Async](
@@ -88,7 +88,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
   ): F[Response[F]] = {
     val entity = codec.encode(
       Stream.emit(message),
-      EncodeOptions(Charset.defaultCharset(), ContentCoding.identity),
+      EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity),
     )
     Async[F].pure(
       Response[F](

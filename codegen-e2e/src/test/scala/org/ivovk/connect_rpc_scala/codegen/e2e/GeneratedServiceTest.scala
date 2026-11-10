@@ -221,6 +221,30 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
+  test("configuring JSON does not replace the selected protobuf encoding") {
+    val service = new CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+      override def add(
+        request: AddRequest,
+        ctx: ConnectRequestContext,
+      ): IO[ConnectResponse[AddResponse]] =
+        IO {
+          ctx.headers.get("content-type") shouldBe Some(Seq("application/proto"))
+          ConnectResponse(AddResponse(request.left + request.right))
+        }
+    }
+
+    ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(service)).build.use { app =>
+      val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app))
+        .enableBinaryFormat()
+        .withJsonCodecConfigurator(identity)
+        .build(uri"http://localhost")
+
+      CalculatorServiceConnect.Client[IO](transport)
+        .add(AddRequest(20, 22), ConnectRequestContext())
+        .map(_.message shouldBe AddResponse(42))
+    }.unsafeRunSync()
+  }
+
   test("server encodes errors as JSON for protobuf requests") {
     ConnectHttp4sRouteBuilder.forService(
       CalculatorServiceConnect.bind(FailingCalculatorServiceImpl)
