@@ -8,7 +8,7 @@ import org.http4s.client.Client
 import org.http4s.headers.`User-Agent`
 import org.http4s.{ContentCoding, Header, Method, ProductId, Request, Uri}
 import org.ivovk.connect_rpc_scala.http.codec.*
-import org.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.{toConnectWithTrailers, toHttp4s}
+import org.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import org.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
 import org.ivovk.connect_rpc_scala.service.*
 import scalapb.GeneratedMessage
@@ -36,7 +36,7 @@ private[http4s] final class Transport[F[_]: Async](
       EncodeOptions(Charset.defaultCharset(), ContentCoding.identity),
     )
     val uri     = descriptor.procedure.stripPrefix("/").split('/').foldLeft(baseUri)(_.addPath(_))
-    val headers = toHttp4s(ctx.headers)
+    val headers = ctx.headers.toHttp4s
       .put(entity.headers.map(Header.ToRaw.keyValuesToRaw).toSeq)
       .put(
         `User-Agent`(ProductId(userAgent)),
@@ -50,7 +50,7 @@ private[http4s] final class Transport[F[_]: Async](
     )
 
     val response = httpClient.run(httpRequest).use { response =>
-      val (headers, trailers) = toConnectWithTrailers(response.headers)
+      val (headers, trailers) = response.headers.toConnectWithTrailers
       val responseEntity      = EntityToDecode[F](response.body, headers)
 
       if response.status.isSuccess then

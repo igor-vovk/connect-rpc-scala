@@ -11,30 +11,35 @@ private[http4s] object HeaderConverters {
   private val TrailerPrefix       = "trailer-"
   private val TrailerPrefixLength = TrailerPrefix.length
 
-  def toHttp4s(headers: ConnectHeaders): Headers =
-    toHttp4s(headers, prefix = "")
+  extension (headers: ConnectHeaders) {
+    def toHttp4s: Headers =
+      convertToHttp4s(prefix = "")
 
-  def toHttp4sTrailers(headers: ConnectHeaders): Headers =
-    toHttp4s(headers, prefix = TrailerPrefix)
+    def toHttp4sTrailers: Headers =
+      convertToHttp4s(prefix = TrailerPrefix)
 
-  def toConnect(headers: Headers): ConnectHeaders =
-    ConnectHeaders.create(toPairs(headers))
-
-  def toConnectWithTrailers(headers: Headers): (ConnectHeaders, ConnectHeaders) = {
-    val (trailers, normal) = toPairs(headers).partition { (name, _) =>
-      name.toLowerCase(Locale.ROOT).startsWith(TrailerPrefix)
+    private def convertToHttp4s(prefix: String): Headers = {
+      val raw = headers.entries.toSeq.flatMap { (name, values) =>
+        values.map(value => Header.Raw(CIString(s"$prefix$name"), value))
+      }
+      new Headers(raw.toList)
     }
-    val connectTrailers = trailers.map((name, value) => name.drop(TrailerPrefixLength) -> value)
-    ConnectHeaders.create(normal) -> ConnectHeaders.create(connectTrailers)
   }
 
-  private def toHttp4s(headers: ConnectHeaders, prefix: String): Headers = {
-    val raw = headers.entries.toSeq.flatMap { (name, values) =>
-      values.map(value => Header.Raw(CIString(s"$prefix$name"), value))
+  extension (headers: Headers) {
+    def toConnect: ConnectHeaders =
+      ConnectHeaders.create(toPairs)
+
+    def toConnectWithTrailers: (ConnectHeaders, ConnectHeaders) = {
+      val (trailers, normal) = toPairs.partition { (name, _) =>
+        name.toLowerCase(Locale.ROOT).startsWith(TrailerPrefix)
+      }
+      val connectTrailers = trailers.map((name, value) => name.drop(TrailerPrefixLength) -> value)
+      ConnectHeaders.create(normal) -> ConnectHeaders.create(connectTrailers)
     }
-    new Headers(raw.toList)
+
+    private def toPairs: Seq[(String, String)] =
+      headers.headers.map(header => header.name.toString -> header.value)
   }
 
-  private def toPairs(headers: Headers): Seq[(String, String)] =
-    headers.headers.map(header => header.name.toString -> header.value)
 }

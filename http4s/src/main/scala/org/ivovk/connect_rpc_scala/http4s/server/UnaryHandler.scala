@@ -44,7 +44,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     }
 
     val status  = Status.fromInt(httpStatus(exception.code)).fold(throw _, identity)
-    val headers = toHttp4s(exception.headers ++ exception.trailers)
+    val headers = (exception.headers ++ exception.trailers).toHttp4s
     val body    = connectrpc.Error(
       code = exception.code,
       message = Option(exception.getMessage).filter(_.nonEmpty),
@@ -73,9 +73,9 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     codec: MessageCodec[F],
   ): F[Response[F]] = {
     val trailerHeaders =
-      if treatTrailersAsHeaders then toHttp4s(result.trailers)
-      else toHttp4sTrailers(result.trailers)
-    val responseHeaders = toHttp4s(result.headers) ++ trailerHeaders
+      if treatTrailersAsHeaders then result.trailers.toHttp4s
+      else result.trailers.toHttp4sTrailers
+    val responseHeaders = result.headers.toHttp4s ++ trailerHeaders
 
     encodeResponse(Status.Ok, responseHeaders, result.message, codec)
   }

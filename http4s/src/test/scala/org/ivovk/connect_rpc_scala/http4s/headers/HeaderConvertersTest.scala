@@ -1,6 +1,7 @@
 package org.ivovk.connect_rpc_scala.http4s.headers
 
 import org.http4s.{Header, Headers}
+import org.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import org.ivovk.connect_rpc_scala.service.ConnectHeaders
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -17,7 +18,7 @@ class HeaderConvertersTest extends AnyFunSuite with Matchers {
       )
     )
 
-    val headers = HeaderConverters.toHttp4s(connectHeaders)
+    val headers = connectHeaders.toHttp4s
 
     values(headers, ci"x-value") shouldBe Seq("first", "second")
     values(headers, ci"x-other") shouldBe Seq("other")
@@ -32,7 +33,7 @@ class HeaderConvertersTest extends AnyFunSuite with Matchers {
       )
     )
 
-    val connectHeaders = HeaderConverters.toConnect(headers)
+    val connectHeaders = headers.toConnect
 
     connectHeaders.get("x-value") shouldBe Some(Seq("first", "second"))
     connectHeaders.get("X-OTHER") shouldBe Some(Seq("other"))
@@ -46,7 +47,7 @@ class HeaderConvertersTest extends AnyFunSuite with Matchers {
       )
     )
 
-    val headers = HeaderConverters.toHttp4sTrailers(trailers)
+    val headers = trailers.toHttp4sTrailers
 
     values(headers, ci"trailer-x-value") shouldBe Seq("first", "second")
     values(headers, ci"x-value") shouldBe empty
@@ -61,7 +62,7 @@ class HeaderConvertersTest extends AnyFunSuite with Matchers {
       )
     )
 
-    val (connectHeaders, connectTrailers) = HeaderConverters.toConnectWithTrailers(headers)
+    val (connectHeaders, connectTrailers) = headers.toConnectWithTrailers
 
     connectHeaders.get("x-header") shouldBe Some(Seq("header-value"))
     connectHeaders.get("trailer-x-trailer") shouldBe None
