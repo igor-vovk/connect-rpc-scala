@@ -88,12 +88,12 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     }
     content ++= "  }\n\n"
 
-    content ++= "  trait Service[F[_]] {\n"
+    content ++= "  trait Service[F[_], Context] {\n"
     methods.foreach { method =>
       val requestType  = method.inputType.scalaType
       val responseType = method.outputType.scalaType
       content ++=
-        s"    def ${method.name}(request: $requestType, ctx: ConnectRequestContext): F[ConnectResponse[$responseType]]\n"
+        s"    def ${method.name}(request: $requestType, ctx: Context): F[ConnectResponse[$responseType]]\n"
     }
     content ++= "  }\n\n"
 
@@ -114,7 +114,13 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     content ++= "      ),\n"
     content ++= "    )\n\n"
 
-    content ++= "  def bind[F[_]](service: Service[F]): ServiceDefinition[F] =\n"
+    content ++= "  def bind[F[_]](service: Service[F, ConnectRequestContext]): ServiceDefinition[F] =\n"
+    content ++= "    bind(service, UnaryInterceptor.identity[F, ConnectRequestContext])\n\n"
+
+    content ++= "  def bind[F[_], Context](\n"
+    content ++= "    service: Service[F, Context],\n"
+    content ++= "    interceptor: UnaryInterceptor[F, ConnectRequestContext, Context],\n"
+    content ++= "  ): ServiceDefinition[F] =\n"
     content ++= "    ServiceDefinition(\n"
     content ++= "      name = serviceName,\n"
     content ++= "      methods = Seq(\n"
@@ -122,8 +128,16 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
       val requestType  = method.inputType.scalaType
       val responseType = method.outputType.scalaType
       val comma        = if (index == methods.size - 1) "" else ","
-      content ++=
-        s"        UnaryMethod[F, $requestType, $responseType](${descriptorName(method.getName)}, service.${method.name})$comma\n"
+      content ++= s"        UnaryMethod[F, $requestType, $responseType](\n"
+      content ++= s"          ${descriptorName(method.getName)},\n"
+      content ++= "          (request, context) =>\n"
+      content ++= "            interceptor.intercept(\n"
+      content ++= s"              ${descriptorName(method.getName)},\n"
+      content ++= "              request,\n"
+      content ++= "              context,\n"
+      content ++= s"              serviceContext => service.${method.name}(request, serviceContext),\n"
+      content ++= "            ),\n"
+      content ++= s"        )$comma\n"
     }
     content ++= "      ),\n"
     content ++= "    )\n\n"
@@ -141,7 +155,8 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     }
     content ++= "  }\n\n"
 
-    content ++= "  final class Client[F[_]](transport: UnaryTransport[F]) extends Service[F] {\n"
+    content ++= "  final class Client[F[_]](transport: UnaryTransport[F])\n"
+    content ++= "      extends Service[F, ConnectRequestContext] {\n"
     methods.foreach { method =>
       val requestType  = method.inputType.scalaType
       val responseType = method.outputType.scalaType
@@ -151,6 +166,26 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
       content ++= s"    ): F[ConnectResponse[$responseType]] =\n"
       content ++= s"      transport.unary(${descriptorName(method.getName)}, request, ctx)\n\n"
     }
+
+    content ++= "    def withInterceptor[Context](\n"
+    content ++= "      interceptor: UnaryInterceptor[F, Context, ConnectRequestContext]\n"
+    content ++= "    ): Service[F, Context] =\n"
+    content ++= "      new Service[F, Context] {\n"
+    methods.foreach { method =>
+      val requestType  = method.inputType.scalaType
+      val responseType = method.outputType.scalaType
+      content ++= s"        override def ${method.name}(\n"
+      content ++= s"          request: $requestType,\n"
+      content ++= "          ctx: Context,\n"
+      content ++= s"        ): F[ConnectResponse[$responseType]] =\n"
+      content ++= "          interceptor.intercept(\n"
+      content ++= s"            ${descriptorName(method.getName)},\n"
+      content ++= "            request,\n"
+      content ++= "            ctx,\n"
+      content ++= s"            clientContext => Client.this.${method.name}(request, clientContext),\n"
+      content ++= "          )\n\n"
+    }
+    content ++= "      }\n"
     content ++= "  }\n"
     content ++= "}\n"
 

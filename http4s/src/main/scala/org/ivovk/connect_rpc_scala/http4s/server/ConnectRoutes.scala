@@ -57,7 +57,11 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
       case None        => unsupportedMediaType(request, isGet)
       case Some(codec) =>
         val message: String | Stream[F, Byte] =
-          if isGet then request.uri.query.multiParams.get("message").flatMap(_.headOption).getOrElse("")
+          if isGet then
+            request.uri.query.pairs
+              .collectFirst { case ("message", value) => value }
+              .flatten
+              .getOrElse("")
           else request.body
 
         decodeAndInvoke(

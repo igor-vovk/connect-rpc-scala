@@ -41,7 +41,7 @@ class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
     response.hasError shouldBe false
     response.getFileCount shouldBe 1
     response.getFile(0).getContent should include("object ExampleServiceConnect")
-    response.getFile(0).getContent should include("trait Service[F[_]]")
+    response.getFile(0).getContent should include("trait Service[F[_], Context]")
     response.getFile(0).getContent should include("UnaryMethodDescriptor")
     response.getFile(0).getContent should not include "io.grpc"
   }
