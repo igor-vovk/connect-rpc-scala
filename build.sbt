@@ -57,6 +57,39 @@ lazy val codegenPlugin = protocGenProject("protoc-gen-connect-rpc-scala", codege
     assembly / mainClass := Some("me.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator"),
   )
 
+lazy val sbtConnectRpcScala = project
+  .in(file("sbt-plugin"))
+  .enablePlugins(SbtPlugin)
+  .settings(
+    name         := "sbt-connect-rpc-scala",
+    scalaVersion := "2.12.21",
+    addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.8"),
+    libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin" % Versions.scalapb,
+    Compile / sourceGenerators += Def.task {
+      val output =
+        (Compile / sourceManaged).value /
+          "me" / "ivovk" / "connect_rpc_scala" / "sbt" / "BuildInfo.scala"
+      IO.write(
+        output,
+        s"""package me.ivovk.connect_rpc_scala.sbt
+           |
+           |private[sbt] object BuildInfo {
+           |  val version: String = "${version.value}"
+           |}
+           |""".stripMargin,
+      )
+      Seq(output)
+    }.taskValue,
+    scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+    scriptedBufferLog := false,
+    scripted          := scripted
+      .dependsOn(
+        core / publishLocal,
+        codegenPlugin.agg / publishLocal,
+      )
+      .evaluated,
+  )
+
 lazy val core = project
   .settings(
     name := "connect-rpc-scala-core",
@@ -186,6 +219,7 @@ lazy val root = (project in file("."))
   .aggregate(
     codegen,
     codegenPlugin.agg,
+    sbtConnectRpcScala,
     codegenE2e,
     core,
     http4s,

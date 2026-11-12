@@ -23,31 +23,27 @@ unary methods in the same service; a streaming-only service produces no Connect 
 
 - `connect-rpc-scala-core`: protocol models, codecs, service descriptors, errors, and transcoding.
 - `connect-rpc-scala-http4s`: unary server routes and client transport.
-- `connect-rpc-scala-codegen`: the protoc service-definition generator.
+- `protoc-gen-connect-rpc-scala`: the executable protoc service-definition generator.
+- `sbt-connect-rpc-scala`: sbt integration for ScalaPB and Connect source generation.
 
 ## Build setup
 
-Add ScalaPB and the Connect generator to `project/plugins.sbt`:
+Add the Connect plugin to `project/plugins.sbt`:
 
 ```scala
-addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.8")
-
-libraryDependencies ++= Seq(
-  "com.thesamet.scalapb" %% "compilerplugin" % "0.11.21",
-  "me.ivovk" % "protoc-gen-connect-rpc-scala" % "<version>" asProtocPlugin(),
-)
+addSbtPlugin("me.ivovk" % "sbt-connect-rpc-scala" % "<version>")
 ```
 
-Generate ScalaPB messages without its service generator, then run the Connect generator:
+Enable it on each project that owns protobuf definitions:
 
 ```scala
-Compile / PB.targets := Seq(
-  scalapb.gen(grpc = false, scala3Sources = true) ->
-    (Compile / sourceManaged).value / "scalapb",
-  PB.gens.plugin("connect-rpc-scala") ->
-    (Compile / sourceManaged).value / "connect",
-)
+lazy val apiProto = project
+  .enablePlugins(ConnectRpcScalaPlugin)
 ```
+
+The plugin generates ScalaPB messages without gRPC services, generates the Connect service definitions, and adds the
+matching `connect-rpc-scala-core` and ScalaPB runtime dependencies. Use `connectRpcScalaGeneratorOptions` to append or
+replace generator options when needed.
 
 Add the runtime to the application:
 
