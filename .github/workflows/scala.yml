@@ -24,6 +24,9 @@ jobs:
       - name: Run tests
         run: sbt test
 
+      - name: Test sbt plugin consumption
+        run: sbt sbtConnectRpcScala/scripted
+
       - name: Run conformance tests
         run: make test-conformance-stable
 
