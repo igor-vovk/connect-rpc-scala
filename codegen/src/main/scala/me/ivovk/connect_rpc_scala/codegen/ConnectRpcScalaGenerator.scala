@@ -98,6 +98,12 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     content ++= "  }\n\n"
 
     content ++= "  def bind[F[_]: _root_.cats.Functor](service: SimpleService[F]): ServiceDefinition[F] =\n"
+    content ++= "    bind(service, UnaryInterceptor.identity[F, ConnectRequestContext])\n\n"
+
+    content ++= "  def bind[F[_]: _root_.cats.Functor, Context](\n"
+    content ++= "    service: SimpleService[F],\n"
+    content ++= "    interceptor: UnaryInterceptor[F, ConnectRequestContext, Context],\n"
+    content ++= "  ): ServiceDefinition[F] =\n"
     content ++= "    ServiceDefinition(\n"
     content ++= "      name = serviceName,\n"
     content ++= "      methods = Seq(\n"
@@ -107,8 +113,14 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
       val comma        = if (index == methods.size - 1) "" else ","
       content ++= s"        UnaryMethod[F, $requestType, $responseType](\n"
       content ++= s"          ${descriptorName(method.getName)},\n"
+      content ++= "          (request, context) =>\n"
+      content ++= "            interceptor.intercept(\n"
+      content ++= s"              ${descriptorName(method.getName)},\n"
+      content ++= "              request,\n"
+      content ++= "              context,\n"
       content ++=
-        s"          (request, _) => _root_.cats.Functor[F].map(service.${method.name}(request))(ConnectResponse(_)),\n"
+        s"              _ => _root_.cats.Functor[F].map(service.${method.name}(request))(ConnectResponse(_)),\n"
+      content ++= "            ),\n"
       content ++= s"        )$comma\n"
     }
     content ++= "      ),\n"

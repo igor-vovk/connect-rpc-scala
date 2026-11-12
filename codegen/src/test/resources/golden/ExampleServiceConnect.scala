@@ -35,16 +35,34 @@ object ExampleServiceConnect {
   }
 
   def bind[F[_]: _root_.cats.Functor](service: SimpleService[F]): ServiceDefinition[F] =
+    bind(service, UnaryInterceptor.identity[F, ConnectRequestContext])
+
+  def bind[F[_]: _root_.cats.Functor, Context](
+    service: SimpleService[F],
+    interceptor: UnaryInterceptor[F, ConnectRequestContext, Context],
+  ): ServiceDefinition[F] =
     ServiceDefinition(
       name = serviceName,
       methods = Seq(
         UnaryMethod[F, test.example.Request, test.example.Response](
           METHOD_CALL,
-          (request, _) => _root_.cats.Functor[F].map(service.call(request))(ConnectResponse(_)),
+          (request, context) =>
+            interceptor.intercept(
+              METHOD_CALL,
+              request,
+              context,
+              _ => _root_.cats.Functor[F].map(service.call(request))(ConnectResponse(_)),
+            ),
         ),
         UnaryMethod[F, test.example.Request, test.example.Response](
           METHOD_HEALTHCHECK,
-          (request, _) => _root_.cats.Functor[F].map(service.healthCheck(request))(ConnectResponse(_)),
+          (request, context) =>
+            interceptor.intercept(
+              METHOD_HEALTHCHECK,
+              request,
+              context,
+              _ => _root_.cats.Functor[F].map(service.healthCheck(request))(ConnectResponse(_)),
+            ),
         )
       ),
     )

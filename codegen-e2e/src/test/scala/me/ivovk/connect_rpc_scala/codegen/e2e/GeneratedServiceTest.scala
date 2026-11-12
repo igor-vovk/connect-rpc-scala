@@ -206,6 +206,25 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
+  test("typed unary interceptors apply to simple services") {
+    ConnectHttp4sRouteBuilder.forService(
+      CalculatorServiceConnect.bind(SimpleCalculatorServiceImpl, AuthenticationInterceptor)
+    ).build
+      .use { app =>
+        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
+        val client    = CalculatorServiceConnect.Client[IO](transport)
+        val context   = ConnectRequestContext(
+          headers = ConnectHeaders.empty.add("authorization", "alice")
+        )
+
+        client.add(AddRequest(11, 31), context).map { response =>
+          response.message shouldBe AddResponse(42)
+          response.headers.get("x-authenticated-user") shouldBe Some(List("alice"))
+        }
+      }
+      .unsafeRunSync()
+  }
+
   test("generated client supports protobuf encoding without a gRPC runtime") {
     ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(CalculatorServiceImpl)).build
       .use { app =>
