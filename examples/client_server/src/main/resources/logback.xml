@@ -12,5 +12,5 @@
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
     </root>
-    <logger name="org.ivovk" level="TRACE"/>
+    <logger name="me.ivovk" level="TRACE"/>
 </configuration>
