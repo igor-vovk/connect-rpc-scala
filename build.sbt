@@ -53,8 +53,8 @@ lazy val codegen = project
 
 lazy val codegenPlugin = protocGenProject("protoc-gen-connect-rpc-scala", codegen)
   .settings(
-    Compile / mainClass  := Some("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator"),
-    assembly / mainClass := Some("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator"),
+    Compile / mainClass  := Some("me.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator"),
+    assembly / mainClass := Some("me.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator"),
   )
 
 lazy val core = project
@@ -99,7 +99,7 @@ lazy val codegenE2e = project
     Compile / PB.targets := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->
         (Compile / sourceManaged).value / "scalapb",
-      (genModule("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
+      (genModule("me.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
         (Compile / sourceManaged).value / "connect",
     ),
   )
@@ -116,7 +116,7 @@ lazy val conformance = project
     Compile / PB.targets      := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->
         (Compile / sourceManaged).value / "scalapb",
-      (genModule("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
+      (genModule("me.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
         (Compile / sourceManaged).value / "connect",
     ),
     libraryDependencies ++= Seq(
@@ -150,7 +150,7 @@ lazy val example_client_server = project.in(file("examples/client_server"))
     Compile / PB.targets := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->
         (Compile / sourceManaged).value / "scalapb",
-      (genModule("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
+      (genModule("me.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
         (Compile / sourceManaged).value / "connect",
     ),
     libraryDependencies ++= Seq(
@@ -170,7 +170,7 @@ lazy val example_zio_client_server = project.in(file("examples/zio_client_server
     Compile / PB.targets := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->
         (Compile / sourceManaged).value / "scalapb",
-      (genModule("org.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
+      (genModule("me.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
         (Compile / sourceManaged).value / "connect",
     ),
     libraryDependencies ++= Seq(

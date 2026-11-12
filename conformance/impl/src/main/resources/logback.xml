@@ -16,5 +16,5 @@
     <root level="INFO">
         <appender-ref ref="FILE"/>
     </root>
-    <logger name="org.ivovk.connect_rpc_scala" level="TRACE"/>
+    <logger name="me.ivovk.connect_rpc_scala" level="TRACE"/>
 </configuration>

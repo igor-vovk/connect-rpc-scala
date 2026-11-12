@@ -12,5 +12,5 @@
     <root level="WARN">
         <appender-ref ref="STDOUT"/>
     </root>
-    <logger name="org.ivovk.connect_rpc_scala" level="TRACE"/>
+    <logger name="me.ivovk.connect_rpc_scala" level="TRACE"/>
 </configuration>

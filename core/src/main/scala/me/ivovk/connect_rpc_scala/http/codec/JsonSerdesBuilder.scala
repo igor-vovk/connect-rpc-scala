@@ -1,0 +1,52 @@
+package me.ivovk.connect_rpc_scala.http.codec
+
+import cats.effect.Sync
+import me.ivovk.connect_rpc_scala.http.json.{ConnectErrorFormat, ErrorDetailsAnyFormat}
+import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
+import scalapb_circe.{FormatRegistry, JsonFormat, Parser, Printer}
+import scalapb_json.TypeRegistry
+
+case class JsonSerdes[F[_]](
+  parser: Parser,
+  codec: JsonMessageCodec[F],
+)
+
+object JsonSerdesBuilder {
+  def apply[F[_]: Sync](): JsonSerdesBuilder[F] =
+    new JsonSerdesBuilder(
+      typeRegistry = TypeRegistry.empty,
+      formatRegistry = JsonFormat.DefaultRegistry,
+    )
+}
+
+case class JsonSerdesBuilder[F[_]: Sync] private (
+  typeRegistry: TypeRegistry,
+  formatRegistry: FormatRegistry,
+) {
+
+  def registerType[T <: Message](using cmp: Companion[T]): JsonSerdesBuilder[F] =
+    copy(
+      typeRegistry = typeRegistry.addMessageByCompanion(cmp)
+    )
+
+  def build: JsonSerdes[F] = {
+    val formatRegistry = this.formatRegistry
+      .registerMessageFormatter[connectrpc.ErrorDetailsAny](
+        ErrorDetailsAnyFormat.writer,
+        ErrorDetailsAnyFormat.parser,
+      )
+      .registerMessageFormatter[connectrpc.Error](
+        ConnectErrorFormat.writer,
+        ConnectErrorFormat.parser,
+      )
+
+    val parser  = new Parser(formatRegistry = formatRegistry, typeRegistry = typeRegistry)
+    val printer = new Printer(formatRegistry = formatRegistry, typeRegistry = typeRegistry)
+
+    JsonSerdes[F](
+      parser = parser,
+      codec = new JsonMessageCodec[F](parser, printer),
+    )
+  }
+
+}

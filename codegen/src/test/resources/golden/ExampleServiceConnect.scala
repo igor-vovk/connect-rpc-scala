@@ -2,7 +2,7 @@
 
 package test.example
 
-import _root_.org.ivovk.connect_rpc_scala.service.*
+import _root_.me.ivovk.connect_rpc_scala.service.*
 
 object ExampleServiceConnect {
   val serviceName: String = "test.ExampleService"
