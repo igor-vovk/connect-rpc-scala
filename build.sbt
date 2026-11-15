@@ -64,7 +64,10 @@ lazy val sbtConnectRpcScala = project
     name         := "sbt-connect-rpc-scala",
     scalaVersion := "2.12.21",
     addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.8"),
-    libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin" % Versions.scalapb,
+    libraryDependencies ++= Seq(
+      "com.thesamet.scalapb" %% "compilerplugin" % Versions.scalapb,
+      "org.scalatest"        %% "scalatest"      % Versions.scalatest % Test,
+    ),
     Compile / sourceGenerators += Def.task {
       val output =
         (Compile / sourceManaged).value /
