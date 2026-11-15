@@ -6,6 +6,9 @@ import sbtprotoc.ProtocPlugin
 import sbtprotoc.ProtocPlugin.ProtobufConfig
 import sbtprotoc.ProtocPlugin.autoImport.PB
 
+import java.io.File
+import protocbridge.ProtocRunner
+
 /** Generates ScalaPB messages and Connect service definitions for protobuf sources. */
 object ConnectRpcScalaPlugin extends AutoPlugin {
 
@@ -39,6 +42,7 @@ object ConnectRpcScalaPlugin extends AutoPlugin {
         )
       else entry
     }),
+    Compile / PB.runProtoc ~= (withJavaOnPath(_)),
     Compile / PB.targets := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->
         (Compile / sourceManaged).value / "scalapb",
@@ -48,6 +52,26 @@ object ConnectRpcScalaPlugin extends AutoPlugin {
   )
 
   private val GeneratorName = "protoc-gen-connect-rpc-scala"
+
+  private[sbt] def withJavaOnPath(
+    runner: ProtocRunner[Int],
+    javaHome: File = file(sys.props("java.home")),
+    inheritedPath: Option[String] = sys.env.get("PATH"),
+  ): ProtocRunner[Int] =
+    ProtocRunner.fromFunction { (arguments, environment) =>
+      val configuredPath = environment.collectFirst {
+        case (key, value) if key.equalsIgnoreCase("PATH") => value
+      }.orElse(inheritedPath)
+      val javaBin = (javaHome / "bin").getAbsolutePath
+      val path    = configuredPath.filter(_.nonEmpty).fold(javaBin) { existingPath =>
+        s"$javaBin${File.pathSeparator}$existingPath"
+      }
+      val updatedEnvironment = environment.filterNot { case (key, _) =>
+        key.equalsIgnoreCase("PATH")
+      } :+ ("PATH" -> path)
+
+      runner.run(arguments, updatedEnvironment)
+    }
 
   private def generatorDependency(version: String): ModuleID = {
     val (classifier, extension) =
