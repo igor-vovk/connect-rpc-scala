@@ -2,14 +2,16 @@ package me.ivovk.connect_rpc_scala.http4s.server
 
 import cats.data.OptionT
 import cats.effect.Async
+import cats.effect.syntax.all.*
 import cats.implicits.*
-import fs2.Stream
-import org.http4s.Status.{MethodNotAllowed, UnsupportedMediaType}
+import fs2.{Chunk, Stream}
+import org.http4s.Status.{MethodNotAllowed, Ok, UnsupportedMediaType}
 import org.http4s.headers.{Allow, Connection}
 import org.http4s.{ContentCoding, HttpRoutes, HttpVersion, Method, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http.codec.*
-import me.ivovk.connect_rpc_scala.service.{ConnectException, ServiceDefinition, UnaryMethod}
+import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
+import me.ivovk.connect_rpc_scala.service.*
 
 object ConnectRoutes {
   // A rejected request may have unread body bytes. Tell HTTP/1 clients that the connection cannot be reused.
@@ -29,13 +31,23 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
 
   private val protoCodec = new ProtoMessageCodec[F]
 
-  private val methodsByPath: Map[(String, String), UnaryMethod[F]] = {
-    val methods = services.flatMap(service => service.methods.map(method => (service.name, method)))
-    val result  = methods.map { (serviceName, method) =>
-      (serviceName -> method.descriptor.methodName) -> method
-    }.toMap
+  private enum RoutedMethod {
+    case Unary(method: UnaryMethod[F])
+    case ServerStreaming(method: ServerStreamingMethod[F])
+  }
 
-    require(result.size == methods.size, "Duplicate Connect service or method definition")
+  private val methodsByPath: Map[(String, String), RoutedMethod] = {
+    val methods = services.flatMap(service => service.methods.map(method => (service.name, method)))
+    val serverStreamingMethods =
+      services.flatMap(service => service.serverStreamingMethods.map(method => (service.name, method)))
+    val entries = methods.map { (serviceName, method) =>
+      (serviceName -> method.descriptor.methodName) -> RoutedMethod.Unary(method)
+    } ++ serverStreamingMethods.map { (serviceName, method) =>
+      (serviceName -> method.descriptor.methodName) -> RoutedMethod.ServerStreaming(method)
+    }
+    val result = entries.toMap
+
+    require(result.size == entries.size, "Duplicate Connect service or method definition")
     result
   }
 
@@ -52,7 +64,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
       }
     }
 
-  private def findMethod(requestPath: Uri.Path): Option[UnaryMethod[F]] = {
+  private def findMethod(requestPath: Uri.Path): Option[RoutedMethod] = {
     val path   = requestPath.segments.map(_.encoded).toList
     val prefix = pathPrefix.segments.map(_.encoded).toList
     if (path.take(prefix.size) != prefix) None
@@ -64,7 +76,13 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
     }
   }
 
-  private def handle(request: Request[F], method: UnaryMethod[F]): F[Response[F]] = {
+  private def handle(request: Request[F], method: RoutedMethod): F[Response[F]] =
+    method match {
+      case RoutedMethod.Unary(unary)               => handleUnary(request, unary)
+      case RoutedMethod.ServerStreaming(streaming) => handleServerStreaming(request, streaming)
+    }
+
+  private def handleUnary(request: Request[F], method: UnaryMethod[F]): F[Response[F]] = {
     val isGet = request.method.isSafe
 
     codecFor(request, isGet) match {
@@ -85,6 +103,103 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
           request.httpVersion,
         )
     }
+  }
+
+  private def handleServerStreaming(
+    request: Request[F],
+    method: ServerStreamingMethod[F],
+  ): F[Response[F]] =
+    if request.method != Method.POST then
+      Async[F].pure(
+        Response[F](MethodNotAllowed).putHeaders(Allow(Method.POST)).closeIfHttp1(request.httpVersion)
+      )
+    else
+      streamingCodecFor(request) match {
+        case None        => unsupportedStreamingMediaType(request)
+        case Some(codec) =>
+          given scalapb.GeneratedMessageCompanion[method.RequestMessage] =
+            method.descriptor.requestCompanion
+
+          codec.decodeRequest[method.RequestMessage](request.body, request.headers)
+            .compile.toList
+            .flatMap {
+              case message :: Nil =>
+                val context =
+                  ConnectRequestContext(
+                    request.headers.removePayloadHeaders,
+                    request.headers.get[`Connect-Timeout-Ms`].map(_.timeout),
+                  )
+                val invocation = method.invoke(message, context).allocated
+                val acquired   = context.timeout.fold(invocation) { duration =>
+                  invocation.timeoutTo(duration, deadlineExceeded.raiseError)
+                }
+                acquired.attempt.flatMap {
+                  case Right((result, release)) =>
+                    val timedResult = context.timeout.fold(result) { duration =>
+                      result.copy(stream = result.stream.timeoutTo(duration, deadlineExceeded))
+                    }
+                    val entity = codec.encodeResponse(timedResult)
+                    Async[F].pure(
+                      Response[F](
+                        status = Ok,
+                        headers = result.headers.removePayloadHeaders ++ entity.headers,
+                        body = entity.body.onFinalize(release),
+                      )
+                    )
+                  case Left(error) =>
+                    streamingErrorResponse(codec, error)
+                }
+              case messages =>
+                streamingErrorResponse(
+                  codec,
+                  ConnectException(
+                    connectrpc.Code.Unimplemented,
+                    s"Server-streaming method requires one request message, got ${messages.size}",
+                  ),
+                )
+            }
+            .handleErrorWith(error => streamingErrorResponse(codec, error))
+      }
+
+  private def streamingCodecFor(request: Request[F]): Option[StreamingMessageCodec[F]] =
+    request.contentType.map(_.mediaType).flatMap {
+      case MediaTypes.`application/connect+json` =>
+        Some(new StreamingMessageCodec(jsonSerdes.codec, jsonSerdes))
+      case MediaTypes.`application/connect+proto` => Some(new StreamingMessageCodec(protoCodec, jsonSerdes))
+      case _                                      => None
+    }
+
+  private def streamingErrorResponse(
+    codec: StreamingMessageCodec[F],
+    error: Throwable,
+  ): F[Response[F]] = {
+    val exception = error match {
+      case connect: ConnectException => connect
+      case other                     =>
+        ConnectException(
+          connectrpc.Code.Internal,
+          Option(other.getMessage).getOrElse("Internal error"),
+        ).withCause(other)
+    }
+    val entity = codec.encodeResponse(
+      ConnectStreamingResponse(ConnectStream.raiseError[F, scalapb.GeneratedMessage](exception))
+    )
+
+    entity.body.compile.to(Chunk).map { body =>
+      val framed = EncodedEntity.fromChunk(entity.headers, body)
+      Response[F](
+        status = Ok,
+        headers = exception.headers.removePayloadHeaders ++ framed.headers,
+        body = framed.body,
+      )
+    }
+  }
+
+  private def unsupportedStreamingMediaType(request: Request[F]): F[Response[F]] = {
+    val provided = request.contentType.map(_.mediaType.show)
+    val message  = s"Unsupported streaming media type ${provided.getOrElse("<missing>")}. " +
+      "Supported values are application/connect+json and application/connect+proto."
+    Async[F].pure(Response[F](UnsupportedMediaType).withEntity(message).closeIfHttp1(request.httpVersion))
   }
 
   private def decodeAndInvoke(
@@ -142,4 +257,6 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
     Async[F].pure(Response[F](UnsupportedMediaType).withEntity(message).closeIfHttp1(request.httpVersion))
   }
 
+  private def deadlineExceeded: ConnectException =
+    ConnectException(connectrpc.Code.DeadlineExceeded, "Request deadline exceeded")
 }

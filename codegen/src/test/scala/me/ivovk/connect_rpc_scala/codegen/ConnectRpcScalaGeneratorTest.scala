@@ -46,7 +46,7 @@ class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
     response.getFile(0).getContent should not include "io.grpc"
   }
 
-  test("generates unary methods and skips streaming methods in the same service") {
+  test("generates unary and server-streaming methods and skips client-streaming methods") {
     val response = generate(
       method("Call"),
       method("ServerStream", serverStreaming = true),
@@ -56,8 +56,17 @@ class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
     response.hasError shouldBe false
     response.getFileCount shouldBe 1
     response.getFile(0).getContent should include("METHOD_CALL")
-    response.getFile(0).getContent should not include "ServerStream"
+    response.getFile(0).getContent should include("METHOD_SERVERSTREAM")
+    response.getFile(0).getContent should include("ServerStreamingMethodDescriptor")
     response.getFile(0).getContent should not include "ClientStream"
+  }
+
+  test("generates a service that contains only server-streaming methods") {
+    val response = generate(method("ServerStream", serverStreaming = true))
+
+    response.hasError shouldBe false
+    response.getFileCount shouldBe 1
+    response.getFile(0).getContent should include("ServerStreamingMethod")
   }
 
   test("does not generate a service that contains only streaming methods") {

@@ -10,7 +10,7 @@ import scalapb.options.Scalapb
 import scala.jdk.CollectionConverters._
 import java.util.Base64
 
-/** Generates unary Connect service definitions on top of ScalaPB messages. */
+/** Generates Connect service definitions on top of ScalaPB messages. */
 object ConnectRpcScalaGenerator extends CodeGenApp {
 
   // google.api.http extends MethodOptions with this stable field number.
@@ -35,9 +35,7 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     val files = for {
       file    <- request.filesToGenerate
       service <- file.getServices.asScala
-      methods = service.getMethods.asScala.toSeq.filterNot(method =>
-        method.isClientStreaming || method.isServerStreaming
-      )
+      methods = service.getMethods.asScala.toSeq.filterNot(_.isClientStreaming)
       if methods.nonEmpty
     } yield generateService(file.scalaPackage.fullName, file.scalaDirectory, service, methods)
 
@@ -55,6 +53,9 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
   )(implicit implicits: DescriptorImplicits): CodeGeneratorResponse.File = {
     import implicits.ExtendedMethodDescriptor
 
+    val unaryMethods           = methods.filterNot(_.isServerStreaming)
+    val serverStreamingMethods = methods.filter(_.isServerStreaming)
+
     val objectName = service.getName + "Connect"
     val content    = new StringBuilder
 
@@ -66,15 +67,17 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     content ++= "  val serviceName: String = \"" + service.getFullName + "\"\n\n"
 
     methods.foreach { method =>
-      val requestType  = method.inputType.scalaType
-      val responseType = method.outputType.scalaType
-      content ++= s"  val ${descriptorName(method.getName)}: UnaryMethodDescriptor[$requestType, $responseType] =\n"
-      content ++= "    UnaryMethodDescriptor(\n"
+      val requestType    = method.inputType.scalaType
+      val responseType   = method.outputType.scalaType
+      val descriptorType =
+        if (method.isServerStreaming) "ServerStreamingMethodDescriptor" else "UnaryMethodDescriptor"
+      content ++= s"  val ${descriptorName(method.getName)}: $descriptorType[$requestType, $responseType] =\n"
+      content ++= s"    $descriptorType(\n"
       content ++= "      serviceName = serviceName,\n"
       content ++= "      methodName = \"" + method.getName + "\",\n"
       content ++= s"      requestCompanion = $requestType,\n"
       content ++= s"      responseCompanion = $responseType,\n"
-      httpRule(method).foreach { rule =>
+      httpRule(method).filter(_ => !method.isServerStreaming).foreach { rule =>
         val encoded = Base64.getEncoder.encodeToString(rule.toByteArray)
         content ++= "      httpRule = Some(_root_.com.google.api.http.HttpRule.parseFrom(" +
           "_root_.java.util.Base64.getDecoder.decode(\"" + encoded + "\"))),\n"
@@ -86,7 +89,9 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     methods.foreach { method =>
       val requestType  = method.inputType.scalaType
       val responseType = method.outputType.scalaType
-      content ++= s"    def ${method.name}(request: $requestType): F[$responseType]\n"
+      if (method.isServerStreaming)
+        content ++= s"    def ${method.name}(request: $requestType): _root_.fs2.Stream[F, $responseType]\n"
+      else content ++= s"    def ${method.name}(request: $requestType): F[$responseType]\n"
     }
     content ++= "  }\n\n"
 
@@ -94,29 +99,44 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     methods.foreach { method =>
       val requestType  = method.inputType.scalaType
       val responseType = method.outputType.scalaType
-      content ++=
-        s"    def ${method.name}(request: $requestType, ctx: Context): F[ConnectResponse[$responseType]]\n"
+      if (method.isServerStreaming)
+        content ++=
+          s"    def ${method.name}(request: $requestType, ctx: Context): _root_.cats.effect.Resource[F, ConnectStreamingResponse[F, $responseType]]\n"
+      else
+        content ++=
+          s"    def ${method.name}(request: $requestType, ctx: Context): F[ConnectResponse[$responseType]]\n"
     }
     content ++= "  }\n\n"
 
-    content ++= "  def bind[F[_]: _root_.cats.Functor](service: SimpleService[F]): ServiceDefinition[F] =\n"
+    val simpleTypeParams =
+      if (unaryMethods.nonEmpty && serverStreamingMethods.nonEmpty) "[F[_]: _root_.cats.Applicative]"
+      else if (unaryMethods.nonEmpty) "[F[_]: _root_.cats.Functor]"
+      else "[F[_]]"
+    val simpleContextTypeParams =
+      if (unaryMethods.nonEmpty && serverStreamingMethods.nonEmpty)
+        "[F[_]: _root_.cats.Applicative, Context]"
+      else if (unaryMethods.nonEmpty) "[F[_]: _root_.cats.Functor, Context]"
+      else "[F[_], Context]"
+    val unaryInterceptorName = if (unaryMethods.nonEmpty) "interceptor" else "_interceptor"
+    content ++= s"  def bind$simpleTypeParams(service: SimpleService[F]): ServiceDefinition[F] =\n"
     content ++= "    bind(service, UnaryInterceptor.identity[F, ConnectRequestContext])\n\n"
 
-    content ++= "  def bind[F[_]: _root_.cats.Functor, Context](\n"
+    content ++= s"  def bind$simpleContextTypeParams(\n"
     content ++= "    service: SimpleService[F],\n"
-    content ++= "    interceptor: UnaryInterceptor[F, ConnectRequestContext, Context],\n"
+    content ++= s"    $unaryInterceptorName: UnaryInterceptor[F, ConnectRequestContext, Context],\n"
     content ++= "  ): ServiceDefinition[F] =\n"
+    if (unaryMethods.isEmpty) content ++= "    val _ = _interceptor\n"
     content ++= "    ServiceDefinition(\n"
     content ++= "      name = serviceName,\n"
     content ++= "      methods = Seq(\n"
-    methods.zipWithIndex.foreach { case (method, index) =>
+    unaryMethods.zipWithIndex.foreach { case (method, index) =>
       val requestType  = method.inputType.scalaType
       val responseType = method.outputType.scalaType
-      val comma        = if (index == methods.size - 1) "" else ","
+      val comma        = if (index == unaryMethods.size - 1) "" else ","
       content ++= s"        UnaryMethod[F, $requestType, $responseType](\n"
       content ++= s"          ${descriptorName(method.getName)},\n"
       content ++= "          (request, context) =>\n"
-      content ++= "            interceptor.intercept(\n"
+      content ++= s"            $unaryInterceptorName.intercept(\n"
       content ++= s"              ${descriptorName(method.getName)},\n"
       content ++= "              request,\n"
       content ++= "              context,\n"
@@ -126,26 +146,51 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
       content ++= s"        )$comma\n"
     }
     content ++= "      ),\n"
+    if (serverStreamingMethods.nonEmpty) {
+      content ++= "      serverStreamingMethods = Seq(\n"
+      serverStreamingMethods.zipWithIndex.foreach { case (method, index) =>
+        val requestType  = method.inputType.scalaType
+        val responseType = method.outputType.scalaType
+        val comma        = if (index == serverStreamingMethods.size - 1) "" else ","
+        content ++= s"        ServerStreamingMethod[F, $requestType, $responseType](\n"
+        content ++= s"          ${descriptorName(method.getName)},\n"
+        content ++= "          (request, _) =>\n"
+        content ++= "            _root_.cats.effect.Resource.pure(\n"
+        content ++= s"              ConnectStreamingResponse(ConnectStream.fromStream(service.${method.name}(request)))\n"
+        content ++= "            ),\n"
+        content ++= s"        )$comma\n"
+      }
+      content ++= "      ),\n"
+    }
     content ++= "    )\n\n"
 
     content ++= "  def bind[F[_]](service: Service[F, ConnectRequestContext]): ServiceDefinition[F] =\n"
-    content ++= "    bind(service, UnaryInterceptor.identity[F, ConnectRequestContext])\n\n"
+    if (serverStreamingMethods.nonEmpty)
+      content ++= "    bind(\n" +
+        "      service,\n" +
+        "      UnaryInterceptor.identity[F, ConnectRequestContext],\n" +
+        "      ServerStreamingInterceptor.identity[F, ConnectRequestContext],\n" +
+        "    )\n\n"
+    else content ++= "    bind(service, UnaryInterceptor.identity[F, ConnectRequestContext])\n\n"
 
     content ++= "  def bind[F[_], Context](\n"
     content ++= "    service: Service[F, Context],\n"
-    content ++= "    interceptor: UnaryInterceptor[F, ConnectRequestContext, Context],\n"
+    content ++= s"    $unaryInterceptorName: UnaryInterceptor[F, ConnectRequestContext, Context],\n"
+    if (serverStreamingMethods.nonEmpty)
+      content ++= "    streamingInterceptor: ServerStreamingInterceptor[F, ConnectRequestContext, Context],\n"
     content ++= "  ): ServiceDefinition[F] =\n"
+    if (unaryMethods.isEmpty) content ++= "    val _ = _interceptor\n"
     content ++= "    ServiceDefinition(\n"
     content ++= "      name = serviceName,\n"
     content ++= "      methods = Seq(\n"
-    methods.zipWithIndex.foreach { case (method, index) =>
+    unaryMethods.zipWithIndex.foreach { case (method, index) =>
       val requestType  = method.inputType.scalaType
       val responseType = method.outputType.scalaType
-      val comma        = if (index == methods.size - 1) "" else ","
+      val comma        = if (index == unaryMethods.size - 1) "" else ","
       content ++= s"        UnaryMethod[F, $requestType, $responseType](\n"
       content ++= s"          ${descriptorName(method.getName)},\n"
       content ++= "          (request, context) =>\n"
-      content ++= "            interceptor.intercept(\n"
+      content ++= s"            $unaryInterceptorName.intercept(\n"
       content ++= s"              ${descriptorName(method.getName)},\n"
       content ++= "              request,\n"
       content ++= "              context,\n"
@@ -154,22 +199,52 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
       content ++= s"        )$comma\n"
     }
     content ++= "      ),\n"
+    if (serverStreamingMethods.nonEmpty) {
+      content ++= "      serverStreamingMethods = Seq(\n"
+      serverStreamingMethods.zipWithIndex.foreach { case (method, index) =>
+        val requestType  = method.inputType.scalaType
+        val responseType = method.outputType.scalaType
+        val comma        = if (index == serverStreamingMethods.size - 1) "" else ","
+        content ++= s"        ServerStreamingMethod[F, $requestType, $responseType](\n"
+        content ++= s"          ${descriptorName(method.getName)},\n"
+        content ++= "          (request, context) =>\n"
+        content ++= "            streamingInterceptor.intercept(\n"
+        content ++= s"              ${descriptorName(method.getName)},\n"
+        content ++= "              request,\n"
+        content ++= "              context,\n"
+        content ++= s"              serviceContext => service.${method.name}(request, serviceContext),\n"
+        content ++= "            ),\n"
+        content ++= s"        )$comma\n"
+      }
+      content ++= "      ),\n"
+    }
     content ++= "    )\n\n"
 
-    content ++= "  final class SimpleClient[F[_]: _root_.cats.Functor](transport: UnaryTransport[F])\n"
+    val transportType    = if (serverStreamingMethods.nonEmpty) "ConnectTransport" else "UnaryTransport"
+    val clientConstraint =
+      if (serverStreamingMethods.nonEmpty) "_root_.cats.effect.kernel.MonadCancelThrow"
+      else "_root_.cats.Functor"
+    content ++= s"  final class SimpleClient[F[_]: $clientConstraint](transport: $transportType[F])\n"
     content ++= "      extends SimpleService[F] {\n"
     methods.foreach { method =>
       val requestType  = method.inputType.scalaType
       val responseType = method.outputType.scalaType
-      content ++= s"    override def ${method.name}(request: $requestType): F[$responseType] =\n"
-      content ++= "      _root_.cats.Functor[F].map(\n"
-      content ++=
-        s"        transport.unary(${descriptorName(method.getName)}, request, ConnectRequestContext())\n"
-      content ++= "      )(_.message)\n\n"
+      if (method.isServerStreaming) {
+        content ++= s"    override def ${method.name}(request: $requestType): _root_.fs2.Stream[F, $responseType] =\n"
+        content ++= "      _root_.fs2.Stream.resource(\n"
+        content ++= s"        transport.serverStreaming(${descriptorName(method.getName)}, request, ConnectRequestContext())\n"
+        content ++= "      ).flatMap(_.stream.messages)\n\n"
+      } else {
+        content ++= s"    override def ${method.name}(request: $requestType): F[$responseType] =\n"
+        content ++= "      _root_.cats.Functor[F].map(\n"
+        content ++=
+          s"        transport.unary(${descriptorName(method.getName)}, request, ConnectRequestContext())\n"
+        content ++= "      )(_.message)\n\n"
+      }
     }
     content ++= "  }\n\n"
 
-    content ++= "  final class Client[F[_]](transport: UnaryTransport[F])\n"
+    content ++= s"  final class Client[F[_]](transport: $transportType[F])\n"
     content ++= "      extends Service[F, ConnectRequestContext] {\n"
     methods.foreach { method =>
       val requestType  = method.inputType.scalaType
@@ -177,13 +252,23 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
       content ++= s"    override def ${method.name}(\n"
       content ++= s"      request: $requestType,\n"
       content ++= "      ctx: ConnectRequestContext,\n"
-      content ++= s"    ): F[ConnectResponse[$responseType]] =\n"
-      content ++= s"      transport.unary(${descriptorName(method.getName)}, request, ctx)\n\n"
+      if (method.isServerStreaming) {
+        content ++= s"    ): _root_.cats.effect.Resource[F, ConnectStreamingResponse[F, $responseType]] =\n"
+        content ++= s"      transport.serverStreaming(${descriptorName(method.getName)}, request, ctx)\n\n"
+      } else {
+        content ++= s"    ): F[ConnectResponse[$responseType]] =\n"
+        content ++= s"      transport.unary(${descriptorName(method.getName)}, request, ctx)\n\n"
+      }
     }
 
     content ++= "    def withInterceptor[Context](\n"
-    content ++= "      interceptor: UnaryInterceptor[F, Context, ConnectRequestContext]\n"
+    content ++= s"      $unaryInterceptorName: UnaryInterceptor[F, Context, ConnectRequestContext]"
+    if (serverStreamingMethods.nonEmpty) {
+      content ++= ",\n"
+      content ++= "      streamingInterceptor: ServerStreamingInterceptor[F, Context, ConnectRequestContext]\n"
+    } else content ++= "\n"
     content ++= "    ): Service[F, Context] =\n"
+    if (unaryMethods.isEmpty) content ++= "      val _ = _interceptor\n"
     content ++= "      new Service[F, Context] {\n"
     methods.foreach { method =>
       val requestType  = method.inputType.scalaType
@@ -191,8 +276,13 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
       content ++= s"        override def ${method.name}(\n"
       content ++= s"          request: $requestType,\n"
       content ++= "          ctx: Context,\n"
-      content ++= s"        ): F[ConnectResponse[$responseType]] =\n"
-      content ++= "          interceptor.intercept(\n"
+      val resultType =
+        if (method.isServerStreaming)
+          s"_root_.cats.effect.Resource[F, ConnectStreamingResponse[F, $responseType]]"
+        else s"F[ConnectResponse[$responseType]]"
+      val interceptorName = if (method.isServerStreaming) "streamingInterceptor" else unaryInterceptorName
+      content ++= s"        ): $resultType =\n"
+      content ++= s"          $interceptorName.intercept(\n"
       content ++= s"            ${descriptorName(method.getName)},\n"
       content ++= "            request,\n"
       content ++= "            ctx,\n"

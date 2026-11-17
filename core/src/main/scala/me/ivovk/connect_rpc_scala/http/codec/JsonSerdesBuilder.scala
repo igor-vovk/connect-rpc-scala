@@ -8,6 +8,7 @@ import scalapb_json.TypeRegistry
 
 case class JsonSerdes[F[_]](
   parser: Parser,
+  printer: Printer,
   codec: JsonMessageCodec[F],
 )
 
@@ -45,6 +46,7 @@ case class JsonSerdesBuilder[F[_]: Sync] private (
 
     JsonSerdes[F](
       parser = parser,
+      printer = printer,
       codec = new JsonMessageCodec[F](parser, printer),
     )
   }

@@ -3,9 +3,10 @@ package me.ivovk.connect_rpc_scala.http4s.client
 import cats.effect.{Async, Resource}
 import cats.effect.syntax.all.*
 import cats.implicits.*
+import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.headers.`User-Agent`
-import org.http4s.{ContentCoding, Headers, Method, ProductId, Request, Uri}
+import org.http4s.{ContentCoding, Headers, Method, ProductId, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.{ConnectHttpStatus, MediaTypes}
 import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
@@ -20,7 +21,7 @@ private[http4s] final class Transport[F[_]: Async](
   codecs: ClientCodecs[F],
   baseUri: Uri,
   userAgent: String,
-) extends UnaryTransport[F] {
+) extends ConnectTransport[F] {
 
   override def unary[
     RequestMessage <: GeneratedMessage,
@@ -82,27 +83,7 @@ private[http4s] final class Transport[F[_]: Async](
           ).raiseError
         }
       } else {
-        responseEntity.decodeOne(connectrpc.Error, codecs.json)
-          .attempt
-          .flatMap {
-            case Right(error) =>
-              ConnectException(
-                code =
-                  if (error.code.isUnspecified) ConnectHttpStatus.toCode(response.status.code)
-                  else error.code,
-                message = error.getMessage,
-                details = error.details,
-                headers = headers,
-                trailers = trailers,
-              ).raiseError
-            case Left(decodeFailure) =>
-              ConnectException(
-                code = ConnectHttpStatus.toCode(response.status.code),
-                message = Option(decodeFailure.getMessage).getOrElse(response.status.reason),
-                headers = headers,
-                trailers = trailers,
-              ).withCause(decodeFailure).raiseError
-          }
+        decodeHttpError(response)
       }
     }
 
@@ -113,4 +94,80 @@ private[http4s] final class Transport[F[_]: Async](
       )
     }
   }
+
+  override def serverStreaming[
+    RequestMessage <: GeneratedMessage,
+    ResponseMessage <: GeneratedMessage,
+  ](
+    descriptor: ServerStreamingMethodDescriptor[RequestMessage, ResponseMessage],
+    request: RequestMessage,
+    ctx: ConnectRequestContext,
+  ): Resource[F, ConnectStreamingResponse[F, ResponseMessage]] = {
+    val streamingCodec = new StreamingMessageCodec(codecs.chosen, codecs.jsonSerdes)
+    val entity         = streamingCodec.encodeRequest(Stream.emit(request))
+    val httpRequest    = Request[F](
+      method = Method.POST,
+      uri = baseUri / descriptor.serviceName / descriptor.methodName,
+      headers = Headers(
+        `User-Agent`(ProductId(userAgent)),
+        ctx.timeout.map(`Connect-Timeout-Ms`.apply),
+      ) ++ ctx.headers ++ entity.headers,
+      body = entity.body,
+    )
+
+    httpClient.run(httpRequest).evalMap { response =>
+      val responseHeaders = response.headers
+
+      if !response.status.isSuccess then decodeHttpError(response)
+      else if !response.contentType.exists(_.mediaType.satisfies(streamingCodec.mediaType)) then
+        ConnectException(
+          connectrpc.Code.Internal,
+          s"Unexpected streaming response content type: ${response.contentType.map(_.mediaType.show).getOrElse("<missing>")}",
+          headers = responseHeaders,
+        ).raiseError
+      else {
+        given scalapb.GeneratedMessageCompanion[ResponseMessage] = descriptor.responseCompanion
+        val decoded = streamingCodec.decodeResponse[ResponseMessage](response.body, responseHeaders)
+        val stream  = ctx.timeout.fold(decoded) { duration =>
+          decoded.timeoutTo(
+            duration,
+            ConnectException(connectrpc.Code.DeadlineExceeded, "Request deadline exceeded"),
+          )
+        }
+        Async[F].pure(
+          ConnectStreamingResponse(
+            stream = stream,
+            headers = responseHeaders,
+          )
+        )
+      }
+    }
+  }
+
+  private def decodeHttpError[A](response: Response[F]): F[A] = {
+    val (headers, trailers) = response.headers.splitTrailers
+    val responseEntity      = EntityToDecode[F](response.body, headers)
+
+    responseEntity.decodeOne(connectrpc.Error, codecs.json)
+      .attempt
+      .flatMap {
+        case Right(error) =>
+          ConnectException(
+            code =
+              if error.code.isUnspecified then ConnectHttpStatus.toCode(response.status.code) else error.code,
+            message = error.getMessage,
+            details = error.details,
+            headers = headers,
+            trailers = trailers,
+          ).raiseError
+        case Left(decodeFailure) =>
+          ConnectException(
+            code = ConnectHttpStatus.toCode(response.status.code),
+            message = Option(decodeFailure.getMessage).getOrElse(response.status.reason),
+            headers = headers,
+            trailers = trailers,
+          ).withCause(decodeFailure).raiseError
+      }
+  }
+
 }

@@ -2,16 +2,17 @@
 
 # Connect RPC for Scala
 
-`connect-rpc-scala` generates unary Connect service APIs from protobuf definitions and serves or calls them with
+`connect-rpc-scala` generates unary and server-streaming Connect service APIs from protobuf definitions and serves or calls them with
 http4s. ScalaPB still generates the message classes, while this project's generator owns the service definitions.
 The runtime does not depend on grpc-java, ScalaPB's gRPC runtime, fs2-grpc, or zio-grpc.
 
-Streaming RPCs are intentionally not supported yet. The generator skips streaming methods while still generating the
-unary methods in the same service; a streaming-only service produces no Connect API.
+Client-streaming and bidirectional RPCs are not supported yet. The generator skips those methods while still generating
+the unary and server-streaming methods in the same service.
 
 ## Features
 
 - Unary Connect endpoints using JSON or protobuf encoding.
+- Server-streaming Connect endpoints with terminal trailers and streaming errors.
 - Generated effect-polymorphic service interfaces, binders, and clients.
 - Connect request and response headers, trailers, timeouts, and structured errors.
 - Identity and gzip request decompression; responses currently use identity encoding.
@@ -22,7 +23,7 @@ unary methods in the same service; a streaming-only service produces no Connect 
 ## Modules
 
 - `connect-rpc-scala-core`: protocol models, codecs, service descriptors, errors, and transcoding.
-- `connect-rpc-scala-http4s`: unary server routes and client transport.
+- `connect-rpc-scala-http4s`: unary and server-streaming server routes and client transport.
 - [`connect-rpc-scala-opentelemetry`](opentelemetry/README.md): opt-in OpenTelemetry metrics for unary server calls.
 - `protoc-gen-connect-rpc-scala`: the executable protoc service-definition generator.
 - `sbt-connect-rpc-scala`: sbt integration for ScalaPB and Connect source generation.
@@ -194,6 +195,38 @@ Call `.enableBinaryFormat()` on the client builder to use protobuf rather than J
 See the [JSON and protobuf benchmark results](docs/json-and-protobuf-performance.md) for latency,
 traffic, and allocation measurements.
 
+## Server streaming
+
+For the convenient API, implement `SimpleService` and return an fs2 `Stream`. The metadata-aware API models the
+whole response as a `Resource`: headers are available immediately, while successful trailers are the terminal value
+of `ConnectStream`.
+
+```scala
+import org.http4s.{Header, Headers}
+import org.typelevel.ci.*
+
+override def addMany(
+  request: AddRequest,
+  ctx: ConnectRequestContext,
+): Resource[IO, ConnectStreamingResponse[IO, AddResponse]] = {
+  val output =
+    ConnectStream.output1[IO, AddResponse](AddResponse(request.left)) >>
+      ConnectStream.output1[IO, AddResponse](AddResponse(request.right)) >>
+      ConnectStream.done[IO, AddResponse](Headers(Header.Raw(ci"x-count", "2")))
+
+  Resource.pure(
+    ConnectStreamingResponse(
+      stream = ConnectStream.fromPull(output),
+      headers = Headers(Header.Raw(ci"x-source", "calculator")),
+    )
+  )
+}
+```
+
+On the client, consume `response.stream.events` to observe both messages and the successful terminal trailers. A
+streaming error is raised as a `ConnectException`; it retains messages already emitted and carries the error trailers.
+Use `response.stream.messages` when only the messages matter.
+
 ## Development
 
 Run the unit, generator, integration, and dependency checks with:
@@ -202,5 +235,6 @@ Run the unit, generator, integration, and dependency checks with:
 sbt test
 ```
 
-Run `make test-conformance-stable` to run the same unary Connect conformance checks as CI. The checks cover JSON and
-binary protobuf on the http4s server over HTTP/1.1 and HTTP/2, and on the http4s client over HTTP/1.1.
+Run `make test-conformance-stable` to run the same unary and server-streaming Connect conformance checks as CI.
+The checks cover JSON and binary protobuf on the http4s server over HTTP/1.1 and HTTP/2, and on the http4s
+client over HTTP/1.1.

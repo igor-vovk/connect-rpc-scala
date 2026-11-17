@@ -1,9 +1,14 @@
 package me.ivovk.connect_rpc_scala.codegen.e2e
 
 import cats.data.Kleisli
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import cats.effect.unsafe.implicits.global
-import codegen.e2e.calculator.{AddRequest, AddResponse, CalculatorServiceConnect}
+import codegen.e2e.calculator.{
+  AddRequest,
+  AddResponse,
+  CalculatorServiceConnect,
+  StreamingCalculatorServiceConnect,
+}
 import com.google.protobuf.ByteString
 import fs2.{Chunk, Stream}
 import org.http4s.client.Client
@@ -21,6 +26,41 @@ import scalapb.GeneratedMessage
 import scala.concurrent.duration.*
 
 class GeneratedServiceTest extends AnyFunSuite with Matchers {
+
+  private object StreamingCalculatorServiceImpl
+      extends StreamingCalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+    override def addMany(
+      request: AddRequest,
+      _ctx: ConnectRequestContext,
+    ): Resource[IO, ConnectStreamingResponse[IO, AddResponse]] = {
+      val pull =
+        ConnectStream.output1[IO, AddResponse](AddResponse(request.left)) >>
+          ConnectStream.output1[IO, AddResponse](AddResponse(request.right)) >>
+          ConnectStream.done[IO, AddResponse](Headers(Header.Raw(ci"x-count", "2")))
+
+      Resource.pure(ConnectStreamingResponse(ConnectStream.fromPull(pull)))
+    }
+  }
+
+  private object FailingStreamingCalculatorServiceImpl
+      extends StreamingCalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+    override def addMany(
+      request: AddRequest,
+      _ctx: ConnectRequestContext,
+    ): Resource[IO, ConnectStreamingResponse[IO, AddResponse]] = {
+      val pull =
+        ConnectStream.output1[IO, AddResponse](AddResponse(request.left)) >>
+          fs2.Pull.raiseError[IO](
+            ConnectException(
+              connectrpc.Code.Unavailable,
+              "response generation failed",
+              trailers = Headers(Header.Raw(ci"x-failure", "generated")),
+            )
+          )
+
+      Resource.pure(ConnectStreamingResponse(ConnectStream.fromPull(pull)))
+    }
+  }
 
   private object SimpleCalculatorServiceImpl extends CalculatorServiceConnect.SimpleService[IO] {
     override def add(request: AddRequest): IO[AddResponse] =
@@ -224,6 +264,71 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     }
   }
 
+  test("generated server-streaming client receives messages and terminal trailers") {
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
+        val client    = StreamingCalculatorServiceConnect.Client[IO](transport)
+
+        client.addMany(AddRequest(11, 31), ConnectRequestContext()).use { response =>
+          response.stream.events.compile.toList.map { events =>
+            events shouldBe List(
+              ConnectStream.Event.Message(AddResponse(11)),
+              ConnectStream.Event.Message(AddResponse(31)),
+              ConnectStream.Event.End(Headers(Header.Raw(ci"x-count", "2"))),
+            )
+          }
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("server-streaming failures preserve messages emitted before the error and error trailers") {
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(FailingStreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
+        val client    = StreamingCalculatorServiceConnect.Client[IO](transport)
+
+        client.addMany(AddRequest(11, 31), ConnectRequestContext()).use { response =>
+          response.stream.events.attempt.compile.toList.map { events =>
+            events.head shouldBe Right(ConnectStream.Event.Message(AddResponse(11)))
+            val error = events.last.swap.toOption.get.asInstanceOf[ConnectException]
+            error.code shouldBe connectrpc.Code.Unavailable
+            error.trailers.get(ci"x-failure").map(_.toList.map(_.value)) shouldBe Some(List("generated"))
+          }
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("server-streaming route returns an error end envelope for an empty request stream") {
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        val request = Request[IO](
+          method = Method.POST,
+          uri = uri"/codegen.e2e.StreamingCalculatorService/AddMany",
+        ).putHeaders(
+          Header.Raw(ci"Content-Type", "application/connect+proto")
+        )
+
+        app.run(request).flatMap { response =>
+          response.body.compile.to(Array).map { body =>
+            response.status shouldBe Status.Ok
+            response.contentLength shouldBe Some(body.length.toLong)
+            body.length should be > 5
+            body.head & 0x02 shouldBe 0x02
+          }
+        }
+      }
+      .unsafeRunSync()
+  }
+
   test("typed unary interceptors transform server and client contexts") {
     val serverInterceptor = AuthenticationInterceptor.andThen(RequestIdInterceptor)
 
@@ -329,7 +434,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
           Method.POST,
           uri"/codegen.e2e.CalculatorService/Add",
         ).withBodyStream(Stream.emits(AddRequest(20, 22).toByteArray).covary[IO])
-          .putHeaders(Header.Raw(CIString("Content-Type"), "application/proto"))
+          .putHeaders(Header.Raw(ci"Content-Type", "application/proto"))
 
         app.run(request).flatMap { response =>
           response.bodyText.compile.string.map { body =>
@@ -350,7 +455,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       IO.pure(
         Response[IO](Status.BadRequest)
           .withEntity(errorBody)
-          .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
+          .putHeaders(Header.Raw(ci"Content-Type", "application/json"))
       )
     )
     val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(errorApp))
@@ -400,7 +505,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         val app     = routes.transcodingRoutes.orNotFound
         val request = Request[IO](Method.POST, uri"/v1/add")
           .withEntity("""{"left": 20, "right": 22}""")
-          .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
+          .putHeaders(Header.Raw(ci"Content-Type", "application/json"))
 
         app.run(request).flatMap { response =>
           response.bodyText.compile.string.map { body =>
