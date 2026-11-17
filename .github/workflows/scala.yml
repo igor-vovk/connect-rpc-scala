@@ -21,11 +21,14 @@ jobs:
       - name: Check Formatting
         run: sbt scalafmtCheckAll
 
-      - name: Run tests
+      - name: Run tests with sbt 1
         run: sbt test
 
-      - name: Test sbt plugin consumption
-        run: sbt sbtConnectRpcScala/scripted
+      - name: Run tests with sbt 2
+        run: sbt -Dsbt.task.cpus=2 -sbt-version 2.1.0 test
+
+      - name: Test sbt 1 and sbt 2 plugin consumption
+        run: sbt "project sbtConnectRpcScala; +scripted"
 
       - name: Run conformance tests
         run: make test-conformance-stable

@@ -7,7 +7,7 @@ import protocgen.{CodeGenApp, CodeGenRequest, CodeGenResponse}
 import scalapb.compiler.{DescriptorImplicits, GeneratorParams}
 import scalapb.options.Scalapb
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import java.util.Base64
 
 /** Generates unary Connect service definitions on top of ScalaPB messages. */
@@ -28,7 +28,8 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
     }
 
   private def generate(request: CodeGenRequest, params: GeneratorParams): CodeGenResponse = {
-    val implicits = DescriptorImplicits.fromCodeGenRequest(params, request)
+    implicit val implicits: DescriptorImplicits =
+      DescriptorImplicits.fromCodeGenRequest(params, request)
     import implicits.ExtendedFileDescriptor
 
     val files = for {
@@ -38,7 +39,7 @@ object ConnectRpcScalaGenerator extends CodeGenApp {
         method.isClientStreaming || method.isServerStreaming
       )
       if methods.nonEmpty
-    } yield generateService(file.scalaPackage.fullName, file.scalaDirectory, service, methods)(implicits)
+    } yield generateService(file.scalaPackage.fullName, file.scalaDirectory, service, methods)
 
     CodeGenResponse.succeed(
       files,

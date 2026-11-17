@@ -34,6 +34,8 @@ Add the Connect plugin to `project/plugins.sbt`:
 addSbtPlugin("me.ivovk" % "sbt-connect-rpc-scala" % "<version>")
 ```
 
+The plugin is cross-published for sbt 1.x and sbt 2.x; sbt selects the matching artifact automatically.
+
 Enable it on each project that owns protobuf definitions:
 
 ```scala

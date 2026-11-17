@@ -15,7 +15,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import protocgen.CodeGenRequest
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.io.Source
 
 class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
