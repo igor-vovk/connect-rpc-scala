@@ -5,6 +5,8 @@ import sbt.Keys._
 import sbtprotoc.ProtocPlugin
 import sbtprotoc.ProtocPlugin.ProtobufConfig
 import sbtprotoc.ProtocPlugin.autoImport.PB
+import sbtcompat.{PluginCompat => SbtCompat}
+import SbtCompat._
 
 import java.io.File
 import protocbridge.ProtocRunner
@@ -27,7 +29,7 @@ object ConnectRpcScalaPlugin extends AutoPlugin {
 
   override def trigger: PluginTrigger = noTrigger
 
-  override lazy val projectSettings: Seq[Def.Setting[_]] = Seq(
+  override lazy val projectSettings = Seq(
     connectRpcScalaVersion          := BuildInfo.version,
     connectRpcScalaGeneratorOptions := Seq("scala3_sources"),
     libraryDependencies ++= Seq(
@@ -35,13 +37,21 @@ object ConnectRpcScalaPlugin extends AutoPlugin {
       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
       "me.ivovk" %% "connect-rpc-scala-core" % connectRpcScalaVersion.value,
     ),
-    ProtobufConfig / managedClasspath ~= (_.map { entry =>
-      if (entry.data.getName.startsWith(s"$GeneratorName-"))
-        entry.get(artifact.key).fold(entry)(resolved =>
-          entry.put(artifact.key, resolved.withType(PB.ProtocPlugin))
-        )
-      else entry
-    }),
+    ProtobufConfig / managedClasspath := Def.uncached {
+      implicit val converter: xsbti.FileConverter = fileConverter.value
+      (ProtobufConfig / managedClasspath).value.map { entry =>
+        if (SbtCompat.toFile(entry).getName.startsWith(s"$GeneratorName-"))
+          entry.get(SbtCompat.artifactStr).fold(entry)(encodedArtifact =>
+            entry.put(
+              SbtCompat.artifactStr,
+              SbtCompat.artifactToStr(
+                SbtCompat.parseArtifactStrAttribute(encodedArtifact).withType(PB.ProtocPlugin)
+              ),
+            )
+          )
+        else entry
+      }
+    },
     Compile / PB.runProtoc ~= (withJavaOnPath(_)),
     Compile / PB.targets := Seq(
       scalapb.gen(grpc = false, scala3Sources = true) ->

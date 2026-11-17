@@ -1,6 +1,6 @@
 import org.typelevel.scalacoptions.ScalacOptions
 
-ThisBuild / scalaVersion := "3.3.8"
+ThisBuild / scalaVersion := Versions.scala3
 
 ThisBuild / organization := "me.ivovk"
 
@@ -38,14 +38,19 @@ lazy val codegen = project
   .in(file("codegen"))
   .settings(
     name         := "connect-rpc-scala-codegen",
-    scalaVersion := "2.12.20",
+    scalaVersion := {
+      if (sbtVersion.value.startsWith("1.")) Versions.scala212
+      else Versions.scala3ForSbt2
+    },
     noPublish,
     libraryDependencies ++= Seq(
-      "com.thesamet.scalapb" %% "compilerplugin"  % Versions.scalapb,
-      "com.thesamet.scalapb" %% "scalapb-runtime" % Versions.scalapb,
+      "com.thesamet.scalapb"   %% "compilerplugin"          % Versions.scalapb,
+      "com.thesamet.scalapb"   %% "scalapb-runtime"         % Versions.scalapb,
+      "org.scala-lang.modules" %% "scala-collection-compat" % Versions.scalaCollectionCompat,
       ("com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % Versions.scalapbCommonProtos)
         .excludeAll(
-          ExclusionRule("com.thesamet.scalapb", "scalapb-runtime-grpc_2.12")
+          ExclusionRule("com.thesamet.scalapb", "scalapb-runtime-grpc_2.12"),
+          ExclusionRule("com.thesamet.scalapb", "scalapb-runtime-grpc_3"),
         ),
       "org.scalatest" %% "scalatest" % Versions.scalatest % Test,
     ),
@@ -62,8 +67,23 @@ lazy val sbtConnectRpcScala = project
   .enablePlugins(SbtPlugin)
   .settings(
     name         := "sbt-connect-rpc-scala",
-    scalaVersion := "2.12.21",
-    addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.8"),
+    scalaVersion := {
+      if (sbtVersion.value.startsWith("1.")) Versions.scala212
+      else Versions.scala3ForSbt2
+    },
+    crossScalaVersions := Seq(Versions.scala212, Versions.scala3ForSbt2),
+    scalacOptions ++= {
+      if (scalaBinaryVersion.value == "3") Seq("-Wconf:msg=unused import:s")
+      else Seq.empty
+    },
+    pluginCrossBuild / sbtVersion := {
+      scalaBinaryVersion.value match {
+        case "2.12" => Versions.sbt1Minimum
+        case _      => Versions.sbt2Minimum
+      }
+    },
+    addSbtPlugin("com.thesamet"   % "sbt-protoc"  % "1.1.0-RC2"),
+    addSbtPlugin("com.github.sbt" % "sbt2-compat" % Versions.sbt2Compat),
     libraryDependencies ++= Seq(
       "com.thesamet.scalapb" %% "compilerplugin" % Versions.scalapb,
       "org.scalatest"        %% "scalatest"      % Versions.scalatest % Test,
@@ -84,6 +104,12 @@ lazy val sbtConnectRpcScala = project
       Seq(output)
     }.taskValue,
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+    scriptedSbt := {
+      scalaBinaryVersion.value match {
+        case "2.12" => Versions.sbt1Latest
+        case _      => Versions.sbt2Latest
+      }
+    },
     scriptedBufferLog := false,
     scripted          := scripted
       .dependsOn(
