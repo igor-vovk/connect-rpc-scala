@@ -23,19 +23,18 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
   private val headersToEncode = Headers(`Content-Type`(mediaType))
 
   override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
-    val msg = entity.message match {
+    val messages = entity.message match {
       case str: String =>
-        Async[F].delay(cmp.parseFrom(base64dec.decode(str.getBytes(entity.charset))))
+        Stream.eval(Async[F].delay(cmp.parseFrom(base64dec.decode(str.getBytes(entity.charset)))))
       case stream: Stream[F, Byte] =>
         stream.through(compressor.decompress(entity.encoding))
           .chunkAll
           .evalMap { chunk =>
             Async[F].delay(cmp.parseFrom(chunk.toArray))
           }
-          .compile.onlyOrError
     }
 
-    Stream.eval(msg)
+    messages
       .pipeIf(logger.isTraceEnabled) {
         _.map { msg =>
           logger.trace(s">>> Proto: ${msg.toProtoString}")
