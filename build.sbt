@@ -131,10 +131,8 @@ lazy val core = project
         .excludeAll(
           ExclusionRule("com.thesamet.scalapb", "scalapb-runtime-grpc_3")
         ),
-      "com.thesamet.scalapb"   %% "scalapb-runtime" % Versions.scalapb % "protobuf",
-      "io.github.scalapb-json" %% "scalapb-circe"   % "0.17.0",
-      "co.fs2"                 %% "fs2-core"        % Versions.fs2,
-      "org.http4s"             %% "http4s-core"     % Versions.http4s,
+      "com.thesamet.scalapb" %% "scalapb-runtime" % Versions.scalapb % "protobuf",
+      "org.http4s"           %% "http4s-core"     % Versions.http4s,
     ),
   )
 
@@ -143,7 +141,11 @@ lazy val http4s = project
   .settings(
     name := "connect-rpc-scala-http4s",
     commonDeps,
-    libraryDependencies += "org.http4s" %% "http4s-client" % Versions.http4s,
+    libraryDependencies ++= Seq(
+      "io.github.scalapb-json" %% "scalapb-circe" % "0.17.0",
+      "co.fs2"                 %% "fs2-core"     % Versions.fs2,
+      "org.http4s"             %% "http4s-client" % Versions.http4s,
+    ),
   )
 
 lazy val codegenE2e = project

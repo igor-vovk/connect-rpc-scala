@@ -21,8 +21,9 @@ unary methods in the same service; a streaming-only service produces no Connect 
 
 ## Modules
 
-- `connect-rpc-scala-core`: protocol models, codecs, service descriptors, errors, and transcoding.
-- `connect-rpc-scala-http4s`: unary server routes and client transport.
+- `connect-rpc-scala-core` provides the runtime for generated services and clients, including service definitions,
+  method descriptors, interceptors, and Connect errors. Request and response metadata use http4s `Headers`.
+- `connect-rpc-scala-http4s` provides unary server routes, client transport, wire codecs, compression, and HTTP transcoding.
 - `protoc-gen-connect-rpc-scala`: the executable protoc service-definition generator.
 - `sbt-connect-rpc-scala`: sbt integration for ScalaPB and Connect source generation.
 
@@ -47,7 +48,9 @@ The plugin generates ScalaPB messages without gRPC services, generates the Conne
 matching `connect-rpc-scala-core` and ScalaPB runtime dependencies. Use `connectRpcScalaGeneratorOptions` to append or
 replace generator options when needed.
 
-Add the runtime to the application:
+Add `connect-rpc-scala-http4s` to the application that serves or calls Connect endpoints. If your project used the wire
+codecs or transcoding directly from `connect-rpc-scala-core`, add the http4s artifact to that project as well. The Scala
+package names are the same.
 
 ```scala
 libraryDependencies ++= Seq(
