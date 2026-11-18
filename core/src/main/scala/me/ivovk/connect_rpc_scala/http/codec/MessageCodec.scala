@@ -2,9 +2,8 @@ package me.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
 import fs2.Stream
-import org.http4s.headers.`Content-Type`
+import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
 import org.http4s.{ContentCoding, Headers, MediaType}
-import org.typelevel.ci.*
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 import java.nio.charset.{Charset, StandardCharsets}
@@ -25,19 +24,16 @@ case class EntityToDecode[F[_]](
   message: String | Stream[F, Byte],
   headers: Headers,
 ) {
-  @threadUnsafe
-  private lazy val contentType: Option[`Content-Type`] =
-    headers.get(ci"Content-Type")
-      .map(header => `Content-Type`.parse(header.head.value).fold(throw _, identity))
 
-  def charset: Charset =
-    contentType.flatMap(_.charset).fold(StandardCharsets.UTF_8)(_.nioCharset)
+  @threadUnsafe
+  lazy val charset: Charset =
+    headers.get[`Content-Type`].flatMap(_.charset)
+      .fold(StandardCharsets.UTF_8)(_.nioCharset)
 
   @threadUnsafe
   lazy val encoding: ContentCoding =
-    headers.get(ci"Content-Encoding")
-      .map(header => ContentCoding.unsafeFromString(header.head.value))
-      .getOrElse(ContentCoding.identity)
+    headers.get[`Content-Encoding`]
+      .fold(ContentCoding.identity)(_.contentCoding)
 
   def as[A <: Message: Companion](using codec: MessageCodec[F]): Stream[F, A] =
     codec.decode(this)(using summon[Companion[A]])
