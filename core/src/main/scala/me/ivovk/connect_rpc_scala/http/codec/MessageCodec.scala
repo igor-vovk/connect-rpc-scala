@@ -1,8 +1,10 @@
 package me.ivovk.connect_rpc_scala.http.codec
 
+import cats.effect.Sync
 import fs2.Stream
 import org.http4s.{ContentCoding, MediaType}
 import me.ivovk.connect_rpc_scala.service.ConnectHeaders
+import org.http4s.headers.`Content-Type`
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
 import java.nio.charset.{Charset, StandardCharsets}
@@ -24,24 +26,29 @@ case class EntityToDecode[F[_]](
   headers: ConnectHeaders,
 ) {
   @threadUnsafe
-  private lazy val contentType: Option[String] =
-    headers.get("content-type").flatMap(_.headOption)
+  private lazy val contentType: Option[`Content-Type`] =
+    headers.get("content-type")
+      .flatMap(_.headOption)
+      .map(`Content-Type`.parse(_).fold(throw _, identity))
 
   def charset: Charset =
-    contentType
-      .flatMap(_.split(';').iterator.map(_.trim).find(_.startsWith("charset=")))
-      .map(_.stripPrefix("charset="))
-      .map(Charset.forName)
-      .getOrElse(StandardCharsets.UTF_8)
+    contentType.flatMap(_.charset).fold(StandardCharsets.UTF_8)(_.nioCharset)
 
   @threadUnsafe
   lazy val encoding: ContentCoding =
-    headers.get("content-encoding").flatMap(_.headOption)
+    headers.get("content-encoding")
+      .flatMap(_.headOption)
       .map(ContentCoding.unsafeFromString)
       .getOrElse(ContentCoding.identity)
 
   def as[A <: Message: Companion](using codec: MessageCodec[F]): Stream[F, A] =
     codec.decode(this)(using summon[Companion[A]])
+
+  def decodeOne[A <: Message](
+    companion: Companion[A],
+    codec: MessageCodec[F],
+  )(using Sync[F]): F[A] =
+    Sync[F].defer(as[A](using companion, codec).compile.onlyOrError)
 }
 
 case class EncodedEntity[F[_]](

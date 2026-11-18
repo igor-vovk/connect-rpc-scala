@@ -151,5 +151,5 @@ Run the unit, generator, integration, and dependency checks with:
 sbt test
 ```
 
-The conformance launchers retain the unary test paths. Streaming test cases are reported as unsupported until the
-runtime implements streaming.
+Run `make test-conformance-stable` to run the same unary Connect conformance checks as CI. The checks cover JSON and
+binary protobuf on the http4s server over HTTP/1.1 and HTTP/2, and on the http4s client over HTTP/1.1.

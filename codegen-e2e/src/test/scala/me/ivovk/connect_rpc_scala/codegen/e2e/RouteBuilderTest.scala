@@ -7,8 +7,9 @@ import codegen.e2e.calculator.CalculatorServiceConnect
 import codegen.e2e.calculator.TranscodingServiceConnect
 import codegen.e2e.calculator.{AddRequest, AddResponse, GetRequest, GetResponse, NestedAddRequest}
 import org.http4s.client.Client
+import org.http4s.headers.{Allow, Connection}
 import org.http4s.implicits.*
-import org.http4s.{Header, HttpRoutes, Method, Request, Response, Status, Uri}
+import org.http4s.{Header, HttpRoutes, HttpVersion, Method, Request, Response, Status, Uri}
 import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sRouteBuilder
 import me.ivovk.connect_rpc_scala.service.{ConnectRequestContext, ConnectResponse}
 import org.scalatest.funsuite.AnyFunSuite
@@ -86,6 +87,26 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
         )
       }
       .map { case (status, _) => status shouldBe Status.BadRequest }
+      .unsafeRunSync()
+  }
+
+  test("close HTTP/1 connections when rejecting a Connect request with an unread body") {
+    val request = Request[IO](Method.DELETE, uri"/codegen.e2e.CalculatorService/Add")
+      .withEntity("unexpected body")
+
+    ConnectHttp4sRouteBuilder.forService(service).build
+      .use { app =>
+        for {
+          http1 <- app.run(request.withHttpVersion(HttpVersion.`HTTP/1.1`))
+          http2 <- app.run(request.withHttpVersion(HttpVersion.`HTTP/2`))
+        } yield {
+          http1.status shouldBe Status.MethodNotAllowed
+          http1.headers.get[Allow] shouldBe Some(Allow(Method.GET, Method.POST))
+          http1.headers.get[Connection] shouldBe Some(Connection.close)
+          http2.status shouldBe Status.MethodNotAllowed
+          http2.headers.get[Connection] shouldBe None
+        }
+      }
       .unsafeRunSync()
   }
 

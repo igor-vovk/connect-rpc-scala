@@ -121,7 +121,9 @@ object Http4sClientLauncher extends IOApp.Simple {
                   conformance.Error(
                     code = conformance.Code.fromValue(connectError.code.value),
                     message = Option(connectError.getMessage).filter(_.nonEmpty),
-                    details = connectError.details.map(detail => Any(detail.`type`, detail.value)),
+                    details = connectError.details.map(detail =>
+                      Any(s"type.googleapis.com/${detail.`type`}", detail.value)
+                    ),
                   )
                 ),
                 responseTrailers = ConformanceHeadersConv.toHeaderSeq(connectError.trailers),
@@ -133,9 +135,11 @@ object Http4sClientLauncher extends IOApp.Simple {
 
     spec.method match {
       case Some("Unary") =>
-        runUnaryRequest(ConformanceServiceConnect.METHOD_UNARY)(_.payload.toSeq)
+        runUnaryRequest(ConformanceServiceConnect.METHOD_UNARY)(response => Seq(response.getPayload))
       case Some("IdempotentUnary") =>
-        runUnaryRequest(ConformanceServiceConnect.METHOD_IDEMPOTENTUNARY)(_.payload.toSeq)
+        runUnaryRequest(ConformanceServiceConnect.METHOD_IDEMPOTENTUNARY)(response =>
+          Seq(response.getPayload)
+        )
       case Some("Unimplemented") =>
         runUnaryRequest(ConformanceServiceConnect.METHOD_UNIMPLEMENTED)(_ => Seq.empty)
       case Some(other) =>
