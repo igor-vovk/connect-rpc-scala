@@ -78,28 +78,29 @@ class JsonMessageCodec[F[_]: Sync](
     stream.adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  override def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F] = {
-    val body = message
-      .evalMap { m =>
-        Sync[F].delay {
-          val bytes = CircePrinter.noSpaces.printToByteBuffer(printer.toJson(m), options.charset)
+  private def encodeChunk(message: Message, charset: Charset): Chunk[Byte] = {
+    val bytes = CircePrinter.noSpaces.printToByteBuffer(printer.toJson(message), charset)
 
-          if (logger.isTraceEnabled) {
-            logger.trace(s"<<< JSON: ${options.charset.decode(bytes.asReadOnlyBuffer)}")
-          }
+    if (logger.isTraceEnabled) {
+      logger.trace(s"<<< JSON: ${charset.decode(bytes.asReadOnlyBuffer)}")
+    }
 
-          Chunk.byteBuffer(bytes)
-        }
-      }
-      .flatMap(Stream.chunk)
-
-    val entity = EncodedEntity[F](
-      headers = headersToEncode,
-      body = body,
-    )
-
-    entity.pipe(compressor.compress(options.encoding))
+    Chunk.byteBuffer(bytes)
   }
+
+  override def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F] = {
+    val body = message.evalMap(m => Sync[F].delay(encodeChunk(m, options.charset))).flatMap(Stream.chunk)
+    EncodedEntity(headersToEncode, body).pipe(compressor.compress(options.encoding))
+  }
+
+  private[connect_rpc_scala] override def encodeUnary[A <: Message](
+    message: A,
+    options: EncodeOptions,
+  )(using F: Sync[F]): F[EncodedEntity[F]] =
+    F.delay {
+      EncodedEntity.fromChunk[F](headersToEncode, encodeChunk(message, options.charset))
+        .pipe(compressor.compress(options.encoding))
+    }
 
   def withDecodingJsonTransform(transform: JsonTransform): JsonMessageCodec[F] =
     if transform == this.decodingTransform then this

@@ -1,6 +1,6 @@
 package me.ivovk.connect_rpc_scala.http.codec
 
-import cats.effect.Async
+import cats.effect.{Async, Sync}
 import cats.implicits.*
 import fs2.{Chunk, Stream}
 import org.http4s.headers.`Content-Type`
@@ -44,21 +44,26 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
       .adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  override def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F] = {
-    val body = message.flatMap { msg =>
-      if (logger.isTraceEnabled) {
-        logger.trace(s"<<< Proto: ${msg.toProtoString}")
-      }
-
-      Stream.chunk(Chunk.array(msg.toByteArray))
+  private def encodeChunk(message: Message): Chunk[Byte] = {
+    if (logger.isTraceEnabled) {
+      logger.trace(s"<<< Proto: ${message.toProtoString}")
     }
 
-    val entity = EncodedEntity[F](
-      headers = headersToEncode,
-      body = body,
-    )
-
-    entity.pipe(compressor.compress(options.encoding))
+    Chunk.array(message.toByteArray)
   }
+
+  override def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F] = {
+    val body = message.flatMap(msg => Stream.chunk(encodeChunk(msg)))
+    EncodedEntity(headersToEncode, body).pipe(compressor.compress(options.encoding))
+  }
+
+  private[connect_rpc_scala] override def encodeUnary[A <: Message](
+    message: A,
+    options: EncodeOptions,
+  )(using F: Sync[F]): F[EncodedEntity[F]] =
+    F.delay {
+      EncodedEntity.fromChunk[F](headersToEncode, encodeChunk(message))
+        .pipe(compressor.compress(options.encoding))
+    }
 
 }

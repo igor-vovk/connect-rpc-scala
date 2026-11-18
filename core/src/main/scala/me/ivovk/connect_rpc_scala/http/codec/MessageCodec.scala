@@ -1,8 +1,8 @@
 package me.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
-import fs2.Stream
-import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
+import fs2.{Chunk, Stream}
+import org.http4s.headers.{`Content-Encoding`, `Content-Length`, `Content-Type`, `Transfer-Encoding`}
 import org.http4s.{ContentCoding, Headers, MediaType}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
@@ -48,7 +48,17 @@ case class EntityToDecode[F[_]](
 case class EncodedEntity[F[_]](
   headers: Headers,
   body: Stream[F, Byte],
-)
+) {
+  private[connect_rpc_scala] def headersWithMetadata(metadata: Headers): Headers =
+    metadata.transform(_.filterNot { header =>
+      header.name == `Content-Length`.name || header.name == `Transfer-Encoding`.name
+    }) ++ headers
+}
+
+object EncodedEntity {
+  private[codec] def fromChunk[F[_]](headers: Headers, chunk: Chunk[Byte]): EncodedEntity[F] =
+    EncodedEntity(headers.put(`Content-Length`.unsafeFromLong(chunk.size.toLong)), Stream.chunk(chunk))
+}
 
 trait MessageCodec[F[_]] {
 
@@ -57,5 +67,11 @@ trait MessageCodec[F[_]] {
   def decode[A <: Message](m: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A]
 
   def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F]
+
+  private[connect_rpc_scala] def encodeUnary[A <: Message](
+    message: A,
+    options: EncodeOptions,
+  )(using F: Sync[F]): F[EncodedEntity[F]] =
+    F.delay(encode(Stream.emit(message), options))
 
 }

@@ -5,7 +5,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import codegen.e2e.calculator.{AddRequest, AddResponse, CalculatorServiceConnect}
 import com.google.protobuf.ByteString
-import fs2.Stream
+import fs2.{Chunk, Stream}
 import org.http4s.client.Client
 import org.http4s.implicits.*
 import org.http4s.{Header, Headers, HttpApp, Method, Request, Response, Status}
@@ -170,6 +170,53 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         }
       }
       .unsafeRunSync()
+  }
+
+  List("JSON", "Protobuf").foreach { encoding =>
+    test(s"$encoding unary requests and responses use the encoded body length") {
+      val metadata = Headers(
+        Header.Raw(ci"content-length", "999"),
+        Header.Raw(ci"transfer-encoding", "chunked"),
+      )
+      val service = new CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+        override def add(
+          request: AddRequest,
+          _ctx: ConnectRequestContext,
+        ): IO[ConnectResponse[AddResponse]] =
+          IO.pure(ConnectResponse(AddResponse(request.left + request.right), headers = metadata))
+      }
+
+      def checkFraming(headers: Headers, body: Stream[IO, Byte]): IO[Chunk[Byte]] =
+        body.compile.to(Chunk).map { bytes =>
+          headers.get(ci"content-length").map(_.toList.map(_.value)) shouldBe Some(List(bytes.size.toString))
+          headers.get(ci"transfer-encoding") shouldBe None
+          bytes
+        }
+
+      ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(service)).build.use { app =>
+        val checkedApp: HttpApp[IO] = Kleisli { request =>
+          for {
+            requestBody  <- checkFraming(request.headers, request.body)
+            response     <- app.run(request.withBodyStream(Stream.chunk(requestBody)))
+            responseBody <- checkFraming(response.headers, response.body)
+          } yield response.withBodyStream(Stream.chunk(responseBody))
+        }
+        val builder  = ConnectHttp4sClientBuilder(Client.fromHttpApp(checkedApp))
+        val selected = if encoding == "Protobuf" then builder.enableBinaryFormat() else builder
+        val client   = CalculatorServiceConnect.Client(selected.build(uri"http://localhost"))
+        val context  = ConnectRequestContext(headers = metadata)
+
+        for {
+          response <- client.add(AddRequest(20, 22), context)
+          zero     <- client.add(AddRequest.defaultInstance, context)
+        } yield {
+          response.message shouldBe AddResponse(42)
+          zero.message shouldBe AddResponse.defaultInstance
+          if encoding == "Protobuf" then
+            zero.headers.get(ci"content-length").map(_.head.value) shouldBe Some("0")
+        }
+      }.unsafeRunSync()
+    }
   }
 
   test("typed unary interceptors transform server and client contexts") {

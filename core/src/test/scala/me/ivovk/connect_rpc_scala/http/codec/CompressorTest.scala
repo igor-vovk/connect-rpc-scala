@@ -2,12 +2,15 @@ package me.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import connectrpc.{Code, Error}
 import fs2.Stream
 import org.http4s.headers.{`Content-Encoding`, `Content-Length`, `Content-Type`}
 import org.http4s.{ContentCoding, Header, Headers, MediaType}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.ci.*
+
+import java.nio.charset.StandardCharsets
 
 class CompressorTest extends AnyFunSuite with Matchers {
 
@@ -31,5 +34,23 @@ class CompressorTest extends AnyFunSuite with Matchers {
     compressed.body.through(
       compressor.decompress(ContentCoding.gzip)
     ).compile.toList.unsafeRunSync() shouldBe bytes
+  }
+
+  test("gzip unary encoders omit the length of the uncompressed body") {
+    val message = Error(code = Code.Internal, message = Some("compressed"))
+    val options = EncodeOptions(StandardCharsets.UTF_8, ContentCoding.gzip)
+    val codecs  = List[MessageCodec[IO]](JsonSerdesBuilder[IO]().build.codec, new ProtoMessageCodec[IO])
+
+    codecs.foreach { codec =>
+      val roundTrip = for {
+        encoded <- codec.encodeUnary(message, options)
+        decoded <- EntityToDecode(encoded.body, encoded.headers).decodeOne(Error, codec)
+      } yield {
+        encoded.headers.get[`Content-Length`] shouldBe None
+        encoded.headers.get[`Content-Encoding`] shouldBe Some(`Content-Encoding`(ContentCoding.gzip))
+        decoded shouldBe message
+      }
+      roundTrip.unsafeRunSync()
+    }
   }
 }

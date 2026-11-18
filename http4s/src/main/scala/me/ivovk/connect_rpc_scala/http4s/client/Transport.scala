@@ -1,9 +1,8 @@
 package me.ivovk.connect_rpc_scala.http4s.client
 
-import cats.effect.Async
+import cats.effect.{Async, Resource}
 import cats.effect.syntax.all.*
 import cats.implicits.*
-import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.headers.`User-Agent`
 import org.http4s.{ContentCoding, Method, ProductId, Request, Uri}
@@ -31,24 +30,20 @@ private[http4s] final class Transport[F[_]: Async](
     request: RequestMessage,
     ctx: ConnectRequestContext,
   ): F[ConnectResponse[ResponseMessage]] = {
-    val entity = codecs.chosen.encode(
-      Stream.emit(request),
-      EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity),
-    )
     val uri     = descriptor.procedure.stripPrefix("/").split('/').foldLeft(baseUri)(_.addPath(_))
-    val headers = (ctx.headers ++ entity.headers)
-      .put(
-        `User-Agent`(ProductId(userAgent)),
-        ctx.timeout.map(`Connect-Timeout-Ms`.apply),
-      )
-    val httpRequest = Request[F](
-      method = Method.POST,
-      uri = uri,
-      headers = headers,
-      body = entity.body,
+    val encoded = Resource.eval(
+      codecs.chosen.encodeUnary(request, EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity))
     )
+    val httpResponse = encoded.flatMap { entity =>
+      val headers = entity.headersWithMetadata(ctx.headers)
+        .put(
+          `User-Agent`(ProductId(userAgent)),
+          ctx.timeout.map(`Connect-Timeout-Ms`.apply),
+        )
+      httpClient.run(Request[F](method = Method.POST, uri = uri, headers = headers, body = entity.body))
+    }
 
-    val response = httpClient.run(httpRequest).use { response =>
+    val response = httpResponse.use { response =>
       val (headers, trailers) = response.headers.splitTrailers
       val responseEntity      = EntityToDecode[F](response.body, headers)
 
