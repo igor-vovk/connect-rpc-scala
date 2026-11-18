@@ -87,7 +87,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     message: GeneratedMessage,
     codec: MessageCodec[F],
   ): F[Response[F]] =
-    codec.encodeUnary(message, EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity)).map { entity =>
+    codec.encode(message, EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity)).map { entity =>
       Response[F](
         status = status,
         headers = entity.headersWithMetadata(headers),

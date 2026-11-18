@@ -49,15 +49,17 @@ case class EncodedEntity[F[_]](
   headers: Headers,
   body: Stream[F, Byte],
 ) {
-  private[connect_rpc_scala] def headersWithMetadata(metadata: Headers): Headers =
+  def headersWithMetadata(metadata: Headers): Headers =
+    // A plain merge can restore framing headers the encoder omits, such as Content-Length
+    // for gzip bodies or Transfer-Encoding for fixed-length bodies.
     metadata.transform(_.filterNot { header =>
       header.name == `Content-Length`.name || header.name == `Transfer-Encoding`.name
     }) ++ headers
 }
 
 object EncodedEntity {
-  private[codec] def fromChunk[F[_]](headers: Headers, chunk: Chunk[Byte]): EncodedEntity[F] =
-    EncodedEntity(headers.put(`Content-Length`.unsafeFromLong(chunk.size.toLong)), Stream.chunk(chunk))
+  def fromChunk[F[_]](headers: Headers, chunk: Chunk[Byte]): EncodedEntity[F] =
+    EncodedEntity(headers.put(`Content-Length`(chunk.size)), Stream.chunk(chunk))
 }
 
 trait MessageCodec[F[_]] {
@@ -66,12 +68,12 @@ trait MessageCodec[F[_]] {
 
   def decode[A <: Message](m: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A]
 
-  def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F]
+  /**
+   * Encodes one message and supplies `Content-Length` when the encoded byte length is known. This lets
+   * HTTP/1.1 transports skip chunked framing and its encoding and parsing work.
+   */
+  def encode[A <: Message](message: A, options: EncodeOptions)(using F: Sync[F]): F[EncodedEntity[F]]
 
-  private[connect_rpc_scala] def encodeUnary[A <: Message](
-    message: A,
-    options: EncodeOptions,
-  )(using F: Sync[F]): F[EncodedEntity[F]] =
-    F.delay(encode(Stream.emit(message), options))
+  private[codec] def encodeChunk(message: Message, charset: Charset): Chunk[Byte]
 
 }

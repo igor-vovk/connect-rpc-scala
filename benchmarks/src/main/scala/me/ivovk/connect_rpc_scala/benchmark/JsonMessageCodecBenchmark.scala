@@ -75,9 +75,7 @@ class JsonMessageCodecBenchmark {
   @Benchmark
   def serializeBody(): Array[Byte] =
     codec
-      .encode(Stream.emit(message), encodeOptions)
-      .body
-      .compile
-      .to(Array)
+      .encode(message, encodeOptions)
+      .flatMap(_.body.compile.to(Array))
       .unsafeRunSync()
 }

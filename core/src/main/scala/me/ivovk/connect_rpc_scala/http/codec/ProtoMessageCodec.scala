@@ -10,6 +10,7 @@ import me.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
+import java.nio.charset.Charset
 import java.util.Base64
 
 class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
@@ -44,7 +45,7 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
       .adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
   }
 
-  private def encodeChunk(message: Message): Chunk[Byte] = {
+  private[codec] override def encodeChunk(message: Message, _charset: Charset): Chunk[Byte] = {
     if (logger.isTraceEnabled) {
       logger.trace(s"<<< Proto: ${message.toProtoString}")
     }
@@ -52,17 +53,11 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
     Chunk.array(message.toByteArray)
   }
 
-  override def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F] = {
-    val body = message.flatMap(msg => Stream.chunk(encodeChunk(msg)))
-    EncodedEntity(headersToEncode, body).pipe(compressor.compress(options.encoding))
-  }
-
-  private[connect_rpc_scala] override def encodeUnary[A <: Message](
-    message: A,
-    options: EncodeOptions,
-  )(using F: Sync[F]): F[EncodedEntity[F]] =
+  override def encode[A <: Message](message: A, options: EncodeOptions)(
+    using F: Sync[F]
+  ): F[EncodedEntity[F]] =
     F.delay {
-      EncodedEntity.fromChunk[F](headersToEncode, encodeChunk(message))
+      EncodedEntity.fromChunk[F](headersToEncode, encodeChunk(message, options.charset))
         .pipe(compressor.compress(options.encoding))
     }
 
