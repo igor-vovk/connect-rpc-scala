@@ -9,6 +9,7 @@ import me.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
 import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
 import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.http4s.{ContentCoding, Headers, Response, Status}
 import scalapb.GeneratedMessage
 
@@ -27,7 +28,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     codec: MessageCodec[F],
   ): F[Response[F]] =
     invoke(method, request, ConnectRequestContext(headers, timeout(headers)))
-      .flatMap(result => encodeResult(result, codec))
+      .flatMap(encodeResult(_, codec))
 
   def decodeError(error: Throwable): ConnectException =
     ConnectException(
@@ -46,7 +47,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     }
 
     val status  = Status.fromInt(ConnectHttpStatus.fromCode(exception.code)).fold(throw _, identity)
-    val headers = Headers(exception.headers.headers ++ exception.trailers.headers)
+    val headers = exception.headers ++ exception.trailers
     val body    = connectrpc.Error(
       code = exception.code,
       message = Option(exception.getMessage).filter(_.nonEmpty),
@@ -74,8 +75,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     result: ConnectResponse[? <: GeneratedMessage],
     codec: MessageCodec[F],
   ): F[Response[F]] = {
-    val trailerHeaders =
-      if (treatTrailersAsHeaders) result.trailers else result.trailers.withTrailerPrefix
+    val trailerHeaders  = result.trailers.pipeIf(!treatTrailersAsHeaders)(_.withTrailerPrefix)
     val responseHeaders = result.headers ++ trailerHeaders
 
     encodeResponse(Status.Ok, responseHeaders, result.message, codec)
