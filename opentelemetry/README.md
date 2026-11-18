@@ -13,7 +13,7 @@ interceptor to your service. This example uses the calculator service from the m
 
 ```scala
 import cats.effect.IO
-import me.ivovk.connect_rpc_scala.opentelemetry.OpenTelemetryServerInterceptor
+import me.ivovk.connect_rpc_scala.interceptors.OpenTelemetryServerInterceptor
 import me.ivovk.connect_rpc_scala.service.ConnectRequestContext
 
 val metrics = OpenTelemetryServerInterceptor.builder

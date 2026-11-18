@@ -17,7 +17,11 @@ import org.http4s.{Header, Headers, HttpApp}
 import org.http4s.client.Client
 import org.http4s.implicits.*
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
-import me.ivovk.connect_rpc_scala.opentelemetry.OpenTelemetryServerInterceptor
+import me.ivovk.connect_rpc_scala.interceptors.{
+  ErrorLoggingInterceptor,
+  OpenTelemetryServerInterceptor,
+  UnaryInterceptor,
+}
 import me.ivovk.connect_rpc_scala.service.*
 import org.typelevel.ci.CIString
 

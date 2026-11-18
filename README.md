@@ -133,6 +133,7 @@ Unary services can also expose Kubernetes health endpoints through transcoding; 
 
 ## Unary interceptors
 
+Import interceptors from `me.ivovk.connect_rpc_scala.interceptors`.
 `UnaryInterceptor[F, In, Out]` wraps a unary call and can transform its context from `In` to `Out`.
 Pass an interceptor to the generated server's `bind(service, interceptor)` or to the generated
 client's `withInterceptor(interceptor)`. Use `first.andThen(second)` to run `first` before `second`,
@@ -147,14 +148,14 @@ The `UnaryInterceptor` companion provides these helpers.
 
 ### RPC error logging
 
-`ErrorLoggingInterceptor` is available in `connect-rpc-scala-core`. It logs the procedure, Connect
+`ErrorLoggingInterceptor` is available in `connect-rpc-scala-core`. It logs the method, Connect
 code, and original exception for failed unary calls. The default filter logs codes that map to HTTP
 5xx, including unexpected exceptions reported as `INTERNAL`. Client errors such as `INVALID_ARGUMENT`
 and `CANCELED` are skipped. The default logger uses SLF4J at `ERROR` level. The interceptor works with
 any effect that has a Cats `MonadThrow` instance.
 
 ```scala
-import me.ivovk.connect_rpc_scala.service.ErrorLoggingInterceptor
+import me.ivovk.connect_rpc_scala.interceptors.ErrorLoggingInterceptor
 
 val logging = ErrorLoggingInterceptor.builder[IO].build[ConnectRequestContext]()
 val service = CalculatorServiceConnect.bind(Calculator, logging)

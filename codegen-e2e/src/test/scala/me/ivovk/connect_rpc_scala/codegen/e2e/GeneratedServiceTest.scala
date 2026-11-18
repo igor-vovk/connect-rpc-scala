@@ -11,6 +11,7 @@ import org.http4s.implicits.*
 import org.http4s.{Header, Headers, HttpApp, Method, Request, Response, Status}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
+import me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
 import me.ivovk.connect_rpc_scala.service.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -129,9 +130,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
           )
         )
       ).map { response =>
-        response.copy(headers =
-          response.headers.put(Header.Raw(ci"x-client-method", descriptor.method))
-        )
+        response.copy(headers = response.headers.put(Header.Raw(ci"x-client-method", descriptor.method)))
       }
   }
 

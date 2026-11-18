@@ -1,4 +1,4 @@
-package me.ivovk.connect_rpc_scala.opentelemetry
+package me.ivovk.connect_rpc_scala.interceptors
 
 import cats.effect.{Deferred, IO}
 import cats.effect.unsafe.implicits.global
