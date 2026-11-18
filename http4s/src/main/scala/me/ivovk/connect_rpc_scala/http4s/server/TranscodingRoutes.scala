@@ -43,8 +43,7 @@ private[http4s] final class TranscodingRoutes[F[_]: Async](
     val codec   = jsonSerdes.codec.withDecodingJsonTransform(matched.reqBodyTransform)
     val headers = request.headers.toConnect
 
-    EntityToDecode[F](request.body, headers).as[method.RequestMessage](using summon, codec)
-      .compile.onlyOrError
+    EntityToDecode[F](request.body, headers).decodeOne(method.descriptor.requestCompanion, codec)
       .map { bodyMessage =>
         val pathMessage  = jsonSerdes.parser.fromJson[method.RequestMessage](matched.pathJson)
         val queryMessage = jsonSerdes.parser.fromJson[method.RequestMessage](matched.queryJson)
