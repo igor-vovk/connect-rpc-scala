@@ -1,8 +1,8 @@
 package me.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
-import fs2.Stream
-import org.http4s.headers.{`Content-Encoding`, `Content-Type`}
+import fs2.{Chunk, Stream}
+import org.http4s.headers.{`Content-Encoding`, `Content-Length`, `Content-Type`}
 import org.http4s.{ContentCoding, Headers, MediaType}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
@@ -50,12 +50,23 @@ case class EncodedEntity[F[_]](
   body: Stream[F, Byte],
 )
 
+object EncodedEntity {
+  def fromChunk[F[_]](headers: Headers, chunk: Chunk[Byte]): EncodedEntity[F] =
+    EncodedEntity(headers.put(`Content-Length`(chunk.size)), Stream.chunk(chunk))
+}
+
 trait MessageCodec[F[_]] {
 
   val mediaType: MediaType
 
   def decode[A <: Message](m: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A]
 
-  def encode[A <: Message](message: Stream[F, A], options: EncodeOptions): EncodedEntity[F]
+  /**
+   * Encodes one message and supplies `Content-Length` when the encoded byte length is known. This lets
+   * HTTP/1.1 transports skip chunked framing and its encoding and parsing work.
+   */
+  def encode[A <: Message](message: A, options: EncodeOptions)(using F: Sync[F]): F[EncodedEntity[F]]
+
+  private[codec] def encodeChunk(message: Message, charset: Charset): Chunk[Byte]
 
 }

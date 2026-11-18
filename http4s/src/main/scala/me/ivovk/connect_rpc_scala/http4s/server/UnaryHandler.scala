@@ -3,7 +3,6 @@ package me.ivovk.connect_rpc_scala.http4s.server
 import cats.effect.Async
 import cats.effect.syntax.all.*
 import cats.implicits.*
-import fs2.Stream
 import me.ivovk.connect_rpc_scala.http.ConnectHttpStatus
 import me.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
@@ -27,7 +26,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     headers: Headers,
     codec: MessageCodec[F],
   ): F[Response[F]] =
-    invoke(method, request, ConnectRequestContext(headers, timeout(headers)))
+    invoke(method, request, ConnectRequestContext(headers.removePayloadHeaders, timeout(headers)))
       .flatMap(encodeResult(_, codec))
 
   def decodeError(error: Throwable): ConnectException =
@@ -87,19 +86,14 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     headers: Headers,
     message: GeneratedMessage,
     codec: MessageCodec[F],
-  ): F[Response[F]] = {
-    val entity = codec.encode(
-      Stream.emit(message),
-      EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity),
-    )
-    Async[F].pure(
+  ): F[Response[F]] =
+    codec.encode(message, EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity)).map { entity =>
       Response[F](
         status = status,
-        headers = headers ++ entity.headers,
+        headers = headers.removePayloadHeaders ++ entity.headers,
         body = entity.body,
       )
-    )
-  }
+    }
 
   private def timeout(headers: Headers): Option[FiniteDuration] =
     headers.get[`Connect-Timeout-Ms`].map(_.timeout)
