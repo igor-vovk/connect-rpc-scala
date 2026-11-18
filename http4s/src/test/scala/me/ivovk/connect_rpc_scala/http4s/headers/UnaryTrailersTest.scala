@@ -1,12 +1,12 @@
 package me.ivovk.connect_rpc_scala.http4s.headers
 
 import org.http4s.{Header, Headers}
-import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
+import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.ci.*
 
-class HeaderConvertersTest extends AnyFunSuite with Matchers {
+class UnaryTrailersTest extends AnyFunSuite with Matchers {
 
   test("prefix Connect trailers when writing http4s headers") {
     val trailers = Headers(

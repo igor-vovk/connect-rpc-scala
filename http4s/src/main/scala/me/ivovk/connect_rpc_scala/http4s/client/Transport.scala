@@ -9,7 +9,7 @@ import org.http4s.headers.`User-Agent`
 import org.http4s.{ContentCoding, Header, Method, ProductId, Request, Uri}
 import me.ivovk.connect_rpc_scala.http.{ConnectHttpStatus, MediaTypes}
 import me.ivovk.connect_rpc_scala.http.codec.*
-import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
+import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
 import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
 import me.ivovk.connect_rpc_scala.service.*
 import scalapb.GeneratedMessage

@@ -7,7 +7,7 @@ import fs2.Stream
 import org.http4s.{ContentCoding, Header, Headers, Response, Status}
 import me.ivovk.connect_rpc_scala.http.ConnectHttpStatus
 import me.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
-import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
+import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
 import me.ivovk.connect_rpc_scala.service.*
 import org.typelevel.ci.*
 import scalapb.GeneratedMessage
@@ -101,7 +101,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
   }
 
   private def timeout(headers: Headers): Option[FiniteDuration] =
-    headers.get(ci"Connect-Timeout-Ms")
+    headers.get[`Connect-Timeout-Ms`]
       .flatMap(_.head.value.toLongOption)
       .map(_.millis)
 }

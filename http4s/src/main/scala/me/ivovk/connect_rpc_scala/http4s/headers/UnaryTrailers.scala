@@ -5,7 +5,7 @@ import org.typelevel.ci.CIString
 
 import java.util.Locale
 
-private[http4s] object HeaderConverters {
+private[http4s] object UnaryTrailers {
 
   private val TrailerPrefix = "trailer-"
 
