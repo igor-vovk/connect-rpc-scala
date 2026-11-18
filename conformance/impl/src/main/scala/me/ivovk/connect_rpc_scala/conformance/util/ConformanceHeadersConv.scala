@@ -1,15 +1,20 @@
 package me.ivovk.connect_rpc_scala.conformance.util
 
-import connectrpc.conformance.v1.Header
-import me.ivovk.connect_rpc_scala.service.ConnectHeaders
+import connectrpc.conformance.v1.Header as ConformanceHeader
+import org.http4s.{Header, Headers}
+import org.typelevel.ci.CIString
+
+import java.util.Locale
 
 object ConformanceHeadersConv {
 
-  def toHeaderSeq(headers: ConnectHeaders): Seq[Header] =
-    headers.entries.toSeq.map((name, values) => Header(name, values))
+  def toHeaderSeq(headers: Headers): Seq[ConformanceHeader] =
+    headers.headers.groupBy(_.name).iterator.map { (name, values) =>
+      ConformanceHeader(name.toString.toLowerCase(Locale.ROOT), values.map(_.value))
+    }.toList
 
-  def toConnectHeaders(headers: Seq[Header]): ConnectHeaders =
-    ConnectHeaders.create(
-      headers.flatMap(header => header.value.map(value => header.name -> value))
-    )
+  def toHttp4sHeaders(headers: Seq[ConformanceHeader]): Headers =
+    Headers(headers.toList.flatMap { header =>
+      header.value.map(value => Header.Raw(CIString(header.name), value))
+    })
 }

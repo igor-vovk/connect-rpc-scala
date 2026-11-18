@@ -36,7 +36,7 @@ private[http4s] final class Transport[F[_]: Async](
       EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity),
     )
     val uri     = descriptor.procedure.stripPrefix("/").split('/').foldLeft(baseUri)(_.addPath(_))
-    val headers = ctx.headers.toHttp4s
+    val headers = ctx.headers
       .put(entity.headers.map(Header.ToRaw.keyValuesToRaw).toSeq)
       .put(
         `User-Agent`(ProductId(userAgent)),
@@ -50,7 +50,7 @@ private[http4s] final class Transport[F[_]: Async](
     )
 
     val response = httpClient.run(httpRequest).use { response =>
-      val (headers, trailers) = response.headers.toConnectWithTrailers
+      val (headers, trailers) = response.headers.splitTrailers
       val responseEntity      = EntityToDecode[F](response.body, headers)
 
       if (response.status.isSuccess) {

@@ -9,6 +9,7 @@ import me.ivovk.connect_rpc_scala.http.ConnectHttpStatus
 import me.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import me.ivovk.connect_rpc_scala.service.*
+import org.typelevel.ci.*
 import scalapb.GeneratedMessage
 
 import java.nio.charset.StandardCharsets
@@ -22,7 +23,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
   def invokeAndEncode(
     method: UnaryMethod[F],
     request: method.RequestMessage,
-    headers: ConnectHeaders,
+    headers: Headers,
     codec: MessageCodec[F],
   ): F[Response[F]] =
     invoke(method, request, ConnectRequestContext(headers, timeout(headers)))
@@ -45,7 +46,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     }
 
     val status  = Status.fromInt(ConnectHttpStatus.fromCode(exception.code)).fold(throw _, identity)
-    val headers = (exception.headers ++ exception.trailers).toHttp4s
+    val headers = Headers(exception.headers.headers ++ exception.trailers.headers)
     val body    = connectrpc.Error(
       code = exception.code,
       message = Option(exception.getMessage).filter(_.nonEmpty),
@@ -74,9 +75,8 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     codec: MessageCodec[F],
   ): F[Response[F]] = {
     val trailerHeaders =
-      if treatTrailersAsHeaders then result.trailers.toHttp4s
-      else result.trailers.toHttp4sTrailers
-    val responseHeaders = result.headers.toHttp4s ++ trailerHeaders
+      if (treatTrailersAsHeaders) result.trailers else result.trailers.withTrailerPrefix
+    val responseHeaders = result.headers ++ trailerHeaders
 
     encodeResponse(Status.Ok, responseHeaders, result.message, codec)
   }
@@ -100,9 +100,8 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     )
   }
 
-  private def timeout(headers: ConnectHeaders): Option[FiniteDuration] =
-    headers.get("connect-timeout-ms")
-      .flatMap(_.headOption)
-      .flatMap(_.toLongOption)
+  private def timeout(headers: Headers): Option[FiniteDuration] =
+    headers.get(ci"Connect-Timeout-Ms")
+      .flatMap(_.head.value.toLongOption)
       .map(_.millis)
 }

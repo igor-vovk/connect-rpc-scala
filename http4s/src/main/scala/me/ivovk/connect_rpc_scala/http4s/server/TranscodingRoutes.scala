@@ -5,7 +5,6 @@ import cats.effect.Async
 import cats.implicits.*
 import org.http4s.{HttpRoutes, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.codec.{EntityToDecode, JsonSerdes}
-import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import me.ivovk.connect_rpc_scala.service.MergingBuilder.*
 import me.ivovk.connect_rpc_scala.service.ServiceDefinition
 import me.ivovk.connect_rpc_scala.transcoding.{MatchedRequest, TranscodingUrlMatcher}
@@ -41,7 +40,7 @@ private[http4s] final class TranscodingRoutes[F[_]: Async](
     given scalapb.GeneratedMessageCompanion[method.RequestMessage] = method.descriptor.requestCompanion
 
     val codec   = jsonSerdes.codec.withDecodingJsonTransform(matched.reqBodyTransform)
-    val headers = request.headers.toConnect
+    val headers = request.headers
 
     EntityToDecode[F](request.body, headers).decodeOne(method.descriptor.requestCompanion, codec)
       .map { bodyMessage =>

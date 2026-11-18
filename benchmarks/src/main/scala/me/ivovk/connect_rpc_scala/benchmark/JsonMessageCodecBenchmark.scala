@@ -12,7 +12,7 @@ import me.ivovk.connect_rpc_scala.http.codec.{
   JsonMessageCodec,
   JsonSerdesBuilder,
 }
-import me.ivovk.connect_rpc_scala.service.ConnectHeaders
+import org.http4s.Headers
 import org.openjdk.jmh.annotations.{
   Benchmark,
   BenchmarkMode,
@@ -65,7 +65,7 @@ class JsonMessageCodecBenchmark {
     )
 
     val bytes = serializeBody()
-    encoded = EntityToDecode(Stream.emits(bytes), ConnectHeaders.empty)
+    encoded = EntityToDecode(Stream.emits(bytes), Headers.empty)
   }
 
   @Benchmark

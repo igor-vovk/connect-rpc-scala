@@ -1,45 +1,28 @@
 package me.ivovk.connect_rpc_scala.http4s.headers
 
 import org.http4s.{Header, Headers}
-import me.ivovk.connect_rpc_scala.service.ConnectHeaders
 import org.typelevel.ci.CIString
 
 import java.util.Locale
 
 private[http4s] object HeaderConverters {
 
-  private val TrailerPrefix       = "trailer-"
-  private val TrailerPrefixLength = TrailerPrefix.length
-
-  extension (headers: ConnectHeaders) {
-    def toHttp4s: Headers =
-      convertToHttp4s(prefix = "")
-
-    def toHttp4sTrailers: Headers =
-      convertToHttp4s(prefix = TrailerPrefix)
-
-    private def convertToHttp4s(prefix: String): Headers = {
-      val raw = headers.entries.toSeq.flatMap { (name, values) =>
-        values.map(value => Header.Raw(CIString(s"$prefix$name"), value))
-      }
-      new Headers(raw.toList)
-    }
-  }
+  private val TrailerPrefix = "trailer-"
 
   extension (headers: Headers) {
-    def toConnect: ConnectHeaders =
-      ConnectHeaders.create(toPairs)
+    def withTrailerPrefix: Headers =
+      headers.transform(_.map { header =>
+        Header.Raw(CIString(s"$TrailerPrefix${header.name}"), header.value)
+      })
 
-    def toConnectWithTrailers: (ConnectHeaders, ConnectHeaders) = {
-      val (trailers, normal) = toPairs.partition { (name, _) =>
-        name.toLowerCase(Locale.ROOT).startsWith(TrailerPrefix)
+    def splitTrailers: (Headers, Headers) = {
+      val (trailers, normal) = headers.headers.partition { header =>
+        header.name.toString.toLowerCase(Locale.ROOT).startsWith(TrailerPrefix)
       }
-      val connectTrailers = trailers.map((name, value) => name.drop(TrailerPrefixLength) -> value)
-      ConnectHeaders.create(normal) -> ConnectHeaders.create(connectTrailers)
+      val unprefixed = trailers.map { header =>
+        Header.Raw(CIString(header.name.toString.drop(TrailerPrefix.length)), header.value)
+      }
+      Headers(normal) -> Headers(unprefixed)
     }
-
-    private def toPairs: Seq[(String, String)] =
-      headers.headers.map(header => header.name.toString -> header.value)
   }
-
 }

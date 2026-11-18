@@ -71,7 +71,7 @@ object Http4sClientLauncher extends IOApp.Simple {
       extractPayloads: Resp => Seq[conformance.ConformancePayload]
     ): IO[ClientCompatResponse] = {
       val requests = spec.requestMessages.map(_.unpack[Req])
-      val headers  = ConformanceHeadersConv.toConnectHeaders(spec.requestHeaders)
+      val headers  = ConformanceHeadersConv.toHttp4sHeaders(spec.requestHeaders)
 
       if requests.size != 1 then
         ClientCompatResponse(spec.testName)

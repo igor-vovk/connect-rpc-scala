@@ -4,9 +4,11 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import connectrpc.conformance.v1.*
-import me.ivovk.connect_rpc_scala.service.{ConnectException, ConnectHeaders, ConnectRequestContext}
+import org.http4s.{Header as HttpHeader, Headers}
+import me.ivovk.connect_rpc_scala.service.{ConnectException, ConnectRequestContext}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.ci.*
 
 import scala.concurrent.duration.*
 
@@ -22,15 +24,17 @@ class ConformanceServiceImplTest extends AnyFunSuite with Matchers {
     )
     val message = UnaryRequest(Some(responseDefinition), ByteString.copyFromUtf8("request"))
     val context = ConnectRequestContext(
-      ConnectHeaders.create(Seq("request-header" -> "request-value")),
+      Headers(HttpHeader.Raw(ci"request-header", "request-value")),
       Some(250.millis),
     )
 
     val response = service.unary(message, context).unsafeRunSync()
 
     response.message.getPayload.data.toStringUtf8 shouldBe "response"
-    response.headers.get("response-header") shouldBe Some(Vector("header-value"))
-    response.trailers.get("trailer-response-trailer") shouldBe Some(Vector("trailer-value"))
+    response.headers.get(ci"response-header").map(_.toList.map(_.value)) shouldBe Some(List("header-value"))
+    response.trailers.get(ci"trailer-response-trailer").map(_.toList.map(_.value)) shouldBe Some(
+      List("trailer-value")
+    )
 
     val requestInfo = response.message.getPayload.getRequestInfo
     requestInfo.timeoutMs shouldBe Some(250L)
