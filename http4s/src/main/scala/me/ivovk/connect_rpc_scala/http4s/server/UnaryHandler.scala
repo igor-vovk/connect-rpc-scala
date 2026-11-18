@@ -46,8 +46,9 @@ private[http4s] final class UnaryHandler[F[_]: Async](
         ).withCause(other)
     }
 
-    val status  = Status.fromInt(ConnectHttpStatus.fromCode(exception.code)).fold(throw _, identity)
-    val headers = exception.headers ++ exception.trailers
+    val status = Status.fromInt(ConnectHttpStatus.fromCode(exception.code)).fold(throw _, identity)
+    // Append values when an error header and trailer share a name.
+    val headers = Headers(exception.headers.headers ++ exception.trailers.headers)
     val body    = connectrpc.Error(
       code = exception.code,
       message = Option(exception.getMessage).filter(_.nonEmpty),
