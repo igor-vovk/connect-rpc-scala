@@ -12,12 +12,21 @@ import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import me.ivovk.connect_rpc_scala.service.{ConnectException, ServiceDefinition, UnaryMethod}
 
+object ConnectRoutes {
+  // A rejected request may have unread body bytes. Tell HTTP/1 clients that the connection cannot be reused.
+  extension (response: Response[F]) {
+    private def closeIfHttp1(version: HttpVersion): Response[F] =
+      if (version.major == 1) response.putHeaders(Connection.close) else response
+  }
+}
+
 private[http4s] final class ConnectRoutes[F[_]: Async](
   services: Seq[ServiceDefinition[F]],
   jsonSerdes: JsonSerdes[F],
   pathPrefix: Uri.Path,
   unaryHandler: UnaryHandler[F],
 ) {
+  import ConnectRoutes.*
 
   private val protoCodec = new ProtoMessageCodec[F]
 
@@ -134,9 +143,4 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
     Async[F].pure(Response[F](UnsupportedMediaType).withEntity(message).closeIfHttp1(request.httpVersion))
   }
 
-  // A rejected request may have unread body bytes. Tell HTTP/1 clients that the connection cannot be reused.
-  extension (response: Response[F]) {
-    private def closeIfHttp1(version: HttpVersion): Response[F] =
-      if (version.major == 1) response.putHeaders(Connection.close) else response
-  }
 }
