@@ -101,7 +101,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         response.copy(
           headers = response.headers.put(
             Header.Raw(ci"x-request-id", requestId),
-            Header.Raw(ci"x-procedure", descriptor.procedure),
+            Header.Raw(ci"x-method", descriptor.method),
           )
         )
       }
@@ -130,7 +130,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         )
       ).map { response =>
         response.copy(headers =
-          response.headers.put(Header.Raw(ci"x-client-procedure", descriptor.procedure))
+          response.headers.put(Header.Raw(ci"x-client-method", descriptor.method))
         )
       }
   }
@@ -152,8 +152,8 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     val definition = CalculatorServiceConnect.bind(CalculatorServiceImpl)
 
     definition.name shouldBe "codegen.e2e.CalculatorService"
-    definition.methods.map(_.descriptor.procedure) should contain(
-      "/codegen.e2e.CalculatorService/Add"
+    definition.methods.map(_.descriptor.method) should contain(
+      "codegen.e2e.CalculatorService/Add"
     )
     CalculatorServiceConnect.METHOD_ADD.httpRule.map(_.getPost) shouldBe Some("/v1/add")
   }
@@ -241,9 +241,9 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
           response.message shouldBe AddResponse(42)
           headerValues(response.headers, ci"x-authenticated-user") shouldBe List("alice")
           headerValues(response.headers, ci"x-request-id") shouldBe List("request-1")
-          headerValues(response.headers, ci"x-procedure") shouldBe List("/codegen.e2e.CalculatorService/Add")
-          headerValues(response.headers, ci"x-client-procedure") shouldBe List(
-            "/codegen.e2e.CalculatorService/Add"
+          headerValues(response.headers, ci"x-method") shouldBe List("codegen.e2e.CalculatorService/Add")
+          headerValues(response.headers, ci"x-client-method") shouldBe List(
+            "codegen.e2e.CalculatorService/Add"
           )
         }
       }

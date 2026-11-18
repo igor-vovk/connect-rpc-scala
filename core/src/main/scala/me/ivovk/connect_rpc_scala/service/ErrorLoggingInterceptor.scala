@@ -7,22 +7,18 @@ import org.slf4j.{Logger, LoggerFactory}
 
 object ErrorLoggingInterceptor {
 
-  private object Loggers {
-    opaque type ErrorLogger[F[_]] = (String, Throwable) => F[Unit]
+  opaque type ErrorLogger[F[_]] = (String, Throwable) => F[Unit]
 
-    object ErrorLogger {
+  object ErrorLogger {
 
-      def apply[F[_]](logger: (String, Throwable) => F[Unit]): ErrorLogger[F] = logger
+    def apply[F[_]](logger: (String, Throwable) => F[Unit]): ErrorLogger[F] = logger
 
-      def fromSlf4j[F[_]](logger: => Logger)(using F: MonadThrow[F]): ErrorLogger[F] =
-        (message, error) => F.catchNonFatal(logger.error(message, error))
+    def fromSlf4j[F[_]](logger: => Logger)(using F: MonadThrow[F]): ErrorLogger[F] =
+      (message, error) => F.catchNonFatal(logger.error(message, error))
 
-      extension [F[_]](logger: ErrorLogger[F])
-        def log(message: String, error: Throwable): F[Unit] = logger(message, error)
-    }
+    extension [F[_]](logger: ErrorLogger[F])
+      def log(message: String, error: Throwable): F[Unit] = logger(message, error)
   }
-
-  import Loggers.ErrorLogger
 
   private lazy val defaultLogger = LoggerFactory.getLogger(getClass.getName.stripSuffix("$"))
 
@@ -62,8 +58,10 @@ object ErrorLoggingInterceptor {
           }
 
           if shouldLog(code) then {
-            val method = descriptor.procedure.stripPrefix("/")
-            logger.log(s"Connect service error: method=$method code=${code.name.stripPrefix("CODE_")}", error)
+            logger(
+              s"Connect service error: method=${descriptor.method} code=${code.name.stripPrefix("CODE_")}",
+              error,
+            )
           } else F.unit
         }
 
