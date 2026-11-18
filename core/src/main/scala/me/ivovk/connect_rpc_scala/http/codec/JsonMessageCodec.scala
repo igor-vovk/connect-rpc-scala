@@ -39,6 +39,8 @@ class JsonMessageCodec[F[_]: Sync](
 
   override val mediaType: MediaType = MediaTypes.`application/json`
 
+  private val headersToEncode = Headers(`Content-Type`(mediaType))
+
   override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
     val stream = entity.message match {
       case str: String if str.isEmpty =>
@@ -92,7 +94,7 @@ class JsonMessageCodec[F[_]: Sync](
       .flatMap(Stream.chunk)
 
     val entity = EncodedEntity[F](
-      headers = Headers(`Content-Type`(mediaType)),
+      headers = headersToEncode,
       body = body,
     )
 

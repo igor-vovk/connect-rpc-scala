@@ -20,6 +20,8 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
 
   override val mediaType: MediaType = MediaTypes.`application/proto`
 
+  private val headersToEncode = Headers(`Content-Type`(mediaType))
+
   override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
     val msg = entity.message match {
       case str: String =>
@@ -53,7 +55,7 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
     }
 
     val entity = EncodedEntity[F](
-      headers = Headers(`Content-Type`(mediaType)),
+      headers = headersToEncode,
       body = body,
     )
 
