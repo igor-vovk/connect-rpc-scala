@@ -6,7 +6,8 @@ import fs2.{Chunk, Stream}
 import io.circe.{Json, Printer as CircePrinter}
 import io.circe.jawn.JawnParser
 import io.circe.parser.parse
-import org.http4s.{InvalidMessageBodyFailure, MediaType}
+import org.http4s.headers.`Content-Type`
+import org.http4s.{Headers, InvalidMessageBodyFailure, MediaType}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
@@ -37,6 +38,8 @@ class JsonMessageCodec[F[_]: Sync](
   private val compressor = Compressor[F]()
 
   override val mediaType: MediaType = MediaTypes.`application/json`
+
+  private val headersToEncode = Headers(`Content-Type`(mediaType))
 
   override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
     val stream = entity.message match {
@@ -91,9 +94,7 @@ class JsonMessageCodec[F[_]: Sync](
       .flatMap(Stream.chunk)
 
     val entity = EncodedEntity[F](
-      headers = Map(
-        "Content-Type" -> mediaType.show
-      ),
+      headers = headersToEncode,
       body = body,
     )
 

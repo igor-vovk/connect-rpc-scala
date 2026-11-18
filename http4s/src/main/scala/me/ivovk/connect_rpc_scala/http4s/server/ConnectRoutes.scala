@@ -9,7 +9,6 @@ import org.http4s.headers.{Allow, Connection}
 import org.http4s.{ContentCoding, HttpRoutes, HttpVersion, Method, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http.codec.*
-import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import me.ivovk.connect_rpc_scala.service.{ConnectException, ServiceDefinition, UnaryMethod}
 
 object ConnectRoutes {
@@ -81,7 +80,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
 
         decodeAndInvoke(
           method,
-          EntityToDecode(message, request.headers.toConnect),
+          EntityToDecode(message, request.headers),
           codec,
           request.httpVersion,
         )

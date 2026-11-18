@@ -3,7 +3,8 @@ package me.ivovk.connect_rpc_scala.http.codec
 import cats.effect.Async
 import cats.implicits.*
 import fs2.{Chunk, Stream}
-import org.http4s.{InvalidMessageBodyFailure, MediaType}
+import org.http4s.headers.`Content-Type`
+import org.http4s.{Headers, InvalidMessageBodyFailure, MediaType}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
@@ -18,6 +19,8 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
   private val compressor = Compressor[F]()
 
   override val mediaType: MediaType = MediaTypes.`application/proto`
+
+  private val headersToEncode = Headers(`Content-Type`(mediaType))
 
   override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
     val msg = entity.message match {
@@ -52,9 +55,7 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
     }
 
     val entity = EncodedEntity[F](
-      headers = Map(
-        "Content-Type" -> mediaType.show
-      ),
+      headers = headersToEncode,
       body = body,
     )
 

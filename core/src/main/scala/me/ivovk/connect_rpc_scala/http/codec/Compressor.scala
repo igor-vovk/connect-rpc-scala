@@ -5,7 +5,7 @@ import cats.effect.Sync
 import fs2.Pipe
 import fs2.compression.Compression
 import org.http4s.ContentCoding
-import org.http4s.util.StringWriter
+import org.http4s.headers.{`Content-Encoding`, `Content-Length`}
 import me.ivovk.connect_rpc_scala.service.ConnectException
 
 class Compressor[F[_]: Sync] {
@@ -25,14 +25,10 @@ class Compressor[F[_]: Sync] {
   def compress(encoding: ContentCoding): Endo[EncodedEntity[F]] = entity =>
     encoding match {
       case ContentCoding.gzip =>
-        val coding = ContentCoding.gzip
-        val writer = new StringWriter()
-        coding.render(writer)
-
         EncodedEntity(
           headers = entity.headers
-            .updated("Content-Encoding", writer.result)
-            .removed("Content-Length"), // Length is unknown after compression
+            .transform(_.filterNot(_.name == `Content-Length`.name))
+            .put(`Content-Encoding`(ContentCoding.gzip)),
           body = entity.body.through(Compression[F].gzip()),
         )
       case ContentCoding.identity =>

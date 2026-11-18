@@ -1,27 +1,28 @@
 package me.ivovk.connect_rpc_scala.service
 
 import com.google.api.http.HttpRule
+import org.http4s.Headers
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 
 import scala.concurrent.duration.FiniteDuration
 
 final case class ConnectRequestContext(
-  headers: ConnectHeaders = ConnectHeaders.empty,
+  headers: Headers = Headers.empty,
   timeout: Option[FiniteDuration] = None,
 )
 
 final case class ConnectResponse[A](
   message: A,
-  headers: ConnectHeaders = ConnectHeaders.empty,
-  trailers: ConnectHeaders = ConnectHeaders.empty,
+  headers: Headers = Headers.empty,
+  trailers: Headers = Headers.empty,
 )
 
 final case class ConnectException(
   code: connectrpc.Code,
   message: String,
   details: Seq[connectrpc.ErrorDetailsAny] = Seq.empty,
-  headers: ConnectHeaders = ConnectHeaders.empty,
-  trailers: ConnectHeaders = ConnectHeaders.empty,
+  headers: Headers = Headers.empty,
+  trailers: Headers = Headers.empty,
 ) extends RuntimeException(message) {
 
   private[connect_rpc_scala] def withCause(cause: Throwable): ConnectException = {

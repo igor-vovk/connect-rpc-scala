@@ -8,13 +8,13 @@ import com.google.protobuf.ByteString
 import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.implicits.*
-import org.http4s.{Header, HttpApp, Method, Request, Response, Status}
+import org.http4s.{Header, Headers, HttpApp, Method, Request, Response, Status}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import me.ivovk.connect_rpc_scala.service.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.ci.CIString
+import org.typelevel.ci.*
 import scalapb.GeneratedMessage
 
 import scala.concurrent.duration.*
@@ -44,6 +44,8 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         ConnectException(
           connectrpc.Code.InvalidArgument,
           s"Cannot add ${request.left} and ${request.right}",
+          headers = Headers(Header.Raw(ci"x-error-metadata", "header")),
+          trailers = Headers(Header.Raw(ci"X-Error-Metadata", "trailer")),
         )
       )
   }
@@ -73,10 +75,10 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       context: ConnectRequestContext,
       next: AuthenticatedContext => IO[ConnectResponse[Response]],
     ): IO[ConnectResponse[Response]] =
-      context.headers.get("authorization").flatMap(_.headOption) match {
+      context.headers.get(ci"authorization").map(_.head.value) match {
         case Some(user) =>
           next(AuthenticatedContext(context, user)).map { response =>
-            response.copy(headers = response.headers.add("x-authenticated-user", user))
+            response.copy(headers = response.headers.put(Header.Raw(ci"x-authenticated-user", user)))
           }
         case None =>
           IO.raiseError(ConnectException(connectrpc.Code.Unauthenticated, "Missing authorization"))
@@ -94,12 +96,13 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       context: AuthenticatedContext,
       next: ServiceContext => IO[ConnectResponse[Response]],
     ): IO[ConnectResponse[Response]] = {
-      val requestId = context.connect.headers.get("x-request-id").flatMap(_.headOption).getOrElse("missing")
+      val requestId = context.connect.headers.get(ci"x-request-id").map(_.head.value).getOrElse("missing")
       next(ServiceContext(context, requestId)).map { response =>
         response.copy(
-          headers = response.headers
-            .add("x-request-id", requestId)
-            .add("x-procedure", descriptor.procedure)
+          headers = response.headers.put(
+            Header.Raw(ci"x-request-id", requestId),
+            Header.Raw(ci"x-procedure", descriptor.procedure),
+          )
         )
       }
     }
@@ -120,12 +123,15 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     ): IO[ConnectResponse[Response]] =
       next(
         ConnectRequestContext(
-          headers = ConnectHeaders.empty
-            .add("authorization", context.user)
-            .add("x-request-id", context.requestId)
+          headers = Headers(
+            Header.Raw(ci"authorization", context.user),
+            Header.Raw(ci"x-request-id", context.requestId),
+          )
         )
       ).map { response =>
-        response.copy(headers = response.headers.add("x-client-procedure", descriptor.procedure))
+        response.copy(headers =
+          response.headers.put(Header.Raw(ci"x-client-procedure", descriptor.procedure))
+        )
       }
   }
 
@@ -180,13 +186,11 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
 
         client.add(AddRequest(11, 31), context).map { response =>
           response.message shouldBe AddResponse(42)
-          response.headers.get("x-authenticated-user") shouldBe Some(List("alice"))
-          response.headers.get("x-request-id") shouldBe Some(List("request-1"))
-          response.headers.get("x-procedure") shouldBe Some(
-            List("/codegen.e2e.CalculatorService/Add")
-          )
-          response.headers.get("x-client-procedure") shouldBe Some(
-            List("/codegen.e2e.CalculatorService/Add")
+          headerValues(response.headers, ci"x-authenticated-user") shouldBe List("alice")
+          headerValues(response.headers, ci"x-request-id") shouldBe List("request-1")
+          headerValues(response.headers, ci"x-procedure") shouldBe List("/codegen.e2e.CalculatorService/Add")
+          headerValues(response.headers, ci"x-client-procedure") shouldBe List(
+            "/codegen.e2e.CalculatorService/Add"
           )
         }
       }
@@ -214,12 +218,12 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
         val client    = CalculatorServiceConnect.Client[IO](transport)
         val context   = ConnectRequestContext(
-          headers = ConnectHeaders.empty.add("authorization", "alice")
+          headers = Headers(Header.Raw(ci"authorization", "alice"))
         )
 
         client.add(AddRequest(11, 31), context).map { response =>
           response.message shouldBe AddResponse(42)
-          response.headers.get("x-authenticated-user") shouldBe Some(List("alice"))
+          headerValues(response.headers, ci"x-authenticated-user") shouldBe List("alice")
         }
       }
       .unsafeRunSync()
@@ -247,7 +251,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         ctx: ConnectRequestContext,
       ): IO[ConnectResponse[AddResponse]] =
         IO {
-          ctx.headers.get("content-type") shouldBe Some(Seq("application/proto"))
+          headerValues(ctx.headers, ci"content-type") shouldBe List("application/proto")
           ConnectResponse(AddResponse(request.left + request.right))
         }
     }
@@ -322,7 +326,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         ctx: ConnectRequestContext,
       ): IO[ConnectResponse[AddResponse]] =
         IO {
-          ctx.headers.get("user-agent") shouldBe Some(List(userAgent))
+          headerValues(ctx.headers, ci"user-agent") shouldBe List(userAgent)
           ConnectResponse(AddResponse(request.left + request.right))
         }
     }
@@ -371,6 +375,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
 
     error.code shouldBe connectrpc.Code.InvalidArgument
     error.getMessage shouldBe "Cannot add 20 and 22"
+    headerValues(error.headers, ci"x-error-metadata") shouldBe List("header", "trailer")
   }
 
   test("server enforces the Connect request timeout") {
@@ -404,4 +409,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
 
     error.code shouldBe connectrpc.Code.DeadlineExceeded
   }
+
+  private def headerValues(headers: Headers, name: CIString): List[String] =
+    headers.headers.collect { case header if header.name == name => header.value }
 }

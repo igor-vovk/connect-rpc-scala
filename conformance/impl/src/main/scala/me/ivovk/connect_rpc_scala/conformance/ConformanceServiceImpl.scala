@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.any.Any
 import connectrpc.conformance.v1.*
 import connectrpc.conformance.v1.UnaryResponseDefinition.Response
+import org.http4s.Headers
 import me.ivovk.connect_rpc_scala.conformance.util.ConformanceHeadersConv
 import me.ivovk.connect_rpc_scala.service.*
 import scalapb.GeneratedMessage
@@ -14,8 +15,8 @@ import scala.concurrent.duration.*
 
 private case class UnaryHandlerResponse(
   payload: ConformancePayload,
-  headers: ConnectHeaders,
-  trailers: ConnectHeaders,
+  headers: Headers,
+  trailers: Headers,
 )
 
 class ConformanceServiceImpl[F[_]: Async]
@@ -65,8 +66,8 @@ class ConformanceServiceImpl[F[_]: Async]
       requests = Seq(Any.pack(request)),
     )
 
-    val headers  = ConformanceHeadersConv.toConnectHeaders(responseDefinition.responseHeaders)
-    val trailers = ConformanceHeadersConv.toConnectHeaders(
+    val headers  = ConformanceHeadersConv.toHttp4sHeaders(responseDefinition.responseHeaders)
+    val trailers = ConformanceHeadersConv.toHttp4sHeaders(
       responseDefinition.responseTrailers.map(header => header.copy(name = s"trailer-${header.name}"))
     )
 
@@ -93,8 +94,8 @@ class ConformanceServiceImpl[F[_]: Async]
   private def delayedResponse(
     responseDefinition: UnaryResponseDefinition,
     requestInfo: ConformancePayload.RequestInfo,
-    headers: ConnectHeaders,
-    trailers: ConnectHeaders,
+    headers: Headers,
+    trailers: Headers,
     responseData: ByteString,
   ): F[UnaryHandlerResponse] =
     Async[F].sleep(responseDefinition.responseDelayMs.millis) *>
