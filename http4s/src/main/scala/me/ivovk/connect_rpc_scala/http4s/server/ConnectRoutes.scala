@@ -38,7 +38,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
           case Method.GET | Method.POST => handle(request, method)
           case _                        =>
             val rejected = Response[F](MethodNotAllowed).putHeaders(Allow(Method.GET, Method.POST))
-            Async[F].pure(closeIfHttp1(request.httpVersion, rejected))
+            Async[F].pure(rejected.closeIfHttp1(request.httpVersion))
         }
         OptionT.liftF(response)
       }
@@ -104,7 +104,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
       .attempt
       .flatMap {
         case Left(error) =>
-          unaryHandler.errorResponse(error).map(closeIfHttp1(httpVersion, _))
+          unaryHandler.errorResponse(error).map(_.closeIfHttp1(httpVersion))
         case Right(message) =>
           Async[F].defer(unaryHandler.invokeAndEncode(method, message, entity.headers, codec))
             .handleErrorWith(unaryHandler.errorResponse)
@@ -131,10 +131,12 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
       else request.contentType.map(_.mediaType.show)
     val message = s"Unsupported media type or encoding ${provided.getOrElse("<missing>")}. " +
       "Supported values are application/json, application/proto, json, and proto."
-    Async[F].pure(closeIfHttp1(request.httpVersion, Response[F](UnsupportedMediaType).withEntity(message)))
+    Async[F].pure(Response[F](UnsupportedMediaType).withEntity(message).closeIfHttp1(request.httpVersion))
   }
 
   // A rejected request may have unread body bytes. Tell HTTP/1 clients that the connection cannot be reused.
-  private def closeIfHttp1(version: HttpVersion, response: Response[F]): Response[F] =
-    if (version.major == 1) response.putHeaders(Connection.close) else response
+  extension (response: Response[F]) {
+    private def closeIfHttp1(version: HttpVersion): Response[F] =
+      if (version.major == 1) response.putHeaders(Connection.close) else response
+  }
 }
