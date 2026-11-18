@@ -192,11 +192,22 @@ lazy val conformance = project
   )
 
 lazy val benchmarks = project
-  .dependsOn(core)
-  .enablePlugins(JmhPlugin)
+  .dependsOn(http4s)
+  .enablePlugins(JmhPlugin, LocalCodeGenPlugin)
   .settings(
     name := "connect-rpc-scala-benchmarks",
     noPublish,
+    codeGenClasspath     := (codegen / Compile / fullClasspath).value,
+    Compile / PB.targets := Seq(
+      scalapb.gen(grpc = false, scala3Sources = true) ->
+        (Compile / sourceManaged).value / "scalapb",
+      (genModule("me.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
+        (Compile / sourceManaged).value / "connect",
+    ),
+    libraryDependencies ++= Seq(
+      "org.http4s" %% "http4s-ember-server" % Versions.http4s,
+      "org.http4s" %% "http4s-ember-client" % Versions.http4s,
+    ),
   )
 
 lazy val examples = project.in(file("examples"))

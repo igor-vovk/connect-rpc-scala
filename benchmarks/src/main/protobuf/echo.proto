@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package me.ivovk.connect_rpc_scala.benchmark.v1;
+
+service EchoService {
+  rpc EchoSmall(SmallPayload) returns (SmallPayload);
+  rpc EchoMedium(MediumPayload) returns (MediumPayload);
+  rpc EchoLarge(LargePayload) returns (LargePayload);
+}
+
+message SmallPayload {
+  string sku = 1;
+  int32 quantity = 2;
+  bool in_stock = 3;
+}
+
+message MediumPayload {
+  string sku = 1;
+  int32 quantity = 2;
+  bool in_stock = 3;
+  string name = 4;
+  string category = 5;
+  string warehouse = 6;
+  string bin = 7;
+  int32 reserved = 8;
+  int32 incoming = 9;
+  int32 reorder_point = 10;
+  int32 unit_price_cents = 11;
+  bool taxable = 12;
+}
+
+message LargePayload {
+  string sku = 1;
+  int32 quantity = 2;
+  bool in_stock = 3;
+  string name = 4;
+  string category = 5;
+  string warehouse = 6;
+  string bin = 7;
+  int32 reserved = 8;
+  int32 incoming = 9;
+  int32 reorder_point = 10;
+  int32 unit_price_cents = 11;
+  bool taxable = 12;
+  string supplier = 13;
+  string supplier_sku = 14;
+  string brand = 15;
+  string color = 16;
+  string material = 17;
+  string country_of_origin = 18;
+  string barcode = 19;
+  string lot_number = 20;
+  string aisle = 21;
+  string shelf = 22;
+  int32 weight_grams = 23;
+  int32 width_mm = 24;
+  int32 height_mm = 25;
+  int32 depth_mm = 26;
+  int32 units_per_case = 27;
+  int32 lead_time_days = 28;
+  bool track_lot = 29;
+  bool returnable = 30;
+}
