@@ -14,7 +14,7 @@ import me.ivovk.connect_rpc_scala.service.{ConnectException, ServiceDefinition, 
 
 object ConnectRoutes {
   // A rejected request may have unread body bytes. Tell HTTP/1 clients that the connection cannot be reused.
-  extension (response: Response[F]) {
+  extension [F[_]](response: Response[F]) {
     private def closeIfHttp1(version: HttpVersion): Response[F] =
       if (version.major == 1) response.putHeaders(Connection.close) else response
   }
