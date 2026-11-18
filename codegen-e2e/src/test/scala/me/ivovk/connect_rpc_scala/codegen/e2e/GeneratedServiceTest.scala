@@ -172,6 +172,12 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
+  test("rejects payload headers in caller-supplied request metadata") {
+    intercept[IllegalArgumentException] {
+      ConnectRequestContext(headers = Headers(Header.Raw(ci"content-length", "999")))
+    }
+  }
+
   List("JSON", "Protobuf").foreach { encoding =>
     test(s"$encoding unary requests and responses use the encoded body length") {
       val metadata = Headers(
@@ -204,7 +210,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         val builder  = ConnectHttp4sClientBuilder(Client.fromHttpApp(checkedApp))
         val selected = if encoding == "Protobuf" then builder.enableBinaryFormat() else builder
         val client   = CalculatorServiceConnect.Client(selected.build(uri"http://localhost"))
-        val context  = ConnectRequestContext(headers = metadata)
+        val context  = ConnectRequestContext()
 
         for {
           response <- client.add(AddRequest(20, 22), context)

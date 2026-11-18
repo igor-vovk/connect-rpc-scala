@@ -9,7 +9,9 @@ import scala.concurrent.duration.FiniteDuration
 final case class ConnectRequestContext(
   headers: Headers = Headers.empty,
   timeout: Option[FiniteDuration] = None,
-)
+) {
+  require(headers.removePayloadHeaders == headers, "Payload headers can not be passed")
+}
 
 final case class ConnectResponse[A](
   message: A,

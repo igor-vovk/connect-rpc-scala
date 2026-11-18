@@ -26,7 +26,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     headers: Headers,
     codec: MessageCodec[F],
   ): F[Response[F]] =
-    invoke(method, request, ConnectRequestContext(headers, timeout(headers)))
+    invoke(method, request, ConnectRequestContext(headers.removePayloadHeaders, timeout(headers)))
       .flatMap(encodeResult(_, codec))
 
   def decodeError(error: Throwable): ConnectException =
@@ -90,7 +90,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     codec.encode(message, EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity)).map { entity =>
       Response[F](
         status = status,
-        headers = entity.headersWithMetadata(headers),
+        headers = headers.removePayloadHeaders ++ entity.headers,
         body = entity.body,
       )
     }

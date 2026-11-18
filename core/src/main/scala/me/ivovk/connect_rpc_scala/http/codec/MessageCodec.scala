@@ -2,7 +2,7 @@ package me.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Sync
 import fs2.{Chunk, Stream}
-import org.http4s.headers.{`Content-Encoding`, `Content-Length`, `Content-Type`, `Transfer-Encoding`}
+import org.http4s.headers.{`Content-Encoding`, `Content-Length`, `Content-Type`}
 import org.http4s.{ContentCoding, Headers, MediaType}
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
@@ -48,14 +48,7 @@ case class EntityToDecode[F[_]](
 case class EncodedEntity[F[_]](
   headers: Headers,
   body: Stream[F, Byte],
-) {
-  def headersWithMetadata(metadata: Headers): Headers =
-    // A plain merge can restore framing headers the encoder omits, such as Content-Length
-    // for gzip bodies or Transfer-Encoding for fixed-length bodies.
-    metadata.transform(_.filterNot { header =>
-      header.name == `Content-Length`.name || header.name == `Transfer-Encoding`.name
-    }) ++ headers
-}
+)
 
 object EncodedEntity {
   def fromChunk[F[_]](headers: Headers, chunk: Chunk[Byte]): EncodedEntity[F] =

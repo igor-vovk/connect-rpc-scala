@@ -30,18 +30,23 @@ private[http4s] final class Transport[F[_]: Async](
     request: RequestMessage,
     ctx: ConnectRequestContext,
   ): F[ConnectResponse[ResponseMessage]] = {
-    val uri     = baseUri / descriptor.serviceName / descriptor.methodName
-    val encoded = Resource.eval(
-      codecs.chosen.encode(request, EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity))
-    )
-    val httpResponse = encoded.flatMap { entity =>
-      val headers = Headers(
+    val uri         = baseUri / descriptor.serviceName / descriptor.methodName
+    val httpRequest = Request[F](
+      method = Method.POST,
+      uri = uri,
+      headers = Headers(
         `User-Agent`(ProductId(userAgent)),
         ctx.timeout.map(`Connect-Timeout-Ms`.apply),
-      ) ++ entity.headersWithMetadata(ctx.headers)
+      ) ++ ctx.headers,
+    )
 
-      httpClient.run(Request[F](method = Method.POST, uri = uri, headers = headers, body = entity.body))
-    }
+    val encodeOptions = EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity)
+
+    val httpResponse = Resource.eval(codecs.chosen.encode(request, encodeOptions))
+      .map { entity =>
+        httpRequest.withBodyStream(entity.body).transformHeaders(_ ++ entity.headers)
+      }
+      .flatMap(httpClient.run)
 
     val response = httpResponse.use { response =>
       val (headers, trailers) = response.headers.splitTrailers
