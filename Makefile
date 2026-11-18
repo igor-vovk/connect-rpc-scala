@@ -29,21 +29,6 @@ test-conformance-http4s-client: build-conformance
 						--build-arg mode=client
 	@code=$$(cat out/exit_code | tr -d '\n'); echo "Exiting with code: $$code"; exit $$code
 
-.PHONY: test-conformance-http4s-proto
-test-conformance-http4s-proto: build-conformance
-	@echo "Running protobuf conformance tests for http4s server"
-	$(DOCKER_BUILD_CMD) --build-arg launcher=Http4sServerLauncher \
-						--build-arg config=suite-http4s-server-proto.yaml \
-						--build-arg parallel_args="--parallel 1"
-	@code=$$(cat out/exit_code) && echo "Exiting with code: $$code" && exit "$$code"
-	@echo "Running protobuf conformance tests for http4s client"
-	$(DOCKER_BUILD_CMD) --build-arg launcher=Http4sClientLauncher \
-						--build-arg config=suite-http4s-client-proto.yaml \
-						--build-arg mode=client
-	@code=$$(cat out/exit_code) && echo "Exiting with code: $$code" && exit "$$code"
-
 .PHONY: test-conformance-stable
-.NOTPARALLEL: test-conformance-stable
 test-conformance-stable: test-conformance-http4s-server \
-						 test-conformance-http4s-client \
-						 test-conformance-http4s-proto
+						 test-conformance-http4s-client

@@ -56,12 +56,11 @@ private[http4s] final class Transport[F[_]: Async](
       def decode[A <: GeneratedMessage](
         companion: GeneratedMessageCompanion[A],
         codec: MessageCodec[F],
-      ): F[A] =
-        Async[F].defer(responseEntity.as[A](using companion, codec).compile.onlyOrError)
+      ): F[A] = Async[F].defer(responseEntity.as[A](using companion, codec).compile.onlyOrError)
 
-      if response.status.isSuccess then
+      if (response.status.isSuccess) {
         val mediaType = response.contentType.map(_.mediaType)
-        if mediaType.exists(_.satisfies(codecs.chosen.mediaType)) then
+        if (mediaType.exists(_.satisfies(codecs.chosen.mediaType))) {
           decode(descriptor.responseCompanion, codecs.chosen)
             .map(message => ConnectResponse(message, headers, trailers))
             .adaptError { case error =>
@@ -72,28 +71,27 @@ private[http4s] final class Transport[F[_]: Async](
                 trailers = trailers,
               ).withCause(error)
             }
-        else
+        } else {
           val isConnectCodec = mediaType.exists { received =>
-            received.satisfies(MediaTypes.`application/json`) || received.satisfies(
-              MediaTypes.`application/proto`
-            )
+            received.satisfies(MediaTypes.`application/json`) ||
+            received.satisfies(MediaTypes.`application/proto`)
           }
           val code =
-            if isConnectCodec then connectrpc.Code.Internal else codeByHttpStatus(response.status.code)
+            if (isConnectCodec) connectrpc.Code.Internal else codeByHttpStatus(response.status.code)
           ConnectException(
             code,
             s"Expected response content type ${codecs.chosen.mediaType.show}, got ${mediaType.map(_.show).getOrElse("<missing>")}",
             headers = headers,
             trailers = trailers,
           ).raiseError
-      else
+        }
+      } else {
         decode(connectrpc.Error, codecs.json)
           .attempt
           .flatMap {
             case Right(error) =>
               ConnectException(
-                code =
-                  if error.code.isUnspecified then codeByHttpStatus(response.status.code) else error.code,
+                code = if (error.code.isUnspecified) codeByHttpStatus(response.status.code) else error.code,
                 message = error.getMessage,
                 details = error.details,
                 headers = headers,
@@ -107,6 +105,7 @@ private[http4s] final class Transport[F[_]: Async](
                 trailers = trailers,
               ).withCause(decodeFailure).raiseError
           }
+      }
     }
 
     ctx.timeout.fold(response) { duration =>

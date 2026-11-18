@@ -47,12 +47,13 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
   private def findMethod(requestPath: Uri.Path): Option[UnaryMethod[F]] = {
     val path   = requestPath.segments.map(_.encoded).toList
     val prefix = pathPrefix.segments.map(_.encoded).toList
-    if path.take(prefix.size) != prefix then None
-    else
+    if (path.take(prefix.size) != prefix) None
+    else {
       path.drop(prefix.size) match {
         case serviceName :: methodName :: Nil => methodsByPath.get(serviceName -> methodName)
         case _                                => None
       }
+    }
   }
 
   private def handle(request: Request[F], method: UnaryMethod[F]): F[Response[F]] = {
@@ -62,12 +63,12 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
       case None        => unsupportedMediaType(request, isGet)
       case Some(codec) =>
         val message: String | Stream[F, Byte] =
-          if isGet then
+          if (isGet) {
             request.uri.query.pairs
               .collectFirst { case ("message", value) => value }
               .flatten
               .getOrElse("")
-          else request.body
+          } else request.body
 
         decodeAndInvoke(
           method,
@@ -114,11 +115,11 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
 
   private def codecFor(request: Request[F], isGet: Boolean): Option[MessageCodec[F]] = {
     val mediaType =
-      if isGet then
+      if (isGet) {
         request.uri.query.multiParams.get("encoding").flatMap(_.headOption).flatMap { value =>
           MediaTypes.parseShort(value).toOption
         }
-      else request.contentType.map(_.mediaType)
+      } else request.contentType.map(_.mediaType)
 
     mediaType.flatMap {
       case MediaTypes.`application/json`  => Some(jsonSerdes.codec)
@@ -129,7 +130,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
 
   private def unsupportedMediaType(request: Request[F], isGet: Boolean): F[Response[F]] = {
     val provided =
-      if isGet then request.uri.query.multiParams.get("encoding").flatMap(_.headOption)
+      if (isGet) request.uri.query.multiParams.get("encoding").flatMap(_.headOption)
       else request.contentType.map(_.mediaType.show)
     val message = s"Unsupported media type or encoding ${provided.getOrElse("<missing>")}. " +
       "Supported values are application/json, application/proto, json, and proto."
@@ -138,5 +139,5 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
 
   // A rejected request may have unread body bytes. Tell HTTP/1 clients that the connection cannot be reused.
   private def closeIfHttp1(version: HttpVersion, response: Response[F]): Response[F] =
-    if version.major == 1 then response.putHeaders(Connection.close) else response
+    if (version.major == 1) response.putHeaders(Connection.close) else response
 }
