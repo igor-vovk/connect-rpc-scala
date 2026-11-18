@@ -23,6 +23,7 @@ unary methods in the same service; a streaming-only service produces no Connect 
 
 - `connect-rpc-scala-core`: protocol models, codecs, service descriptors, errors, and transcoding.
 - `connect-rpc-scala-http4s`: unary server routes and client transport.
+- [`connect-rpc-scala-opentelemetry`](opentelemetry/README.md): opt-in OpenTelemetry metrics for unary server calls.
 - `protoc-gen-connect-rpc-scala`: the executable protoc service-definition generator.
 - `sbt-connect-rpc-scala`: sbt integration for ScalaPB and Connect source generation.
 
@@ -129,6 +130,53 @@ Use `buildRoutes` when the Connect routes need to be combined with other routes 
 
 Unary services can also expose Kubernetes health endpoints through transcoding; see
 [Kubernetes health checks](docs/kubernetes-health-checks.md).
+
+## Unary interceptors
+
+`UnaryInterceptor[F, In, Out]` wraps a unary call and can transform its context from `In` to `Out`.
+Pass an interceptor to the generated server's `bind(service, interceptor)` or to the generated
+client's `withInterceptor(interceptor)`. Use `first.andThen(second)` to run `first` before `second`,
+passing the first interceptor's output context to the second.
+
+The `UnaryInterceptor` companion provides these helpers.
+
+- `identity` forwards the context as-is.
+- `transformContext` runs an effectful function to produce the downstream context.
+- `tapError` runs a callback with the method descriptor and exception when a call fails. If the
+  callback succeeds, the call propagates its original exception.
+
+### RPC error logging
+
+`ErrorLoggingInterceptor` is available in `connect-rpc-scala-core`. It logs the procedure, Connect
+code, and original exception for failed unary calls. The default filter logs codes that map to HTTP
+5xx, including unexpected exceptions reported as `INTERNAL`. Client errors such as `INVALID_ARGUMENT`
+and `CANCELED` are skipped. The default logger uses SLF4J at `ERROR` level. The interceptor works with
+any effect that has a Cats `MonadThrow` instance.
+
+```scala
+import me.ivovk.connect_rpc_scala.service.ErrorLoggingInterceptor
+
+val logging = ErrorLoggingInterceptor.builder[IO].build[ConnectRequestContext]()
+val service = CalculatorServiceConnect.bind(Calculator, logging)
+```
+
+`withLogger` accepts an `org.slf4j.Logger` or a function of type `(String, Throwable) => F[Unit]`.
+Use `withCodeFilter` to choose which Connect codes to log. A log4cats logger can be used through a function.
+
+```scala
+val logging = ErrorLoggingInterceptor.builder[IO]
+  .withLogger((message, cause) => appLogger.error(cause)(message))
+  .build[ConnectRequestContext]()
+```
+
+### OpenTelemetry metrics
+
+`OpenTelemetryServerInterceptor` records call starts and durations for unary server calls. Add
+`connect-rpc-scala-opentelemetry` and supply an OpenTelemetry SDK or `Meter` to its builder.
+For configuration and metric names, see the [OpenTelemetry module README](opentelemetry/README.md).
+
+Bind `metrics.andThen(logging)` to use both interceptors on a service. The runnable example also
+uses `transformContext` on the client to send a request ID. [Interceptor example](examples/interceptors/README.md)
 
 ## http4s client
 

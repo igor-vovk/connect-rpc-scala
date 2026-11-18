@@ -146,6 +146,17 @@ lazy val http4s = project
     libraryDependencies += "org.http4s" %% "http4s-client" % Versions.http4s,
   )
 
+lazy val opentelemetry = project
+  .dependsOn(core)
+  .settings(
+    name := "connect-rpc-scala-opentelemetry",
+    commonDeps,
+    libraryDependencies ++= Seq(
+      "io.opentelemetry" % "opentelemetry-api"         % Versions.opentelemetry,
+      "io.opentelemetry" % "opentelemetry-sdk-metrics" % Versions.opentelemetry % Test,
+    ),
+  )
+
 lazy val codegenE2e = project
   .in(file("codegen-e2e"))
   .dependsOn(http4s)
@@ -211,7 +222,7 @@ lazy val benchmarks = project
   )
 
 lazy val examples = project.in(file("examples"))
-  .aggregate(example_client_server, example_zio_client_server)
+  .aggregate(example_client_server, example_zio_client_server, example_interceptors)
   .settings(noPublish)
 
 lazy val example_client_server = project.in(file("examples/client_server"))
@@ -255,6 +266,26 @@ lazy val example_zio_client_server = project.in(file("examples/zio_client_server
     ),
   )
 
+lazy val example_interceptors = project.in(file("examples/interceptors"))
+  .dependsOn(http4s, opentelemetry)
+  .enablePlugins(LocalCodeGenPlugin)
+  .settings(
+    noPublish,
+    Compile / run / fork := true,
+    codeGenClasspath     := (codegen / Compile / fullClasspath).value,
+    Compile / PB.targets := Seq(
+      scalapb.gen(grpc = false, scala3Sources = true) ->
+        (Compile / sourceManaged).value / "scalapb",
+      (genModule("me.ivovk.connect_rpc_scala.codegen.ConnectRpcScalaGenerator$"), Seq("scala3_sources")) ->
+        (Compile / sourceManaged).value / "connect",
+    ),
+    libraryDependencies ++= Seq(
+      "me.ivovk"        %% "cedi"                     % Versions.cedi,
+      "io.opentelemetry" % "opentelemetry-sdk-metrics" % Versions.opentelemetry,
+      "ch.qos.logback"   % "logback-classic"           % Versions.logback % Runtime,
+    ),
+  )
+
 lazy val root = (project in file("."))
   .aggregate(
     codegen,
@@ -263,6 +294,7 @@ lazy val root = (project in file("."))
     codegenE2e,
     core,
     http4s,
+    opentelemetry,
     conformance,
     benchmarks,
     examples,

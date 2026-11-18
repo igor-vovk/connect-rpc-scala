@@ -4,6 +4,7 @@ object Versions {
   val googleCommonProtos    = "2.78.0"
   val http4s                = "0.23.38"
   val logback               = "1.6.6"
+  val opentelemetry         = "1.65.0"
   val sbt1Latest            = "1.12.14"
   val sbt1Minimum           = "1.9.0"
   val sbt2Latest            = "2.1.0"
