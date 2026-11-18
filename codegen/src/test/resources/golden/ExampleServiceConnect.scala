@@ -2,6 +2,7 @@
 
 package test.example
 
+import _root_.me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
 import _root_.me.ivovk.connect_rpc_scala.service.*
 
 object ExampleServiceConnect {

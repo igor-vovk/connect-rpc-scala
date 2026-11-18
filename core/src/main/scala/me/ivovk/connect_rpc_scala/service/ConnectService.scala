@@ -43,7 +43,7 @@ final case class UnaryMethodDescriptor[
   responseCompanion: GeneratedMessageCompanion[Response],
   httpRule: Option[HttpRule] = None,
 ) {
-  val procedure: String = s"/$serviceName/$methodName"
+  val method: String = s"$serviceName/$methodName"
 }
 
 sealed trait UnaryMethod[F[_]] {

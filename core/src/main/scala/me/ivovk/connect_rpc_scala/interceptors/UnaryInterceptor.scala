@@ -1,6 +1,7 @@
-package me.ivovk.connect_rpc_scala.service
+package me.ivovk.connect_rpc_scala.interceptors
 
 import cats.{FlatMap, MonadThrow}
+import me.ivovk.connect_rpc_scala.service.{ConnectResponse, UnaryMethodDescriptor}
 import scalapb.GeneratedMessage
 
 trait UnaryInterceptor[F[_], In, Out] { self =>
@@ -69,8 +70,9 @@ object UnaryInterceptor {
         F.flatMap(transform(context))(next)
     }
 
+  /** Observes a failed call with its method descriptor before propagating the error. */
   def tapError[F[_], Context](
-    onError: Throwable => F[Unit]
+    onError: (UnaryMethodDescriptor[?, ?], Throwable) => F[Unit]
   )(using F: MonadThrow[F]): UnaryInterceptor[F, Context, Context] =
     new UnaryInterceptor[F, Context, Context] {
       override def intercept[
@@ -81,10 +83,12 @@ object UnaryInterceptor {
         request: Request,
         context: Context,
         next: Context => F[ConnectResponse[Response]],
-      ): F[ConnectResponse[Response]] =
-        F.handleErrorWith(next(context)) { error =>
-          F.flatMap(onError(error))(_ => F.raiseError(error))
+      ): F[ConnectResponse[Response]] = {
+        val response = F.flatMap(F.unit)(_ => F.flatten(F.catchNonFatal(next(context))))
+        F.handleErrorWith(response) { error =>
+          F.flatMap(onError(descriptor, error))(_ => F.raiseError(error))
         }
+      }
     }
 
 }
