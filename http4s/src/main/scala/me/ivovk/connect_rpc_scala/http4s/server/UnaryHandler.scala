@@ -5,6 +5,7 @@ import cats.effect.syntax.all.*
 import cats.implicits.*
 import fs2.Stream
 import org.http4s.{ContentCoding, Header, Headers, Response, Status}
+import me.ivovk.connect_rpc_scala.http.ConnectHttpStatus
 import me.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import me.ivovk.connect_rpc_scala.service.*
@@ -43,7 +44,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
         ).withCause(other)
     }
 
-    val status  = Status.fromInt(httpStatus(exception.code)).fold(throw _, identity)
+    val status  = Status.fromInt(ConnectHttpStatus.fromCode(exception.code)).fold(throw _, identity)
     val headers = (exception.headers ++ exception.trailers).toHttp4s
     val body    = connectrpc.Error(
       code = exception.code,
@@ -104,21 +105,4 @@ private[http4s] final class UnaryHandler[F[_]: Async](
       .flatMap(_.headOption)
       .flatMap(_.toLongOption)
       .map(_.millis)
-
-  private def httpStatus(code: connectrpc.Code): Int = code match {
-    case connectrpc.Code.Canceled           => 499
-    case connectrpc.Code.InvalidArgument    => 400
-    case connectrpc.Code.DeadlineExceeded   => 504
-    case connectrpc.Code.NotFound           => 404
-    case connectrpc.Code.AlreadyExists      => 409
-    case connectrpc.Code.PermissionDenied   => 403
-    case connectrpc.Code.ResourceExhausted  => 429
-    case connectrpc.Code.FailedPrecondition => 400
-    case connectrpc.Code.Aborted            => 409
-    case connectrpc.Code.OutOfRange         => 400
-    case connectrpc.Code.Unimplemented      => 501
-    case connectrpc.Code.Unavailable        => 503
-    case connectrpc.Code.Unauthenticated    => 401
-    case _                                  => 500
-  }
 }

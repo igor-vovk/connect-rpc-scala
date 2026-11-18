@@ -7,7 +7,7 @@ import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.headers.`User-Agent`
 import org.http4s.{ContentCoding, Header, Method, ProductId, Request, Uri}
-import me.ivovk.connect_rpc_scala.http.MediaTypes
+import me.ivovk.connect_rpc_scala.http.{ConnectHttpStatus, MediaTypes}
 import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
@@ -73,11 +73,13 @@ private[http4s] final class Transport[F[_]: Async](
             }
         } else {
           val isConnectCodec = mediaType.exists { received =>
-            received.satisfies(MediaTypes.`application/json`) ||
-            received.satisfies(MediaTypes.`application/proto`)
+            received.satisfies(MediaTypes.`application/json`)
+            || received.satisfies(MediaTypes.`application/proto`)
           }
+
           val code =
-            if (isConnectCodec) connectrpc.Code.Internal else codeByHttpStatus(response.status.code)
+            if (isConnectCodec) connectrpc.Code.Internal else ConnectHttpStatus.toCode(response.status.code)
+
           ConnectException(
             code,
             s"Expected response content type ${codecs.chosen.mediaType.show}, got ${mediaType.map(_.show).getOrElse("<missing>")}",
@@ -91,7 +93,9 @@ private[http4s] final class Transport[F[_]: Async](
           .flatMap {
             case Right(error) =>
               ConnectException(
-                code = if (error.code.isUnspecified) codeByHttpStatus(response.status.code) else error.code,
+                code =
+                  if (error.code.isUnspecified) ConnectHttpStatus.toCode(response.status.code)
+                  else error.code,
                 message = error.getMessage,
                 details = error.details,
                 headers = headers,
@@ -99,7 +103,7 @@ private[http4s] final class Transport[F[_]: Async](
               ).raiseError
             case Left(decodeFailure) =>
               ConnectException(
-                code = codeByHttpStatus(response.status.code),
+                code = ConnectHttpStatus.toCode(response.status.code),
                 message = Option(decodeFailure.getMessage).getOrElse(response.status.reason),
                 headers = headers,
                 trailers = trailers,
@@ -114,17 +118,5 @@ private[http4s] final class Transport[F[_]: Async](
         ConnectException(connectrpc.Code.DeadlineExceeded, "Request deadline exceeded").raiseError,
       )
     }
-  }
-
-  private def codeByHttpStatus(status: Int): connectrpc.Code = status match {
-    case 400 => connectrpc.Code.Internal
-    case 401 => connectrpc.Code.Unauthenticated
-    case 403 => connectrpc.Code.PermissionDenied
-    case 404 => connectrpc.Code.Unimplemented
-    case 429 => connectrpc.Code.Unavailable
-    case 502 => connectrpc.Code.Unavailable
-    case 503 => connectrpc.Code.Unavailable
-    case 504 => connectrpc.Code.Unavailable
-    case _   => connectrpc.Code.Unknown
   }
 }
