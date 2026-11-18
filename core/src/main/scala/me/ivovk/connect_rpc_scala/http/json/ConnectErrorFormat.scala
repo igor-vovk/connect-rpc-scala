@@ -3,6 +3,8 @@ package me.ivovk.connect_rpc_scala.http.json
 import connectrpc.{Error, ErrorDetailsAny}
 import io.circe.Json
 
+import java.util.Locale
+
 object ConnectErrorFormat {
 
   private val stringErrorCodes: Array[Json] = {
@@ -10,7 +12,7 @@ object ConnectErrorFormat {
     val codes   = new Array[Json](maxCode + 1)
 
     connectrpc.Code.values.foreach { code =>
-      codes(code.value) = Json.fromString(code.name.substring("CODE_".length).toLowerCase)
+      codes(code.value) = Json.fromString(code.name.substring("CODE_".length).toLowerCase(Locale.ROOT))
     }
 
     codes
@@ -31,12 +33,10 @@ object ConnectErrorFormat {
   val parser: Reader[Error] = { (parser, json) =>
     json.asObject match {
       case Some(obj) =>
-        val code = obj("code").flatMap(_.asString) match
-          case Some(code) =>
-            connectrpc.Code
-              .fromName(s"CODE_${code.toUpperCase}")
-              .getOrElse(throw new IllegalArgumentException(s"Unknown error code: $code"))
-          case None => throw new IllegalArgumentException(s"Error parsing Error: $json")
+        val code = obj("code")
+          .flatMap(_.asString)
+          .flatMap(value => connectrpc.Code.fromName(s"CODE_${value.toUpperCase(Locale.ROOT)}"))
+          .getOrElse(connectrpc.Code.Unspecified)
 
         val message = obj("message") match
           case Some(value) =>

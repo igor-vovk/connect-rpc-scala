@@ -7,11 +7,12 @@ import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.headers.`User-Agent`
 import org.http4s.{ContentCoding, Header, Method, ProductId, Request, Uri}
+import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
 import me.ivovk.connect_rpc_scala.service.*
-import scalapb.GeneratedMessage
+import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 
 import java.nio.charset.StandardCharsets
 
@@ -52,13 +53,41 @@ private[http4s] final class Transport[F[_]: Async](
       val (headers, trailers) = response.headers.toConnectWithTrailers
       val responseEntity      = EntityToDecode[F](response.body, headers)
 
+      def decode[A <: GeneratedMessage](
+        companion: GeneratedMessageCompanion[A],
+        codec: MessageCodec[F],
+      ): F[A] =
+        Async[F].defer(responseEntity.as[A](using companion, codec).compile.onlyOrError)
+
       if response.status.isSuccess then
-        responseEntity.as[ResponseMessage](using descriptor.responseCompanion, codecs.chosen)
-          .compile.onlyOrError
-          .map(message => ConnectResponse(message, headers, trailers))
+        val mediaType = response.contentType.map(_.mediaType)
+        if mediaType.exists(_.satisfies(codecs.chosen.mediaType)) then
+          decode(descriptor.responseCompanion, codecs.chosen)
+            .map(message => ConnectResponse(message, headers, trailers))
+            .adaptError { case error =>
+              ConnectException(
+                connectrpc.Code.Internal,
+                Option(error.getMessage).getOrElse("Unable to decode the response"),
+                headers = headers,
+                trailers = trailers,
+              ).withCause(error)
+            }
+        else
+          val isConnectCodec = mediaType.exists { received =>
+            received.satisfies(MediaTypes.`application/json`) || received.satisfies(
+              MediaTypes.`application/proto`
+            )
+          }
+          val code =
+            if isConnectCodec then connectrpc.Code.Internal else codeByHttpStatus(response.status.code)
+          ConnectException(
+            code,
+            s"Expected response content type ${codecs.chosen.mediaType.show}, got ${mediaType.map(_.show).getOrElse("<missing>")}",
+            headers = headers,
+            trailers = trailers,
+          ).raiseError
       else
-        responseEntity.as[connectrpc.Error](using connectrpc.Error, codecs.json)
-          .compile.onlyOrError
+        decode(connectrpc.Error, codecs.json)
           .attempt
           .flatMap {
             case Right(error) =>
