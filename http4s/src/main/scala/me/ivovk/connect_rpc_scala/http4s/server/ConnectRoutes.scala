@@ -84,9 +84,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
     entity: EntityToDecode[F],
     codec: MessageCodec[F],
     httpVersion: HttpVersion,
-  ): F[Response[F]] = {
-    given scalapb.GeneratedMessageCompanion[method.RequestMessage] = method.descriptor.requestCompanion
-
+  ): F[Response[F]] =
     Async[F].defer {
       val encoding = entity.message match {
         case _: String => ContentCoding.identity
@@ -94,7 +92,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
       }
       encoding match {
         case ContentCoding.identity | ContentCoding.gzip =>
-          entity.as[method.RequestMessage](using summon, codec).compile.onlyOrError
+          entity.decodeOne(method.descriptor.requestCompanion, codec)
         case unsupported =>
           ConnectException(
             connectrpc.Code.Unimplemented,
@@ -111,7 +109,6 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
           Async[F].defer(unaryHandler.invokeAndEncode(method, message, entity.headers, codec))
             .handleErrorWith(unaryHandler.errorResponse)
       }
-  }
 
   private def codecFor(request: Request[F], isGet: Boolean): Option[MessageCodec[F]] = {
     val mediaType =

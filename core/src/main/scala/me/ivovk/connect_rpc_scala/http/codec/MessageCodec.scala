@@ -1,5 +1,6 @@
 package me.ivovk.connect_rpc_scala.http.codec
 
+import cats.effect.Sync
 import fs2.Stream
 import org.http4s.{ContentCoding, MediaType}
 import me.ivovk.connect_rpc_scala.service.ConnectHeaders
@@ -42,6 +43,12 @@ case class EntityToDecode[F[_]](
 
   def as[A <: Message: Companion](using codec: MessageCodec[F]): Stream[F, A] =
     codec.decode(this)(using summon[Companion[A]])
+
+  private[connect_rpc_scala] def decodeOne[A <: Message](
+    companion: Companion[A],
+    codec: MessageCodec[F],
+  )(using Sync[F]): F[A] =
+    Sync[F].defer(as[A](using companion, codec).compile.onlyOrError)
 }
 
 case class EncodedEntity[F[_]](

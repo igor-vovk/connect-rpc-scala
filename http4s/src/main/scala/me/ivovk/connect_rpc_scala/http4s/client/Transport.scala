@@ -12,7 +12,7 @@ import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http4s.headers.HeaderConverters.*
 import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
 import me.ivovk.connect_rpc_scala.service.*
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
+import scalapb.GeneratedMessage
 
 import java.nio.charset.StandardCharsets
 
@@ -53,15 +53,10 @@ private[http4s] final class Transport[F[_]: Async](
       val (headers, trailers) = response.headers.toConnectWithTrailers
       val responseEntity      = EntityToDecode[F](response.body, headers)
 
-      def decode[A <: GeneratedMessage](
-        companion: GeneratedMessageCompanion[A],
-        codec: MessageCodec[F],
-      ): F[A] = Async[F].defer(responseEntity.as[A](using companion, codec).compile.onlyOrError)
-
       if (response.status.isSuccess) {
         val mediaType = response.contentType.map(_.mediaType)
         if (mediaType.exists(_.satisfies(codecs.chosen.mediaType))) {
-          decode(descriptor.responseCompanion, codecs.chosen)
+          responseEntity.decodeOne(descriptor.responseCompanion, codecs.chosen)
             .map(message => ConnectResponse(message, headers, trailers))
             .adaptError { case error =>
               ConnectException(
@@ -88,7 +83,7 @@ private[http4s] final class Transport[F[_]: Async](
           ).raiseError
         }
       } else {
-        decode(connectrpc.Error, codecs.json)
+        responseEntity.decodeOne(connectrpc.Error, codecs.json)
           .attempt
           .flatMap {
             case Right(error) =>
