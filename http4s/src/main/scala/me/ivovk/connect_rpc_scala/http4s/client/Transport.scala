@@ -30,7 +30,7 @@ private[http4s] final class Transport[F[_]: Async](
     request: RequestMessage,
     ctx: ConnectRequestContext,
   ): F[ConnectResponse[ResponseMessage]] = {
-    val uri     = descriptor.procedure.stripPrefix("/").split('/').foldLeft(baseUri)(_.addPath(_))
+    val uri     = baseUri / descriptor.serviceName / descriptor.methodName
     val encoded = Resource.eval(
       codecs.chosen.encode(request, EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity))
     )
