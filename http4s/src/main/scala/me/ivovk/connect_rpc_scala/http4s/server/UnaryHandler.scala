@@ -9,7 +9,7 @@ import me.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
 import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
 import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
 import me.ivovk.connect_rpc_scala.service.*
-import org.http4s.{ContentCoding, Header, Headers, Response, Status}
+import org.http4s.{ContentCoding, Headers, Response, Status}
 import scalapb.GeneratedMessage
 
 import java.nio.charset.StandardCharsets
@@ -94,7 +94,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     Async[F].pure(
       Response[F](
         status = status,
-        headers = headers.put(entity.headers.map(Header.ToRaw.keyValuesToRaw).toSeq*),
+        headers = headers ++ entity.headers,
         body = entity.body,
       )
     )

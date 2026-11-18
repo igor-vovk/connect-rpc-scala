@@ -46,7 +46,7 @@ case class EntityToDecode[F[_]](
 }
 
 case class EncodedEntity[F[_]](
-  headers: Map[String, String],
+  headers: Headers,
   body: Stream[F, Byte],
 )
 

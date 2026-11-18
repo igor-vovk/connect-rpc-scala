@@ -6,7 +6,7 @@ import cats.implicits.*
 import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.headers.`User-Agent`
-import org.http4s.{ContentCoding, Header, Method, ProductId, Request, Uri}
+import org.http4s.{ContentCoding, Method, ProductId, Request, Uri}
 import me.ivovk.connect_rpc_scala.http.{ConnectHttpStatus, MediaTypes}
 import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
@@ -36,8 +36,7 @@ private[http4s] final class Transport[F[_]: Async](
       EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity),
     )
     val uri     = descriptor.procedure.stripPrefix("/").split('/').foldLeft(baseUri)(_.addPath(_))
-    val headers = ctx.headers
-      .put(entity.headers.map(Header.ToRaw.keyValuesToRaw).toSeq)
+    val headers = (ctx.headers ++ entity.headers)
       .put(
         `User-Agent`(ProductId(userAgent)),
         ctx.timeout.map(`Connect-Timeout-Ms`.apply),
