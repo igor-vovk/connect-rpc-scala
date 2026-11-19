@@ -339,6 +339,26 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
+  test("server-streaming route reports an unsupported content type") {
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        val request = Request[IO](
+          method = Method.POST,
+          uri = uri"/codegen.e2e.StreamingCalculatorService/AddMany",
+        ).putHeaders(`Content-Type`(MediaTypes.`application/json`))
+
+        app.run(request).flatMap { response =>
+          response.bodyText.compile.string.map { body =>
+            response.status shouldBe Status.UnsupportedMediaType
+            body should startWith("Unsupported streaming media type application/json.")
+          }
+        }
+      }
+      .unsafeRunSync()
+  }
+
   test("typed unary interceptors transform server and client contexts") {
     val serverInterceptor = AuthenticationInterceptor.andThen(RequestIdInterceptor)
 

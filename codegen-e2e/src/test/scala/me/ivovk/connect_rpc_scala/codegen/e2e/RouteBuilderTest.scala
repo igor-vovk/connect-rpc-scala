@@ -134,6 +134,21 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
+  test("report the supplied encoding when rejecting a Connect GET request") {
+    ConnectHttp4sRouteBuilder.forService(service).build
+      .use { app =>
+        response(
+          Client.fromHttpApp(app),
+          Request[IO](Method.GET, uri"/codegen.e2e.CalculatorService/Add?encoding=xml"),
+        )
+      }
+      .map { case (status, body) =>
+        status shouldBe Status.UnsupportedMediaType
+        body should startWith("Unsupported media type or encoding xml.")
+      }
+      .unsafeRunSync()
+  }
+
   test("serve transcoded GET routes") {
     ConnectHttp4sRouteBuilder.forService(transcodingService).build
       .use { app =>

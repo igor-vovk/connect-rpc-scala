@@ -7,7 +7,7 @@ import cats.implicits.*
 import fs2.{Chunk, Stream}
 import org.http4s.Status.{MethodNotAllowed, Ok, UnsupportedMediaType}
 import org.http4s.headers.{Allow, Connection}
-import org.http4s.{ContentCoding, HttpRoutes, HttpVersion, Method, Request, Response, Uri}
+import org.http4s.{ContentCoding, HttpRoutes, HttpVersion, MediaType, Method, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
@@ -81,10 +81,11 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
     }
 
   private def handleUnary(request: Request[F], method: UnaryMethod[F]): F[Response[F]] = {
-    val isGet = request.method.isSafe
+    val isGet     = request.method.isSafe
+    val mediaType = mediaTypeFor(request, isGet)
 
-    codecFor(request, isGet) match {
-      case None        => unsupportedMediaType(request, isGet)
+    mediaType.toOption.flatMap(codecs.unary) match {
+      case None        => unsupportedMediaType(mediaType, request.httpVersion)
       case Some(codec) =>
         val message: String | Stream[F, Byte] =
           if (isGet) {
@@ -94,12 +95,34 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
               .getOrElse("")
           } else request.body
 
-        decodeAndInvoke(
-          method,
-          EntityToDecode(message, request.headers),
-          codec,
-          request.httpVersion,
-        )
+        val entity = EntityToDecode(message, request.headers)
+
+        Async[F].defer {
+          val encoding = message match {
+            case _: String => ContentCoding.identity
+            case _         => entity.encoding
+          }
+          encoding match {
+            case ContentCoding.identity | ContentCoding.gzip =>
+              entity.decodeOne(method.descriptor.requestCompanion, codec)
+            case unsupported =>
+              ConnectException(
+                connectrpc.Code.Unimplemented,
+                s"Unsupported compression ${unsupported.coding}. Supported encodings are identity and gzip.",
+              ).raiseError[F, method.RequestMessage]
+          }
+        }
+          .adaptError {
+            case error if !error.isInstanceOf[ConnectException] => unaryHandler.decodeError(error)
+          }
+          .attempt
+          .flatMap {
+            case Left(error) =>
+              unaryHandler.errorResponse(error).map(_.closeIfHttp1(request.httpVersion))
+            case Right(message) =>
+              Async[F].defer(unaryHandler.invokeAndEncode(method, message, entity.headers, codec))
+                .handleErrorWith(unaryHandler.errorResponse)
+          }
     }
   }
 
@@ -111,21 +134,23 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
       Async[F].pure(
         Response[F](MethodNotAllowed).putHeaders(Allow(Method.POST)).closeIfHttp1(request.httpVersion)
       )
-    else
-      streamingCodecFor(request) match {
-        case None        => unsupportedStreamingMediaType(request)
-        case Some(codec) =>
-          given scalapb.GeneratedMessageCompanion[method.RequestMessage] =
-            method.descriptor.requestCompanion
+    else {
+      val mediaType = mediaTypeFor(request)
 
-          codec.decodeRequest[method.RequestMessage](request.body, request.headers)
+      mediaType.toOption.flatMap(codecs.streaming) match {
+        case None        => unsupportedMediaType(mediaType, request.httpVersion, isStreaming = true)
+        case Some(codec) =>
+
+          codec.decodeRequest[method.RequestMessage](request.body, request.headers)(
+            using method.descriptor.requestCompanion
+          )
             .compile.toList
             .flatMap {
               case message :: Nil =>
                 val context =
                   ConnectRequestContext(
-                    request.headers.removePayloadHeaders,
-                    request.headers.get[`Connect-Timeout-Ms`].map(_.timeout),
+                    headers = request.headers.removePayloadHeaders,
+                    timeout = request.headers.get[`Connect-Timeout-Ms`].map(_.timeout),
                   )
                 val invocation = method.invoke(message, context).allocated
                 val acquired   = context.timeout.fold(invocation) { duration =>
@@ -158,9 +183,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
             }
             .handleErrorWith(error => streamingErrorResponse(codec, error))
       }
-
-  private def streamingCodecFor(request: Request[F]): Option[StreamingMessageCodec[F]] =
-    request.contentType.flatMap(contentType => codecs.streaming(contentType.mediaType))
+    }
 
   private def streamingErrorResponse(
     codec: StreamingMessageCodec[F],
@@ -188,62 +211,27 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
     }
   }
 
-  private def unsupportedStreamingMediaType(request: Request[F]): F[Response[F]] = {
-    val provided = request.contentType.map(_.mediaType.show)
-    val message  = s"Unsupported streaming media type ${provided.getOrElse("<missing>")}. " +
-      "Supported values are application/connect+json and application/connect+proto."
-    Async[F].pure(Response[F](UnsupportedMediaType).withEntity(message).closeIfHttp1(request.httpVersion))
-  }
+  private def mediaTypeFor(request: Request[F], isGetRequest: Boolean = false): Either[String, MediaType] =
+    if (isGetRequest) {
+      request.uri.query.multiParams.get("encoding").flatMap(_.headOption).toRight("<missing>")
+        .flatMap(value => MediaTypes.parseShort(value).leftMap(_ => value))
+    } else request.contentType.map(_.mediaType).toRight("<missing>")
 
-  private def decodeAndInvoke(
-    method: UnaryMethod[F],
-    entity: EntityToDecode[F],
-    codec: MessageCodec[F],
+  private def unsupportedMediaType(
+    mediaType: Either[String, MediaType],
     httpVersion: HttpVersion,
-  ): F[Response[F]] =
-    Async[F].defer {
-      val encoding = entity.message match {
-        case _: String => ContentCoding.identity
-        case _         => entity.encoding
-      }
-      encoding match {
-        case ContentCoding.identity | ContentCoding.gzip =>
-          entity.decodeOne(method.descriptor.requestCompanion, codec)
-        case unsupported =>
-          ConnectException(
-            connectrpc.Code.Unimplemented,
-            s"Unsupported compression ${unsupported.coding}. Supported encodings are identity and gzip.",
-          ).raiseError[F, method.RequestMessage]
-      }
-    }
-      .adaptError { case error if !error.isInstanceOf[ConnectException] => unaryHandler.decodeError(error) }
-      .attempt
-      .flatMap {
-        case Left(error) =>
-          unaryHandler.errorResponse(error).map(_.closeIfHttp1(httpVersion))
-        case Right(message) =>
-          Async[F].defer(unaryHandler.invokeAndEncode(method, message, entity.headers, codec))
-            .handleErrorWith(unaryHandler.errorResponse)
-      }
+    isStreaming: Boolean = false,
+  ): F[Response[F]] = {
+    val provided = mediaType.fold(identity, _.show)
+    val message  =
+      if (isStreaming)
+        s"Unsupported streaming media type $provided. " +
+          "Supported values are application/connect+json and application/connect+proto."
+      else
+        s"Unsupported media type or encoding $provided. " +
+          "Supported values are application/json, application/proto, json, and proto."
 
-  private def codecFor(request: Request[F], isGet: Boolean): Option[MessageCodec[F]] = {
-    val mediaType =
-      if (isGet) {
-        request.uri.query.multiParams.get("encoding").flatMap(_.headOption).flatMap { value =>
-          MediaTypes.parseShort(value).toOption
-        }
-      } else request.contentType.map(_.mediaType)
-
-    mediaType.flatMap(codecs.unary)
-  }
-
-  private def unsupportedMediaType(request: Request[F], isGet: Boolean): F[Response[F]] = {
-    val provided =
-      if (isGet) request.uri.query.multiParams.get("encoding").flatMap(_.headOption)
-      else request.contentType.map(_.mediaType.show)
-    val message = s"Unsupported media type or encoding ${provided.getOrElse("<missing>")}. " +
-      "Supported values are application/json, application/proto, json, and proto."
-    Async[F].pure(Response[F](UnsupportedMediaType).withEntity(message).closeIfHttp1(request.httpVersion))
+    Async[F].pure(Response[F](UnsupportedMediaType).withEntity(message).closeIfHttp1(httpVersion))
   }
 
   private def deadlineExceeded: ConnectException =
