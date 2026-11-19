@@ -9,6 +9,52 @@ import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 import java.util.concurrent.TimeoutException
 import scala.concurrent.duration.FiniteDuration
 
+object ConnectStream {
+
+  final case class Output[+A] private[ConnectStream] (value: A)
+
+  enum Event[+A] {
+    case Message(value: A)
+    case End(trailers: Headers)
+  }
+
+  def fromStream[F[_], A](
+    messages: Stream[F, A],
+    trailers: Headers = Headers.empty,
+  ): ConnectStream[F, A] =
+    fromPull(messages.map(Output(_)).pull.echo >> Pull.pure(trailers))
+
+  def fromPull[F[_], A](
+    pull: Pull[F, Output[A], Headers]
+  ): ConnectStream[F, A] =
+    new ConnectStream(pull)
+
+  def output1[F[_], A](message: A): Pull[F, Output[A], Unit] =
+    Pull.output1(Output(message))
+
+  def done[F[_], A](trailers: Headers = Headers.empty): Pull[F, Output[A], Headers] =
+    Pull.pure(trailers)
+
+  def raiseError[F[_], A](
+    error: ConnectException
+  )(using fs2.RaiseThrowable[F]): ConnectStream[F, A] =
+    fromPull(Pull.raiseError[F](error))
+
+  private def fromCompletedEvents[F[_], A](
+    events: Stream[F, Event[A]]
+  ): ConnectStream[F, A] = {
+    def go(stream: Stream[F, Event[A]]): Pull[F, Output[A], Headers] =
+      stream.pull.uncons1.flatMap {
+        case Some((Event.Message(value), tail)) => output1(value) >> go(tail)
+        case Some((Event.End(trailers), _))     => Pull.pure(trailers)
+        case None                               =>
+          throw new IllegalStateException("Connect stream completed without terminal trailers")
+      }
+
+    fromPull(go(events))
+  }
+}
+
 /**
  * A stream of RPC messages whose successful terminal value is the response trailers.
  *
@@ -61,52 +107,6 @@ final class ConnectStream[F[_], A] private (
         case output: ConnectStream.Output[A] @unchecked => ConnectStream.Event.Message(output.value)
         case ConnectStream.Event.End(trailers)          => ConnectStream.Event.End(trailers)
       }
-}
-
-object ConnectStream {
-
-  final case class Output[+A] private[ConnectStream] (value: A)
-
-  enum Event[+A] {
-    case Message(value: A)
-    case End(trailers: Headers)
-  }
-
-  def fromStream[F[_], A](
-    messages: Stream[F, A],
-    trailers: Headers = Headers.empty,
-  ): ConnectStream[F, A] =
-    fromPull(messages.map(Output(_)).pull.echo >> Pull.pure(trailers))
-
-  def fromPull[F[_], A](
-    pull: Pull[F, Output[A], Headers]
-  ): ConnectStream[F, A] =
-    new ConnectStream(pull)
-
-  def output1[F[_], A](message: A): Pull[F, Output[A], Unit] =
-    Pull.output1(Output(message))
-
-  def done[F[_], A](trailers: Headers = Headers.empty): Pull[F, Output[A], Headers] =
-    Pull.pure(trailers)
-
-  def raiseError[F[_], A](
-    error: ConnectException
-  )(using fs2.RaiseThrowable[F]): ConnectStream[F, A] =
-    fromPull(Pull.raiseError[F](error))
-
-  private def fromCompletedEvents[F[_], A](
-    events: Stream[F, Event[A]]
-  ): ConnectStream[F, A] = {
-    def go(stream: Stream[F, Event[A]]): Pull[F, Output[A], Headers] =
-      stream.pull.uncons1.flatMap {
-        case Some((Event.Message(value), tail)) => output1(value) >> go(tail)
-        case Some((Event.End(trailers), _))     => Pull.pure(trailers)
-        case None                               =>
-          throw new IllegalStateException("Connect stream completed without terminal trailers")
-      }
-
-    fromPull(go(events))
-  }
 }
 
 final case class ConnectStreamingResponse[F[_], A](

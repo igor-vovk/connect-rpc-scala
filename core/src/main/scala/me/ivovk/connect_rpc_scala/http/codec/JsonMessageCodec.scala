@@ -16,6 +16,7 @@ import scalapb_circe.{Parser, Printer}
 
 import java.net.URLDecoder
 import java.nio.charset.{Charset, StandardCharsets}
+
 private[codec] object CirceJsonParser {
   private val parser = new JawnParser()
 

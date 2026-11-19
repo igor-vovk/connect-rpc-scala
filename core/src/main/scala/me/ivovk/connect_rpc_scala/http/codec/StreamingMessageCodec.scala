@@ -5,7 +5,6 @@ import cats.implicits.*
 import fs2.{Chunk, Pull, Stream}
 import io.circe.{Json, JsonObject, Printer as CircePrinter}
 import io.circe.parser.parse
-import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http.json.ConnectErrorFormat
 import me.ivovk.connect_rpc_scala.service.*
 import org.http4s.headers.`Content-Type`
@@ -17,9 +16,17 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.Locale
 
+private object StreamingMessageCodec {
+  private val EnvelopeHeaderSize = 5
+  private val CompressedFlag     = 0x01
+  private val EndStreamFlag      = 0x02
+  private val KnownFlags         = CompressedFlag | EndStreamFlag
+}
+
 private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
   messageCodec: MessageCodec[F],
   jsonSerdes: JsonSerdes[F],
+  val mediaType: MediaType,
 ) {
 
   import StreamingMessageCodec.*
@@ -36,25 +43,13 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
 
   private val compressor = Compressor[F]()
 
-  val mediaType: MediaType =
-    if messageCodec.mediaType == MediaTypes.`application/json` then MediaTypes.`application/connect+json`
-    else MediaTypes.`application/connect+proto`
+  private val encodedEntityHeaders = Headers(`Content-Type`(mediaType))
 
-  def encodeResponse[A <: GeneratedMessage](
-    response: ConnectStreamingResponse[F, A]
-  ): EncodedEntity[F] = {
-    val body = response.stream.events
-      .flatMap {
-        case ConnectStream.Event.Message(message) => encodeMessage(message)
-        case ConnectStream.Event.End(trailers)    => encodeEndStream(trailers, None)
-      }
-      .handleErrorWith(error => encodeEndStream(errorTrailers(error), Some(asConnectException(error))))
-
+  def encodeRequest[A <: GeneratedMessage](messages: Stream[F, A]): EncodedEntity[F] =
     EncodedEntity(
-      headers = Headers(`Content-Type`(mediaType)),
-      body = body,
+      headers = encodedEntityHeaders,
+      body = messages.flatMap(encodeMessage),
     )
-  }
 
   def decodeRequest[A <: GeneratedMessage](
     body: Stream[F, Byte],
@@ -72,11 +67,21 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
     }
   }
 
-  def encodeRequest[A <: GeneratedMessage](messages: Stream[F, A]): EncodedEntity[F] =
+  def encodeResponse[A <: GeneratedMessage](
+    response: ConnectStreamingResponse[F, A]
+  ): EncodedEntity[F] = {
+    val body = response.stream.events
+      .flatMap {
+        case ConnectStream.Event.Message(message) => encodeMessage(message)
+        case ConnectStream.Event.End(trailers)    => encodeEndStream(trailers, None)
+      }
+      .handleErrorWith(error => encodeEndStream(errorTrailers(error), Some(asConnectException(error))))
+
     EncodedEntity(
-      headers = Headers(`Content-Type`(mediaType)),
-      body = messages.flatMap(encodeMessage),
+      headers = encodedEntityHeaders,
+      body = body,
     )
+  }
 
   def decodeResponse[A <: GeneratedMessage](
     body: Stream[F, Byte],
@@ -149,6 +154,22 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
     envelope(EndStreamFlag, payload)
   }
 
+  private def asConnectException(error: Throwable): ConnectException =
+    error match {
+      case connect: ConnectException => connect
+      case other                     =>
+        ConnectException(
+          connectrpc.Code.Internal,
+          Option(other.getMessage).getOrElse("Internal error"),
+        ).withCause(other)
+    }
+
+  private def errorTrailers(error: Throwable): Headers =
+    error match {
+      case connect: ConnectException => connect.trailers
+      case _                         => Headers.empty
+    }
+
   private def decodeMessage[A <: GeneratedMessage](
     envelope: Envelope,
     coding: ContentCoding,
@@ -210,6 +231,11 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
     Headers(headers)
   }
 
+  private def contentEncoding(headers: Headers): ContentCoding =
+    headers.get(ci"connect-content-encoding").map(_.head.value)
+      .map(ContentCoding.unsafeFromString)
+      .getOrElse(ContentCoding.identity)
+
   private def decodedPayload(envelope: Envelope, coding: ContentCoding): F[Chunk[Byte]] =
     if !envelope.compressed then Async[F].pure(envelope.payload)
     else if coding == ContentCoding.identity then
@@ -223,6 +249,15 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
         .compile
         .to(Array)
         .map(Chunk.array)
+
+  private def envelope(flags: Int, payload: Chunk[Byte]): Stream[F, Byte] = {
+    val header = ByteBuffer.allocate(EnvelopeHeaderSize)
+      .put(flags.toByte)
+      .putInt(payload.size)
+      .array()
+
+    Stream.chunk(Chunk.array(header)) ++ Stream.chunk(payload)
+  }
 
   private def decodeEnvelopes(body: Stream[F, Byte]): Stream[F, Envelope] = {
     def go(remaining: Stream[F, Byte]): Pull[F, Envelope, Unit] =
@@ -269,41 +304,4 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
 
     go(body).stream
   }
-
-  private def envelope(flags: Int, payload: Chunk[Byte]): Stream[F, Byte] = {
-    val header = ByteBuffer.allocate(EnvelopeHeaderSize)
-      .put(flags.toByte)
-      .putInt(payload.size)
-      .array()
-
-    Stream.chunk(Chunk.array(header)) ++ Stream.chunk(payload)
-  }
-
-  private def contentEncoding(headers: Headers): ContentCoding =
-    headers.get(ci"connect-content-encoding").map(_.head.value)
-      .map(ContentCoding.unsafeFromString)
-      .getOrElse(ContentCoding.identity)
-
-  private def asConnectException(error: Throwable): ConnectException =
-    error match {
-      case connect: ConnectException => connect
-      case other                     =>
-        ConnectException(
-          connectrpc.Code.Internal,
-          Option(other.getMessage).getOrElse("Internal error"),
-        ).withCause(other)
-    }
-
-  private def errorTrailers(error: Throwable): Headers =
-    error match {
-      case connect: ConnectException => connect.trailers
-      case _                         => Headers.empty
-    }
-}
-
-private object StreamingMessageCodec {
-  private val EnvelopeHeaderSize = 5
-  private val CompressedFlag     = 0x01
-  private val EndStreamFlag      = 0x02
-  private val KnownFlags         = CompressedFlag | EndStreamFlag
 }

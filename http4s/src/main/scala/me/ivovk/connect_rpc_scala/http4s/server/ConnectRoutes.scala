@@ -23,13 +23,11 @@ object ConnectRoutes {
 
 private[http4s] final class ConnectRoutes[F[_]: Async](
   services: Seq[ServiceDefinition[F]],
-  jsonSerdes: JsonSerdes[F],
+  codecs: CodecRegistry[F],
   pathPrefix: Uri.Path,
   unaryHandler: UnaryHandler[F],
 ) {
   import ConnectRoutes.*
-
-  private val protoCodec = new ProtoMessageCodec[F]
 
   private enum RoutedMethod {
     case Unary(method: UnaryMethod[F])
@@ -162,12 +160,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
       }
 
   private def streamingCodecFor(request: Request[F]): Option[StreamingMessageCodec[F]] =
-    request.contentType.map(_.mediaType).flatMap {
-      case MediaTypes.`application/connect+json` =>
-        Some(new StreamingMessageCodec(jsonSerdes.codec, jsonSerdes))
-      case MediaTypes.`application/connect+proto` => Some(new StreamingMessageCodec(protoCodec, jsonSerdes))
-      case _                                      => None
-    }
+    request.contentType.flatMap(contentType => codecs.streaming(contentType.mediaType))
 
   private def streamingErrorResponse(
     codec: StreamingMessageCodec[F],
@@ -241,11 +234,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
         }
       } else request.contentType.map(_.mediaType)
 
-    mediaType.flatMap {
-      case MediaTypes.`application/json`  => Some(jsonSerdes.codec)
-      case MediaTypes.`application/proto` => Some(protoCodec)
-      case _                              => None
-    }
+    mediaType.flatMap(codecs.unary)
   }
 
   private def unsupportedMediaType(request: Request[F], isGet: Boolean): F[Response[F]] = {

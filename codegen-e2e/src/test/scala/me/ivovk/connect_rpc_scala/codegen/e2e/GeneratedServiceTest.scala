@@ -3,6 +3,7 @@ package me.ivovk.connect_rpc_scala.codegen.e2e
 import cats.data.Kleisli
 import cats.effect.{IO, Resource}
 import cats.effect.unsafe.implicits.global
+import cats.syntax.foldable.*
 import codegen.e2e.calculator.{
   AddRequest,
   AddResponse,
@@ -12,6 +13,7 @@ import codegen.e2e.calculator.{
 import com.google.protobuf.ByteString
 import fs2.{Chunk, Stream}
 import org.http4s.client.Client
+import org.http4s.headers.`Content-Type`
 import org.http4s.implicits.*
 import org.http4s.{Header, Headers, HttpApp, Method, Request, Response, Status}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
@@ -269,16 +271,24 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
       .build
       .use { app =>
-        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
-        val client    = StreamingCalculatorServiceConnect.Client[IO](transport)
+        val builder = ConnectHttp4sClientBuilder(Client.fromHttpApp(app))
+        val clients = List(
+          builder                      -> MediaTypes.`application/connect+json`,
+          builder.enableBinaryFormat() -> MediaTypes.`application/connect+proto`,
+        )
 
-        client.addMany(AddRequest(11, 31), ConnectRequestContext()).use { response =>
-          response.stream.events.compile.toList.map { events =>
-            events shouldBe List(
-              ConnectStream.Event.Message(AddResponse(11)),
-              ConnectStream.Event.Message(AddResponse(31)),
-              ConnectStream.Event.End(Headers(Header.Raw(ci"x-count", "2"))),
-            )
+        clients.traverse_ { (configured, mediaType) =>
+          val client = StreamingCalculatorServiceConnect.Client[IO](configured.build(uri"http://localhost"))
+
+          client.addMany(AddRequest(11, 31), ConnectRequestContext()).use { response =>
+            response.stream.events.compile.toList.map { events =>
+              response.headers.get[`Content-Type`].map(_.mediaType) shouldBe Some(mediaType)
+              events shouldBe List(
+                ConnectStream.Event.Message(AddResponse(11)),
+                ConnectStream.Event.Message(AddResponse(31)),
+                ConnectStream.Event.End(Headers(Header.Raw(ci"x-count", "2"))),
+              )
+            }
           }
         }
       }

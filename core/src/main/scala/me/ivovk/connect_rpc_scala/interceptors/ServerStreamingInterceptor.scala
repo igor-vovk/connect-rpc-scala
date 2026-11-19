@@ -1,6 +1,7 @@
-package me.ivovk.connect_rpc_scala.service
+package me.ivovk.connect_rpc_scala.interceptors
 
 import cats.effect.Resource
+import me.ivovk.connect_rpc_scala.service.{ConnectStreamingResponse, ServerStreamingMethodDescriptor}
 import scalapb.GeneratedMessage
 
 trait ServerStreamingInterceptor[F[_], In, Out] { self =>

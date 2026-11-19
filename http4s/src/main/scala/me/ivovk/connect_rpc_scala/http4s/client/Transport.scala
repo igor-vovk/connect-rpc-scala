@@ -18,10 +18,14 @@ import java.nio.charset.StandardCharsets
 
 private[http4s] final class Transport[F[_]: Async](
   httpClient: Client[F],
-  codecs: ClientCodecs[F],
+  codecs: CodecRegistry[F],
+  encoding: MessageEncoding,
   baseUri: Uri,
   userAgent: String,
 ) extends ConnectTransport[F] {
+
+  private val unaryCodec     = codecs.unary(encoding)
+  private val streamingCodec = codecs.streaming(encoding)
 
   override def unary[
     RequestMessage <: GeneratedMessage,
@@ -43,7 +47,7 @@ private[http4s] final class Transport[F[_]: Async](
 
     val encodeOptions = EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity)
 
-    val httpResponse = Resource.eval(codecs.chosen.encode(request, encodeOptions))
+    val httpResponse = Resource.eval(unaryCodec.encode(request, encodeOptions))
       .map { entity =>
         httpRequest.withBodyStream(entity.body).transformHeaders(_ ++ entity.headers)
       }
@@ -55,8 +59,8 @@ private[http4s] final class Transport[F[_]: Async](
 
       if (response.status.isSuccess) {
         val mediaType = response.contentType.map(_.mediaType)
-        if (mediaType.exists(_.satisfies(codecs.chosen.mediaType))) {
-          responseEntity.decodeOne(descriptor.responseCompanion, codecs.chosen)
+        if (mediaType.exists(_.satisfies(unaryCodec.mediaType))) {
+          responseEntity.decodeOne(descriptor.responseCompanion, unaryCodec)
             .map(message => ConnectResponse(message, headers, trailers))
             .adaptError { case error =>
               ConnectException(
@@ -77,7 +81,7 @@ private[http4s] final class Transport[F[_]: Async](
 
           ConnectException(
             code,
-            s"Expected response content type ${codecs.chosen.mediaType.show}, got ${mediaType.map(_.show).getOrElse("<missing>")}",
+            s"Expected response content type ${unaryCodec.mediaType.show}, got ${mediaType.map(_.show).getOrElse("<missing>")}",
             headers = headers,
             trailers = trailers,
           ).raiseError
@@ -103,9 +107,8 @@ private[http4s] final class Transport[F[_]: Async](
     request: RequestMessage,
     ctx: ConnectRequestContext,
   ): Resource[F, ConnectStreamingResponse[F, ResponseMessage]] = {
-    val streamingCodec = new StreamingMessageCodec(codecs.chosen, codecs.jsonSerdes)
-    val entity         = streamingCodec.encodeRequest(Stream.emit(request))
-    val httpRequest    = Request[F](
+    val entity      = streamingCodec.encodeRequest(Stream.emit(request))
+    val httpRequest = Request[F](
       method = Method.POST,
       uri = baseUri / descriptor.serviceName / descriptor.methodName,
       headers = Headers(
@@ -146,9 +149,9 @@ private[http4s] final class Transport[F[_]: Async](
 
   private def decodeHttpError[A](response: Response[F]): F[A] = {
     val (headers, trailers) = response.headers.splitTrailers
-    val responseEntity      = EntityToDecode[F](response.body, headers)
 
-    responseEntity.decodeOne(connectrpc.Error, codecs.json)
+    EntityToDecode[F](response.body, headers)
+      .decodeOne(connectrpc.Error, codecs.json)
       .attempt
       .flatMap {
         case Right(error) =>
