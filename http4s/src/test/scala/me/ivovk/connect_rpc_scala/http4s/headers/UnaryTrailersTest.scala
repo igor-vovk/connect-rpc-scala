@@ -1,7 +1,7 @@
 package me.ivovk.connect_rpc_scala.http4s.headers
 
 import org.http4s.{Header, Headers}
-import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
+import me.ivovk.connect_rpc_scala.http.headers.UnaryTrailers.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.ci.*

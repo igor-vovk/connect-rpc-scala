@@ -1,11 +1,11 @@
-package me.ivovk.connect_rpc_scala.http4s.headers
+package me.ivovk.connect_rpc_scala.http.headers
 
 import org.http4s.{Header, Headers}
 import org.typelevel.ci.CIString
 
 import java.util.Locale
 
-private[http4s] object UnaryTrailers {
+private[connect_rpc_scala] object UnaryTrailers {
 
   private val TrailerPrefix = "trailer-"
 

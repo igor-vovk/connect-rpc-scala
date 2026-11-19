@@ -10,8 +10,8 @@ import org.http4s.headers.{Allow, Connection}
 import org.http4s.{ContentCoding, HttpRoutes, HttpVersion, MediaType, Method, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http.codec.*
-import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.http.headers.`Connect-Timeout-Ms`
+import me.ivovk.connect_rpc_scala.*
 
 object ConnectRoutes {
   // A rejected request may have unread body bytes. Tell HTTP/1 clients that the connection cannot be reused.
@@ -35,10 +35,10 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
   }
 
   private val methodsByPath: Map[(String, String), RoutedMethod] = {
-    val methods = services.flatMap(service => service.methods.map(method => (service.name, method)))
+    val unaryMethods = services.flatMap(service => service.unaryMethods.map(method => (service.name, method)))
     val serverStreamingMethods =
       services.flatMap(service => service.serverStreamingMethods.map(method => (service.name, method)))
-    val entries = methods.map { (serviceName, method) =>
+    val entries = unaryMethods.map { (serviceName, method) =>
       (serviceName -> method.descriptor.methodName) -> RoutedMethod.Unary(method)
     } ++ serverStreamingMethods.map { (serviceName, method) =>
       (serviceName -> method.descriptor.methodName) -> RoutedMethod.ServerStreaming(method)

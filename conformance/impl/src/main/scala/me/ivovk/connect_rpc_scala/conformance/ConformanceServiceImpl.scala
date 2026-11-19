@@ -9,7 +9,7 @@ import connectrpc.conformance.v1.UnaryResponseDefinition.Response
 import fs2.Stream
 import org.http4s.Headers
 import me.ivovk.connect_rpc_scala.conformance.util.ConformanceHeadersConv
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.*
 import scalapb.GeneratedMessage
 
 import scala.concurrent.duration.*

@@ -6,7 +6,7 @@ import connectrpc.Code
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.{AttributeKey, Attributes}
 import io.opentelemetry.api.metrics.Meter
-import me.ivovk.connect_rpc_scala.service.{ConnectException, ConnectResponse, UnaryMethodDescriptor}
+import me.ivovk.connect_rpc_scala.{ConnectException, ConnectResponse, UnaryMethodDescriptor}
 import scalapb.GeneratedMessage
 
 import scala.jdk.CollectionConverters.*

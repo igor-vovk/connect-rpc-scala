@@ -1,4 +1,4 @@
-package me.ivovk.connect_rpc_scala.service
+package me.ivovk.connect_rpc_scala.transcoding
 
 import connectrpc.{Code, Error}
 import org.scalatest.funsuite.AnyFunSuite

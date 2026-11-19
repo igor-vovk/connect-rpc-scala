@@ -19,7 +19,7 @@ import org.http4s.{Header, Headers, HttpApp, Method, Request, Response, Status}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.ci.*
@@ -193,7 +193,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     val definition = CalculatorServiceConnect.bind(CalculatorServiceImpl)
 
     definition.name shouldBe "codegen.e2e.CalculatorService"
-    definition.methods.map(_.descriptor.method) should contain(
+    definition.unaryMethods.map(_.descriptor.method) should contain(
       "codegen.e2e.CalculatorService/Add"
     )
     CalculatorServiceConnect.METHOD_ADD.httpRule.map(_.getPost) shouldBe Some("/v1/add")

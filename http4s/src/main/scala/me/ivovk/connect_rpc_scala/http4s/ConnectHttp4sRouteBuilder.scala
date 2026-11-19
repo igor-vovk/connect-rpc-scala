@@ -7,7 +7,7 @@ import org.http4s.{HttpApp, HttpRoutes, Uri}
 import me.ivovk.connect_rpc_scala.http.codec.{CodecRegistry, JsonSerdes, JsonSerdesBuilder}
 import me.ivovk.connect_rpc_scala.http4s.HttpRoutesSyntax.orNotFoundClosingOnUnreadBody
 import me.ivovk.connect_rpc_scala.http4s.server.{ConnectRoutes, Routes, TranscodingRoutes, UnaryHandler}
-import me.ivovk.connect_rpc_scala.service.ServiceDefinition
+import me.ivovk.connect_rpc_scala.ServiceDefinition
 
 object ConnectHttp4sRouteBuilder {
 

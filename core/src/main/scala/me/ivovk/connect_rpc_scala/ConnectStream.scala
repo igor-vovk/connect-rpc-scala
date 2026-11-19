@@ -1,10 +1,8 @@
-package me.ivovk.connect_rpc_scala.service
+package me.ivovk.connect_rpc_scala
 
-import cats.effect.Resource
 import cats.effect.Temporal
 import fs2.{Pull, Stream}
 import org.http4s.Headers
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 
 import java.util.concurrent.TimeoutException
 import scala.concurrent.duration.FiniteDuration
@@ -108,70 +106,3 @@ final class ConnectStream[F[_], A] private (
         case ConnectStream.Event.End(trailers)          => ConnectStream.Event.End(trailers)
       }
 }
-
-final case class ConnectStreamingResponse[F[_], A](
-  stream: ConnectStream[F, A],
-  headers: Headers = Headers.empty,
-)
-
-final case class ServerStreamingMethodDescriptor[
-  Request <: GeneratedMessage,
-  Response <: GeneratedMessage,
-](
-  serviceName: String,
-  methodName: String,
-  requestCompanion: GeneratedMessageCompanion[Request],
-  responseCompanion: GeneratedMessageCompanion[Response],
-) {
-  val procedure: String = s"/$serviceName/$methodName"
-}
-
-sealed trait ServerStreamingMethod[F[_]] {
-  type RequestMessage <: GeneratedMessage
-  type ResponseMessage <: GeneratedMessage
-
-  def descriptor: ServerStreamingMethodDescriptor[RequestMessage, ResponseMessage]
-
-  def invoke(
-    request: RequestMessage,
-    ctx: ConnectRequestContext,
-  ): Resource[F, ConnectStreamingResponse[F, ResponseMessage]]
-}
-
-object ServerStreamingMethod {
-
-  def apply[
-    F[_],
-    Request <: GeneratedMessage,
-    Response <: GeneratedMessage,
-  ](
-    methodDescriptor: ServerStreamingMethodDescriptor[Request, Response],
-    handler: (Request, ConnectRequestContext) => Resource[F, ConnectStreamingResponse[F, Response]],
-  ): ServerStreamingMethod[F] =
-    new ServerStreamingMethod[F] {
-      override type RequestMessage  = Request
-      override type ResponseMessage = Response
-
-      override val descriptor: ServerStreamingMethodDescriptor[Request, Response] = methodDescriptor
-
-      override def invoke(
-        request: Request,
-        ctx: ConnectRequestContext,
-      ): Resource[F, ConnectStreamingResponse[F, Response]] =
-        handler(request, ctx)
-    }
-}
-
-trait ServerStreamingTransport[F[_]] {
-
-  def serverStreaming[
-    Request <: GeneratedMessage,
-    Response <: GeneratedMessage,
-  ](
-    descriptor: ServerStreamingMethodDescriptor[Request, Response],
-    request: Request,
-    ctx: ConnectRequestContext,
-  ): Resource[F, ConnectStreamingResponse[F, Response]]
-}
-
-trait ConnectTransport[F[_]] extends UnaryTransport[F] with ServerStreamingTransport[F]

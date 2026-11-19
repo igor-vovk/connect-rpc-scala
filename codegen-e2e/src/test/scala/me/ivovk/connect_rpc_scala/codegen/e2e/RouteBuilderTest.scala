@@ -12,7 +12,7 @@ import org.http4s.implicits.*
 import org.http4s.{Header, HttpRoutes, HttpVersion, Method, Request, Response, Status, Uri}
 import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sRouteBuilder
 import me.ivovk.connect_rpc_scala.http4s.HttpRoutesSyntax.orNotFoundClosingOnUnreadBody
-import me.ivovk.connect_rpc_scala.service.{ConnectRequestContext, ConnectResponse}
+import me.ivovk.connect_rpc_scala.{ConnectRequestContext, ConnectResponse}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.ci.*

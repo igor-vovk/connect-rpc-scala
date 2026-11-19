@@ -6,7 +6,7 @@ import fs2.Pipe
 import fs2.compression.Compression
 import org.http4s.ContentCoding
 import org.http4s.headers.{`Content-Encoding`, `Content-Length`}
-import me.ivovk.connect_rpc_scala.service.ConnectException
+import me.ivovk.connect_rpc_scala.ConnectException
 
 class Compressor[F[_]: Sync] {
 

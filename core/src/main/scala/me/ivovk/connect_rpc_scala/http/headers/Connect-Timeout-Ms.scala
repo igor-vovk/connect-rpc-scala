@@ -1,13 +1,13 @@
-package me.ivovk.connect_rpc_scala.http4s.headers
+package me.ivovk.connect_rpc_scala.http.headers
 
 import org.http4s.{Header, ParseResult}
 import org.typelevel.ci.*
 
 import scala.concurrent.duration.*
 
-private[http4s] final case class `Connect-Timeout-Ms`(timeout: FiniteDuration)
+private[connect_rpc_scala] final case class `Connect-Timeout-Ms`(timeout: FiniteDuration)
 
-private[http4s] object `Connect-Timeout-Ms` {
+private[connect_rpc_scala] object `Connect-Timeout-Ms` {
 
   def parse(value: String): ParseResult[`Connect-Timeout-Ms`] =
     value.toLongOption match {

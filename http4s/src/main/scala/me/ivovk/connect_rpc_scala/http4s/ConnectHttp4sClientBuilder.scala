@@ -6,7 +6,7 @@ import org.http4s.Uri
 import org.http4s.client.Client
 import me.ivovk.connect_rpc_scala.http.codec.{CodecRegistry, JsonSerdesBuilder, MessageEncoding}
 import me.ivovk.connect_rpc_scala.http4s.client.Transport
-import me.ivovk.connect_rpc_scala.service.ConnectTransport
+import me.ivovk.connect_rpc_scala.ConnectTransport
 
 object ConnectHttp4sClientBuilder {
 

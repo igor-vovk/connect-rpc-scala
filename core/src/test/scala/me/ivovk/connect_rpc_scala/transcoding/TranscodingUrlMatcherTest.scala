@@ -6,12 +6,7 @@ import io.circe.Json
 import org.http4s.implicits.uri
 import org.http4s.{Method, Request, Uri}
 import me.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, SubKeyJsonTransform}
-import me.ivovk.connect_rpc_scala.service.{
-  ConnectRequestContext,
-  ConnectResponse,
-  UnaryMethod,
-  UnaryMethodDescriptor,
-}
+import me.ivovk.connect_rpc_scala.{ConnectRequestContext, ConnectResponse, UnaryMethod, UnaryMethodDescriptor}
 import me.ivovk.connect_rpc_scala.transcoding.TranscodingUrlMatcher.extractVariable
 import org.scalatest.funsuite.AnyFunSuiteLike
 

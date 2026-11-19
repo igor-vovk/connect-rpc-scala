@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import me.ivovk.connect_rpc_scala.http.MediaTypes
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.*
 import org.http4s.{Header, Headers}
 import org.typelevel.ci.*
 import org.scalatest.funsuite.AnyFunSuite

@@ -11,7 +11,7 @@ import org.http4s.{Headers, Uri}
 import org.http4s.ember.client.EmberClientBuilder
 import me.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, ScodecProto}
 import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sClientBuilder
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.*
 import me.ivovk.connect_rpc_scala.util.PipeSyntax.pipeIf
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}

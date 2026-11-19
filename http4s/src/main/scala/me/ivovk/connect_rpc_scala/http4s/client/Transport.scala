@@ -9,9 +9,9 @@ import org.http4s.headers.`User-Agent`
 import org.http4s.{ContentCoding, Headers, Method, ProductId, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.{ConnectHttpStatus, MediaTypes}
 import me.ivovk.connect_rpc_scala.http.codec.*
-import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
-import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.http.headers.UnaryTrailers.*
+import me.ivovk.connect_rpc_scala.http.headers.`Connect-Timeout-Ms`
+import me.ivovk.connect_rpc_scala.*
 import scalapb.GeneratedMessage
 
 import java.nio.charset.StandardCharsets
@@ -119,19 +119,17 @@ private[http4s] final class Transport[F[_]: Async](
     )
 
     httpClient.run(httpRequest).evalMap { response =>
-      val responseHeaders = response.headers
-
       if !response.status.isSuccess then decodeHttpError(response)
       else if !response.contentType.exists(_.mediaType.satisfies(streamingCodec.mediaType)) then
         ConnectException(
           connectrpc.Code.Internal,
           s"Unexpected streaming response content type: ${response.contentType.map(_.mediaType.show).getOrElse("<missing>")}",
-          headers = responseHeaders,
+          headers = response.headers,
         ).raiseError
       else {
-        given scalapb.GeneratedMessageCompanion[ResponseMessage] = descriptor.responseCompanion
-        val decoded = streamingCodec.decodeResponse[ResponseMessage](response.body, responseHeaders)
-        val stream  = ctx.timeout.fold(decoded) { duration =>
+        val decoded =
+          streamingCodec.decodeResponse(response.body, response.headers)(using descriptor.responseCompanion)
+        val stream = ctx.timeout.fold(decoded) { duration =>
           decoded.timeoutTo(
             duration,
             ConnectException(connectrpc.Code.DeadlineExceeded, "Request deadline exceeded"),
@@ -140,7 +138,7 @@ private[http4s] final class Transport[F[_]: Async](
         Async[F].pure(
           ConnectStreamingResponse(
             stream = stream,
-            headers = responseHeaders,
+            headers = response.headers,
           )
         )
       }

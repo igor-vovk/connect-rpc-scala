@@ -3,7 +3,7 @@ package me.ivovk.connect_rpc_scala.interceptors
 import cats.effect.{IO, Ref}
 import cats.effect.unsafe.implicits.global
 import connectrpc.Code
-import me.ivovk.connect_rpc_scala.service.{ConnectException, ConnectResponse, UnaryMethodDescriptor}
+import me.ivovk.connect_rpc_scala.{ConnectException, ConnectResponse, UnaryMethodDescriptor}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.slf4j.event.Level

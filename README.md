@@ -94,6 +94,8 @@ the generator creates `CalculatorServiceConnect.Service[F, Context]`, `bind`, me
 `CalculatorServiceConnect.Client[F]`:
 
 ```scala
+import me.ivovk.connect_rpc_scala.{ConnectRequestContext, ConnectResponse}
+
 object Calculator extends CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
   override def add(
     request: AddRequest,
@@ -202,6 +204,7 @@ whole response as a `Resource`: headers are available immediately, while success
 of `ConnectStream`.
 
 ```scala
+import me.ivovk.connect_rpc_scala.{ConnectRequestContext, ConnectStream, ConnectStreamingResponse}
 import org.http4s.{Header, Headers}
 import org.typelevel.ci.*
 

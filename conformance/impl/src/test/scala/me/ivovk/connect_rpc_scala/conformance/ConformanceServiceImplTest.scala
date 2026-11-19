@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import connectrpc.conformance.v1.*
 import org.http4s.{Header as HttpHeader, Headers}
-import me.ivovk.connect_rpc_scala.service.{ConnectException, ConnectRequestContext, ConnectStream}
+import me.ivovk.connect_rpc_scala.{ConnectException, ConnectRequestContext, ConnectStream}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.ci.*

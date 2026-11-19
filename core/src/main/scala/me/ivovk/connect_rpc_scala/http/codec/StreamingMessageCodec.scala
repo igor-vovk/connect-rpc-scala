@@ -5,8 +5,9 @@ import cats.implicits.*
 import fs2.{Chunk, Pull, Stream}
 import io.circe.{Json, JsonObject, Printer as CircePrinter}
 import io.circe.parser.parse
+import me.ivovk.connect_rpc_scala.http.headers.`Connect-Content-Encoding`
 import me.ivovk.connect_rpc_scala.http.json.ConnectErrorFormat
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.*
 import org.http4s.headers.`Content-Type`
 import org.http4s.{ContentCoding, Header, Headers, MediaType}
 import org.typelevel.ci.*
@@ -232,9 +233,9 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
   }
 
   private def contentEncoding(headers: Headers): ContentCoding =
-    headers.get(ci"connect-content-encoding").map(_.head.value)
-      .map(ContentCoding.unsafeFromString)
-      .getOrElse(ContentCoding.identity)
+    headers.getWithWarnings[`Connect-Content-Encoding`].fold(ContentCoding.identity) { result =>
+      result.toEither.fold(failures => throw failures.head, _.contentCoding)
+    }
 
   private def decodedPayload(envelope: Envelope, coding: ContentCoding): F[Chunk[Byte]] =
     if !envelope.compressed then Async[F].pure(envelope.payload)

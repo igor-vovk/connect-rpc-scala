@@ -1,4 +1,4 @@
-package me.ivovk.connect_rpc_scala.service
+package me.ivovk.connect_rpc_scala.transcoding
 
 import com.google.protobuf.CodedOutputStream
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
