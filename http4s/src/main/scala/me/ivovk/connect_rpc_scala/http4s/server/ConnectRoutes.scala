@@ -127,12 +127,16 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
         case None        => unsupportedMediaType(mediaType, request.httpVersion, isStreaming = true)
         case Some(codec) =>
 
-          codec.decodeRequest[method.RequestMessage](request.body, request.headers)(
-            using method.descriptor.requestCompanion
-          )
-            .compile.toList
+          Async[F].defer {
+            codec.decodeRequest[method.RequestMessage](request.body, request.headers)(
+              using method.descriptor.requestCompanion
+            ).compile.toList
+          }
+            .attempt
             .flatMap {
-              case message :: Nil =>
+              case Left(error) =>
+                streamingErrorResponse(codec, error).map(_.closeIfHttp1(request.httpVersion))
+              case Right(message :: Nil) =>
                 val context =
                   ConnectRequestContext(
                     headers = request.headers.removePayloadHeaders,
@@ -158,7 +162,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
                   case Left(error) =>
                     streamingErrorResponse(codec, error)
                 }
-              case messages =>
+              case Right(messages) =>
                 streamingErrorResponse(
                   codec,
                   ConnectException(

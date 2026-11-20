@@ -13,9 +13,9 @@ import codegen.e2e.calculator.{
 import com.google.protobuf.ByteString
 import fs2.{Chunk, Stream}
 import org.http4s.client.Client
-import org.http4s.headers.`Content-Type`
+import org.http4s.headers.{`Content-Type`, Connection}
 import org.http4s.implicits.*
-import org.http4s.{Header, Headers, HttpApp, Method, Request, Response, Status}
+import org.http4s.{Header, Headers, HttpApp, HttpVersion, Method, Request, Response, Status}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
@@ -354,6 +354,32 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
             response.status shouldBe Status.UnsupportedMediaType
             body should startWith("Unsupported streaming media type application/json.")
           }
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("server-streaming request decode errors close HTTP/1 connections with unread body bytes") {
+    val body = Stream.emits(Array[Byte](1, 0, 0, 0, 1, 0)) ++
+      Stream.raiseError[IO](new IllegalStateException("remaining request body was read"))
+    val request = Request[IO](Method.POST, uri"/codegen.e2e.StreamingCalculatorService/AddMany")
+      .putHeaders(`Content-Type`(MediaTypes.`application/connect+proto`))
+      .withBodyStream(body)
+
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        for {
+          http1 <- app.run(request.withHttpVersion(HttpVersion.`HTTP/1.1`))
+          http2 <- app.run(request.withHttpVersion(HttpVersion.`HTTP/2`))
+          error <- http1.bodyText.compile.string
+        } yield {
+          http1.status shouldBe Status.Ok
+          http2.status shouldBe Status.Ok
+          http1.headers.get[Connection] shouldBe Some(Connection.close)
+          http2.headers.get[Connection] shouldBe None
+          error should include("Compressed envelope used without connect-content-encoding")
         }
       }
       .unsafeRunSync()
