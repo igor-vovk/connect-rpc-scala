@@ -1,14 +1,15 @@
 package me.ivovk.connect_rpc_scala.conformance
 
-import cats.effect.Async
+import cats.effect.{Async, Resource}
 import cats.implicits.*
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.Any
 import connectrpc.conformance.v1.*
 import connectrpc.conformance.v1.UnaryResponseDefinition.Response
+import fs2.Stream
 import org.http4s.Headers
 import me.ivovk.connect_rpc_scala.conformance.util.ConformanceHeadersConv
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.*
 import scalapb.GeneratedMessage
 
 import scala.concurrent.duration.*
@@ -46,9 +47,66 @@ class ConformanceServiceImpl[F[_]: Async]
       ConnectResponse(IdempotentUnaryResponse(result.payload.some), result.headers, result.trailers)
     }
 
+  override def serverStream(
+    request: ServerStreamRequest,
+    ctx: ConnectRequestContext,
+  ): Resource[F, ConnectStreamingResponse[F, ServerStreamResponse]] = {
+    val responseDefinition = request.getResponseDefinition
+    val requestInfo        = ConformancePayload.RequestInfo(
+      requestHeaders = ConformanceHeadersConv.toHeaderSeq(ctx.headers),
+      timeoutMs = ctx.timeout.map(_.toMillis),
+      requests = Seq(Any.pack(request)),
+    )
+    val headers  = ConformanceHeadersConv.toHttp4sHeaders(responseDefinition.responseHeaders)
+    val trailers = ConformanceHeadersConv.toHttp4sHeaders(responseDefinition.responseTrailers)
+
+    val messages = Stream.emits(responseDefinition.responseData).covary[F]
+      .zipWithIndex
+      .evalMap { (data, index) =>
+        Async[F].sleep(responseDefinition.responseDelayMs.millis).as(
+          ServerStreamResponse(
+            ConformancePayload(
+              data = data,
+              requestInfo = Option.when(index == 0)(requestInfo),
+            ).some
+          )
+        )
+      }
+
+    val body = responseDefinition.error match {
+      case Some(error) =>
+        val requestInfoDetails =
+          if responseDefinition.responseData.isEmpty then
+            Seq(
+              connectrpc.ErrorDetailsAny(
+                `type` = requestInfo.companion.scalaDescriptor.fullName,
+                value = requestInfo.toByteString,
+              )
+            )
+          else Seq.empty
+        val definedDetails =
+          error.details.map(detail => connectrpc.ErrorDetailsAny(detail.typeUrl, detail.value))
+        val exception = ConnectException(
+          code = connectrpc.Code.fromValue(error.code.value),
+          message = error.getMessage,
+          details = definedDetails ++ requestInfoDetails,
+          trailers = trailers,
+        )
+        messages ++ Stream.raiseError[F](exception)
+      case None => messages
+    }
+
+    Resource.pure(
+      ConnectStreamingResponse(
+        stream = ConnectStream.fromStream(body, trailers),
+        headers = headers,
+      )
+    )
+  }
+
   override def unimplemented(
     request: UnimplementedRequest,
-    _ctx: ConnectRequestContext,
+    ctx: ConnectRequestContext,
   ): F[ConnectResponse[UnimplementedResponse]] =
     ConnectException(
       connectrpc.Code.Unimplemented,

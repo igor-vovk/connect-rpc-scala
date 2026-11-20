@@ -9,12 +9,12 @@ import scodec.codecs.*
 /**
  * Scodec codecs for Protobuf messages.
  */
-object ProtoCodecs {
+object ScodecProto {
 
-  def decoderFor[T <: Message](using cmp: Companion[T]): Decoder[T] =
+  def decoderFor[T <: Message](using cmp: Companion[T]): scodec.Decoder[T] =
     int32.flatMap(bytes).map(_.toArray.pipe(cmp.parseFrom))
 
-  def encoder: Encoder[Message] =
+  def encoder: scodec.Encoder[Message] =
     variableSizeBytes(int32, bytes)
       .contramap[Message](_.toByteArray.pipe(ByteVector.apply))
 

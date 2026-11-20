@@ -7,7 +7,7 @@ import org.http4s.{Method, Uri}
 import me.ivovk.connect_rpc_scala
 import me.ivovk.connect_rpc_scala.http.codec.{AsIsJsonTransform, JsonTransform, SubKeyJsonTransform}
 import me.ivovk.connect_rpc_scala.http.json.JsonProcessing.*
-import me.ivovk.connect_rpc_scala.service.UnaryMethod
+import me.ivovk.connect_rpc_scala.UnaryMethod
 import me.ivovk.connect_rpc_scala.util.SeqOps.*
 import scalapb.descriptors.ScalaType
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}

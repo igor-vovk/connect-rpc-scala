@@ -1,18 +1,25 @@
 package me.ivovk.connect_rpc_scala.codegen.e2e
 
 import cats.data.Kleisli
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import cats.effect.unsafe.implicits.global
-import codegen.e2e.calculator.{AddRequest, AddResponse, CalculatorServiceConnect}
+import cats.syntax.foldable.*
+import codegen.e2e.calculator.{
+  AddRequest,
+  AddResponse,
+  CalculatorServiceConnect,
+  StreamingCalculatorServiceConnect,
+}
 import com.google.protobuf.ByteString
 import fs2.{Chunk, Stream}
 import org.http4s.client.Client
+import org.http4s.headers.{`Content-Type`, Connection}
 import org.http4s.implicits.*
-import org.http4s.{Header, Headers, HttpApp, Method, Request, Response, Status}
+import org.http4s.{Header, Headers, HttpApp, HttpVersion, Method, Request, Response, Status}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.ci.*
@@ -21,6 +28,41 @@ import scalapb.GeneratedMessage
 import scala.concurrent.duration.*
 
 class GeneratedServiceTest extends AnyFunSuite with Matchers {
+
+  private object StreamingCalculatorServiceImpl
+      extends StreamingCalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+    override def addMany(
+      request: AddRequest,
+      _ctx: ConnectRequestContext,
+    ): Resource[IO, ConnectStreamingResponse[IO, AddResponse]] = {
+      val pull =
+        ConnectStream.output1[IO, AddResponse](AddResponse(request.left)) >>
+          ConnectStream.output1[IO, AddResponse](AddResponse(request.right)) >>
+          ConnectStream.done[IO, AddResponse](Headers(Header.Raw(ci"x-count", "2")))
+
+      Resource.pure(ConnectStreamingResponse(ConnectStream.fromPull(pull)))
+    }
+  }
+
+  private object FailingStreamingCalculatorServiceImpl
+      extends StreamingCalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+    override def addMany(
+      request: AddRequest,
+      _ctx: ConnectRequestContext,
+    ): Resource[IO, ConnectStreamingResponse[IO, AddResponse]] = {
+      val pull =
+        ConnectStream.output1[IO, AddResponse](AddResponse(request.left)) >>
+          fs2.Pull.raiseError[IO](
+            ConnectException(
+              connectrpc.Code.Unavailable,
+              "response generation failed",
+              trailers = Headers(Header.Raw(ci"x-failure", "generated")),
+            )
+          )
+
+      Resource.pure(ConnectStreamingResponse(ConnectStream.fromPull(pull)))
+    }
+  }
 
   private object SimpleCalculatorServiceImpl extends CalculatorServiceConnect.SimpleService[IO] {
     override def add(request: AddRequest): IO[AddResponse] =
@@ -151,7 +193,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     val definition = CalculatorServiceConnect.bind(CalculatorServiceImpl)
 
     definition.name shouldBe "codegen.e2e.CalculatorService"
-    definition.methods.map(_.descriptor.method) should contain(
+    definition.unaryMethods.map(_.descriptor.method) should contain(
       "codegen.e2e.CalculatorService/Add"
     )
     CalculatorServiceConnect.METHOD_ADD.httpRule.map(_.getPost) shouldBe Some("/v1/add")
@@ -222,6 +264,125 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         }
       }.unsafeRunSync()
     }
+  }
+
+  test("generated server-streaming client receives messages and terminal trailers") {
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        val builder = ConnectHttp4sClientBuilder(Client.fromHttpApp(app))
+        val clients = List(
+          builder                      -> MediaTypes.`application/connect+json`,
+          builder.enableBinaryFormat() -> MediaTypes.`application/connect+proto`,
+        )
+
+        clients.traverse_ { (configured, mediaType) =>
+          val client = StreamingCalculatorServiceConnect.Client[IO](configured.build(uri"http://localhost"))
+
+          client.addMany(AddRequest(11, 31), ConnectRequestContext()).use { response =>
+            response.stream.events.compile.toList.map { events =>
+              response.headers.get[`Content-Type`].map(_.mediaType) shouldBe Some(mediaType)
+              events shouldBe List(
+                ConnectStream.Event.Message(AddResponse(11)),
+                ConnectStream.Event.Message(AddResponse(31)),
+                ConnectStream.Event.End(Headers(Header.Raw(ci"x-count", "2"))),
+              )
+            }
+          }
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("server-streaming failures preserve messages emitted before the error and error trailers") {
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(FailingStreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
+        val client    = StreamingCalculatorServiceConnect.Client[IO](transport)
+
+        client.addMany(AddRequest(11, 31), ConnectRequestContext()).use { response =>
+          response.stream.events.attempt.compile.toList.map { events =>
+            events.head shouldBe Right(ConnectStream.Event.Message(AddResponse(11)))
+            val error = events.last.swap.toOption.get.asInstanceOf[ConnectException]
+            error.code shouldBe connectrpc.Code.Unavailable
+            error.trailers.get(ci"x-failure").map(_.toList.map(_.value)) shouldBe Some(List("generated"))
+          }
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("server-streaming route returns an error end envelope for an empty request stream") {
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        val request = Request[IO](
+          method = Method.POST,
+          uri = uri"/codegen.e2e.StreamingCalculatorService/AddMany",
+        ).putHeaders(
+          Header.Raw(ci"Content-Type", "application/connect+proto")
+        )
+
+        app.run(request).flatMap { response =>
+          response.body.compile.to(Array).map { body =>
+            response.status shouldBe Status.Ok
+            response.contentLength shouldBe Some(body.length.toLong)
+            body.length should be > 5
+            body.head & 0x02 shouldBe 0x02
+          }
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("server-streaming route reports an unsupported content type") {
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        val request = Request[IO](
+          method = Method.POST,
+          uri = uri"/codegen.e2e.StreamingCalculatorService/AddMany",
+        ).putHeaders(`Content-Type`(MediaTypes.`application/json`))
+
+        app.run(request).flatMap { response =>
+          response.bodyText.compile.string.map { body =>
+            response.status shouldBe Status.UnsupportedMediaType
+            body should startWith("Unsupported streaming media type application/json.")
+          }
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("server-streaming request decode errors close HTTP/1 connections with unread body bytes") {
+    val body = Stream.emits(Array[Byte](1, 0, 0, 0, 1, 0)) ++
+      Stream.raiseError[IO](new IllegalStateException("remaining request body was read"))
+    val request = Request[IO](Method.POST, uri"/codegen.e2e.StreamingCalculatorService/AddMany")
+      .putHeaders(`Content-Type`(MediaTypes.`application/connect+proto`))
+      .withBodyStream(body)
+
+    ConnectHttp4sRouteBuilder
+      .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
+      .build
+      .use { app =>
+        for {
+          http1 <- app.run(request.withHttpVersion(HttpVersion.`HTTP/1.1`))
+          http2 <- app.run(request.withHttpVersion(HttpVersion.`HTTP/2`))
+          error <- http1.bodyText.compile.string
+        } yield {
+          http1.status shouldBe Status.Ok
+          http2.status shouldBe Status.Ok
+          http1.headers.get[Connection] shouldBe Some(Connection.close)
+          http2.headers.get[Connection] shouldBe None
+          error should include("Compressed envelope used without connect-content-encoding")
+        }
+      }
+      .unsafeRunSync()
   }
 
   test("typed unary interceptors transform server and client contexts") {
@@ -329,7 +490,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
           Method.POST,
           uri"/codegen.e2e.CalculatorService/Add",
         ).withBodyStream(Stream.emits(AddRequest(20, 22).toByteArray).covary[IO])
-          .putHeaders(Header.Raw(CIString("Content-Type"), "application/proto"))
+          .putHeaders(Header.Raw(ci"Content-Type", "application/proto"))
 
         app.run(request).flatMap { response =>
           response.bodyText.compile.string.map { body =>
@@ -350,7 +511,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       IO.pure(
         Response[IO](Status.BadRequest)
           .withEntity(errorBody)
-          .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
+          .putHeaders(Header.Raw(ci"Content-Type", "application/json"))
       )
     )
     val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(errorApp))
@@ -400,7 +561,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         val app     = routes.transcodingRoutes.orNotFound
         val request = Request[IO](Method.POST, uri"/v1/add")
           .withEntity("""{"left": 20, "right": 22}""")
-          .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
+          .putHeaders(Header.Raw(ci"Content-Type", "application/json"))
 
         app.run(request).flatMap { response =>
           response.bodyText.compile.string.map { body =>

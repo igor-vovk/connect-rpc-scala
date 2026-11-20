@@ -8,14 +8,15 @@ import io.circe.jawn.JawnParser
 import io.circe.parser.parse
 import org.http4s.headers.`Content-Type`
 import org.http4s.{Headers, InvalidMessageBodyFailure, MediaType}
+import me.ivovk.connect_rpc_scala.ConnectException
 import me.ivovk.connect_rpc_scala.http.MediaTypes
-import me.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 import scalapb_circe.{Parser, Printer}
 
 import java.net.URLDecoder
 import java.nio.charset.{Charset, StandardCharsets}
+
 private[codec] object CirceJsonParser {
   private val parser = new JawnParser()
 
@@ -75,7 +76,11 @@ class JsonMessageCodec[F[_]: Sync](
           }
     }
 
-    stream.adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
+    stream.adaptError {
+      case e: ConnectException => e
+      case error               =>
+        InvalidMessageBodyFailure(error.getMessage, error.some)
+    }
   }
 
   private[codec] override def encodeChunk(message: Message, charset: Charset): Chunk[Byte] = {
@@ -91,10 +96,8 @@ class JsonMessageCodec[F[_]: Sync](
   override def encode[A <: Message](message: A, options: EncodeOptions)(
     using F: Sync[F]
   ): F[EncodedEntity[F]] =
-    F.delay {
-      EncodedEntity.fromChunk[F](headersToEncode, encodeChunk(message, options.charset))
-        .pipe(compressor.compress(options.encoding))
-    }
+    F.delay(EncodedEntity.fromChunk[F](headersToEncode, encodeChunk(message, options.charset)))
+      .flatMap(compressor.compress(options.encoding))
 
   def withDecodingJsonTransform(transform: JsonTransform): JsonMessageCodec[F] =
     if transform == this.decodingTransform then this

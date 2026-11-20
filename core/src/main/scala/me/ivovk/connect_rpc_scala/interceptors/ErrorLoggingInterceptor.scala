@@ -3,7 +3,7 @@ package me.ivovk.connect_rpc_scala.interceptors
 import cats.MonadThrow
 import connectrpc.Code
 import me.ivovk.connect_rpc_scala.http.ConnectHttpStatus
-import me.ivovk.connect_rpc_scala.service.ConnectException
+import me.ivovk.connect_rpc_scala.ConnectException
 import org.slf4j.{Logger, LoggerFactory}
 
 object ErrorLoggingInterceptor {

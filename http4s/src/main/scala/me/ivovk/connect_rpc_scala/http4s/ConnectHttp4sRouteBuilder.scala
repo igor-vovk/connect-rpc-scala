@@ -4,10 +4,10 @@ import cats.Endo
 import cats.effect.{Async, Resource}
 import cats.implicits.*
 import org.http4s.{HttpApp, HttpRoutes, Uri}
-import me.ivovk.connect_rpc_scala.http.codec.{JsonSerdes, JsonSerdesBuilder}
+import me.ivovk.connect_rpc_scala.http.codec.{CodecRegistry, JsonSerdes, JsonSerdesBuilder}
 import me.ivovk.connect_rpc_scala.http4s.HttpRoutesSyntax.orNotFoundClosingOnUnreadBody
 import me.ivovk.connect_rpc_scala.http4s.server.{ConnectRoutes, Routes, TranscodingRoutes, UnaryHandler}
-import me.ivovk.connect_rpc_scala.service.ServiceDefinition
+import me.ivovk.connect_rpc_scala.ServiceDefinition
 
 object ConnectHttp4sRouteBuilder {
 
@@ -73,9 +73,10 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
     }
 
   def buildRoutes: Resource[F, Routes[F]] = {
-    val unaryHandler  = UnaryHandler(treatTrailersAsHeaders, jsonSerdes.codec)
+    val codecs        = CodecRegistry.create(jsonSerdes)
+    val unaryHandler  = UnaryHandler(treatTrailersAsHeaders, codecs.json)
     val connectRoutes =
-      ConnectRoutes(services, jsonSerdes, pathPrefix, unaryHandler).routes
+      ConnectRoutes(services, codecs, pathPrefix, unaryHandler).routes
     val transcodingRoutes =
       TranscodingRoutes(services, jsonSerdes, pathPrefix, unaryHandler).routes
 

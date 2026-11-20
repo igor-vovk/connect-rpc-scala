@@ -4,23 +4,20 @@ import cats.Endo
 import cats.effect.Async
 import org.http4s.Uri
 import org.http4s.client.Client
-import me.ivovk.connect_rpc_scala.http.codec.{JsonSerdesBuilder, ProtoMessageCodec}
-import me.ivovk.connect_rpc_scala.http4s.client.{ClientCodecs, MessageEncoding, Transport}
-import me.ivovk.connect_rpc_scala.service.UnaryTransport
+import me.ivovk.connect_rpc_scala.http.codec.{CodecRegistry, JsonSerdesBuilder, MessageEncoding}
+import me.ivovk.connect_rpc_scala.http4s.client.Transport
+import me.ivovk.connect_rpc_scala.ConnectTransport
 
 object ConnectHttp4sClientBuilder {
 
   private val DefaultUserAgent = "connect-rpc-scala-http4s"
 
   def apply[F[_]: Async](client: Client[F]): ConnectHttp4sClientBuilder[F] = {
-    val jsonCodec = JsonSerdesBuilder[F]().build.codec
+    val jsonSerdes = JsonSerdesBuilder[F]().build
     new ConnectHttp4sClientBuilder(
       client = client,
-      codecs = ClientCodecs(
-        json = jsonCodec,
-        protobuf = new ProtoMessageCodec[F],
-        encoding = MessageEncoding.Json,
-      ),
+      codecs = CodecRegistry.create(jsonSerdes),
+      encoding = MessageEncoding.Json,
       userAgent = DefaultUserAgent,
     )
   }
@@ -28,33 +25,36 @@ object ConnectHttp4sClientBuilder {
 
 final class ConnectHttp4sClientBuilder[F[_]: Async] private (
   client: Client[F],
-  codecs: ClientCodecs[F],
+  codecs: CodecRegistry[F],
+  encoding: MessageEncoding,
   userAgent: String,
 ) {
 
   private def copy(
-    codecs: ClientCodecs[F] = this.codecs,
+    codecs: CodecRegistry[F] = this.codecs,
+    encoding: MessageEncoding = this.encoding,
     userAgent: String = this.userAgent,
   ): ConnectHttp4sClientBuilder[F] =
-    new ConnectHttp4sClientBuilder(client, codecs, userAgent)
+    new ConnectHttp4sClientBuilder(client, codecs, encoding, userAgent)
 
   def withJsonCodecConfigurator(
     configure: Endo[JsonSerdesBuilder[F]]
   ): ConnectHttp4sClientBuilder[F] = {
-    val jsonCodec = configure(JsonSerdesBuilder[F]()).build.codec
-    copy(codecs = codecs.copy(json = jsonCodec))
+    val jsonSerdes = configure(JsonSerdesBuilder[F]()).build
+    copy(codecs = CodecRegistry.create(jsonSerdes))
   }
 
   def withUserAgent(userAgent: String): ConnectHttp4sClientBuilder[F] =
     copy(userAgent = userAgent)
 
   def enableBinaryFormat(): ConnectHttp4sClientBuilder[F] =
-    copy(codecs = codecs.copy(encoding = MessageEncoding.Protobuf))
+    copy(encoding = MessageEncoding.Protobuf)
 
-  def build(baseUri: Uri): UnaryTransport[F] =
+  def build(baseUri: Uri): ConnectTransport[F] =
     Transport(
       httpClient = client,
       codecs = codecs,
+      encoding = encoding,
       baseUri = baseUri,
       userAgent = userAgent,
     )

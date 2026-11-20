@@ -13,6 +13,10 @@ service CalculatorService {
   }
 }
 
+service StreamingCalculatorService {
+  rpc AddMany(AddRequest) returns (stream AddResponse);
+}
+
 service TranscodingService {
   rpc Get(GetRequest) returns (GetResponse) {
     option (google.api.http) = {get: "/v1/get/{key}"};

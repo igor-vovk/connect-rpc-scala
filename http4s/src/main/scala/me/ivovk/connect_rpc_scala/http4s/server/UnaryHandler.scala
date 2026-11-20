@@ -5,9 +5,9 @@ import cats.effect.syntax.all.*
 import cats.implicits.*
 import me.ivovk.connect_rpc_scala.http.ConnectHttpStatus
 import me.ivovk.connect_rpc_scala.http.codec.{EncodeOptions, MessageCodec}
-import me.ivovk.connect_rpc_scala.http4s.headers.UnaryTrailers.*
-import me.ivovk.connect_rpc_scala.http4s.headers.`Connect-Timeout-Ms`
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.http.headers.UnaryTrailers.*
+import me.ivovk.connect_rpc_scala.http.headers.`Connect-Timeout-Ms`
+import me.ivovk.connect_rpc_scala.*
 import me.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.http4s.{ContentCoding, Headers, Response, Status}
 import scalapb.GeneratedMessage

@@ -1,7 +1,7 @@
 package me.ivovk.connect_rpc_scala.interceptors
 
 import cats.{FlatMap, MonadThrow}
-import me.ivovk.connect_rpc_scala.service.{ConnectResponse, UnaryMethodDescriptor}
+import me.ivovk.connect_rpc_scala.{ConnectResponse, UnaryMethodDescriptor}
 import scalapb.GeneratedMessage
 
 trait UnaryInterceptor[F[_], In, Out] { self =>

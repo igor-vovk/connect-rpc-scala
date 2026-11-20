@@ -8,7 +8,7 @@ import io.opentelemetry.sdk.common.CompletableResultCode
 import io.opentelemetry.sdk.metrics.{InstrumentType, SdkMeterProvider}
 import io.opentelemetry.sdk.metrics.data.{AggregationTemporality, MetricData}
 import io.opentelemetry.sdk.metrics.`export`.{CollectionRegistration, MetricReader}
-import me.ivovk.connect_rpc_scala.service.{ConnectException, ConnectResponse, UnaryMethodDescriptor}
+import me.ivovk.connect_rpc_scala.{ConnectException, ConnectResponse, UnaryMethodDescriptor}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 

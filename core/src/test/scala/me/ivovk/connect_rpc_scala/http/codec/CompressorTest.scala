@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import connectrpc.{Code, Error}
 import fs2.Stream
+import me.ivovk.connect_rpc_scala.ConnectException
 import org.http4s.headers.{`Content-Encoding`, `Content-Length`, `Content-Type`}
 import org.http4s.{ContentCoding, Header, Headers, MediaType}
 import org.scalatest.funsuite.AnyFunSuite
@@ -26,7 +27,7 @@ class CompressorTest extends AnyFunSuite with Matchers {
     )
 
     val compressor = Compressor[IO]()
-    val compressed = compressor.compress(ContentCoding.gzip)(entity)
+    val compressed = compressor.compress(ContentCoding.gzip)(entity).unsafeRunSync()
 
     compressed.headers.get[`Content-Encoding`] shouldBe Some(`Content-Encoding`(ContentCoding.gzip))
     compressed.headers.get[`Content-Length`] shouldBe None
@@ -52,5 +53,16 @@ class CompressorTest extends AnyFunSuite with Matchers {
       }
       roundTrip.unsafeRunSync()
     }
+  }
+
+  test("unsupported outbound compression fails with an unimplemented error") {
+    val compressor = Compressor[IO]()
+    val entity     = EncodedEntity[IO](Headers.empty, Stream.empty)
+    val encoded    = compressor.compress(ContentCoding.br)(entity)
+
+    val error = intercept[ConnectException](encoded.unsafeRunSync())
+
+    error.code shouldBe Code.Unimplemented
+    error.getMessage shouldBe "Unsupported compression br. Supported encodings are identity and gzip."
   }
 }

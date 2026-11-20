@@ -22,7 +22,7 @@ import me.ivovk.connect_rpc_scala.interceptors.{
   OpenTelemetryServerInterceptor,
   UnaryInterceptor,
 }
-import me.ivovk.connect_rpc_scala.service.*
+import me.ivovk.connect_rpc_scala.*
 import org.typelevel.ci.CIString
 
 object Main extends IOApp.Simple {

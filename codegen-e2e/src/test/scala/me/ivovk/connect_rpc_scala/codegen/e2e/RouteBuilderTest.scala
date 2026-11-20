@@ -3,6 +3,7 @@ package me.ivovk.connect_rpc_scala.codegen.e2e
 import cats.data.OptionT
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import fs2.Stream
 import codegen.e2e.calculator.CalculatorServiceConnect
 import codegen.e2e.calculator.TranscodingServiceConnect
 import codegen.e2e.calculator.{AddRequest, AddResponse, GetRequest, GetResponse, NestedAddRequest}
@@ -12,7 +13,7 @@ import org.http4s.implicits.*
 import org.http4s.{Header, HttpRoutes, HttpVersion, Method, Request, Response, Status, Uri}
 import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sRouteBuilder
 import me.ivovk.connect_rpc_scala.http4s.HttpRoutesSyntax.orNotFoundClosingOnUnreadBody
-import me.ivovk.connect_rpc_scala.service.{ConnectRequestContext, ConnectResponse}
+import me.ivovk.connect_rpc_scala.{ConnectRequestContext, ConnectResponse}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.ci.*
@@ -114,6 +115,27 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
+  for (contentType <- List("application/json", "application/proto"))
+    test(s"reject $contentType requests with unsupported compression before reading the body") {
+      val request = Request[IO](Method.POST, uri"/codegen.e2e.CalculatorService/Add")
+        .putHeaders(Header.Raw(ci"Content-Type", contentType), Header.Raw(ci"Content-Encoding", "br"))
+        .withBodyStream(Stream.raiseError[IO](new IllegalStateException("request body was read")))
+
+      ConnectHttp4sRouteBuilder.forService(service).build
+        .use { app =>
+          for {
+            response <- app.run(request)
+            body     <- response.bodyText.compile.string
+          } yield {
+            response.status shouldBe Status.NotImplemented
+            response.headers.get[Connection] shouldBe Some(Connection.close)
+            body should include("\"code\":\"unimplemented\"")
+            body should include("Unsupported compression br. Supported encodings are identity and gzip.")
+          }
+        }
+        .unsafeRunSync()
+    }
+
   test("close HTTP/1 connections when rejecting a Connect request with an unread body") {
     val request = Request[IO](Method.DELETE, uri"/codegen.e2e.CalculatorService/Add")
       .withEntity("unexpected body")
@@ -130,6 +152,21 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
           http2.status shouldBe Status.MethodNotAllowed
           http2.headers.get[Connection] shouldBe None
         }
+      }
+      .unsafeRunSync()
+  }
+
+  test("report the supplied encoding when rejecting a Connect GET request") {
+    ConnectHttp4sRouteBuilder.forService(service).build
+      .use { app =>
+        response(
+          Client.fromHttpApp(app),
+          Request[IO](Method.GET, uri"/codegen.e2e.CalculatorService/Add?encoding=xml"),
+        )
+      }
+      .map { case (status, body) =>
+        status shouldBe Status.UnsupportedMediaType
+        body should startWith("Unsupported media type or encoding xml.")
       }
       .unsafeRunSync()
   }

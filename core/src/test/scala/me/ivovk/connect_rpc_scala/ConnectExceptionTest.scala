@@ -1,4 +1,4 @@
-package me.ivovk.connect_rpc_scala.service
+package me.ivovk.connect_rpc_scala
 
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers

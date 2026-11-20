@@ -2,8 +2,8 @@
 
 package test.example
 
+import _root_.me.ivovk.connect_rpc_scala.*
 import _root_.me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
-import _root_.me.ivovk.connect_rpc_scala.service.*
 
 object ExampleServiceConnect {
   val serviceName: String = "test.ExampleService"
@@ -44,7 +44,7 @@ object ExampleServiceConnect {
   ): ServiceDefinition[F] =
     ServiceDefinition(
       name = serviceName,
-      methods = Seq(
+      unaryMethods = Seq(
         UnaryMethod[F, test.example.Request, test.example.Response](
           METHOD_CALL,
           (request, context) =>
@@ -77,7 +77,7 @@ object ExampleServiceConnect {
   ): ServiceDefinition[F] =
     ServiceDefinition(
       name = serviceName,
-      methods = Seq(
+      unaryMethods = Seq(
         UnaryMethod[F, test.example.Request, test.example.Response](
           METHOD_CALL,
           (request, context) =>
