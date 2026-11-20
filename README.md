@@ -191,6 +191,8 @@ val result: Resource[IO, ConnectResponse[AddResponse]] =
 ```
 
 Call `.enableBinaryFormat()` on the client builder to use protobuf rather than JSON.
+See the [JSON and protobuf benchmark results](docs/json-and-protobuf-performance.md) for latency,
+traffic, and allocation measurements.
 
 ## Development
 

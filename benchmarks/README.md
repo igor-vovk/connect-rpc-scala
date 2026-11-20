@@ -3,6 +3,9 @@
 The benchmarks use [JMH](https://github.com/openjdk/jmh) to measure performance-sensitive paths through the public
 library implementation.
 
+See [JSON and protobuf performance](../docs/json-and-protobuf-performance.md) for measured latency,
+traffic, and allocations.
+
 Run the full benchmark configuration:
 
 ```shell
