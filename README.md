@@ -193,7 +193,10 @@ val result: Resource[IO, ConnectResponse[AddResponse]] =
   }
 ```
 
-Call `.enableBinaryFormat()` on the client builder to use protobuf rather than JSON.
+The client uses binary protobuf by default for unary and server-streaming calls. To select JSON,
+import `me.ivovk.connect_rpc_scala.http.codec.MessageEncoding` and call
+`.withMessageEncoding(MessageEncoding.Json)` on the client builder.
+Use `.withMessageEncoding(MessageEncoding.Protobuf)` to select protobuf explicitly.
 See the [JSON and protobuf benchmark results](docs/json-and-protobuf-performance.md) for latency,
 traffic, and allocation measurements.
 
