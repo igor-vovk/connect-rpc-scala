@@ -30,6 +30,18 @@ jobs:
       - name: Test sbt 1 and sbt 2 plugin consumption
         run: sbt "project sbtConnectRpcScala; +scripted"
 
+  conformance:
+    name: Conformance
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-scala
+
       - name: Run conformance tests
         run: make test-conformance-stable
 
