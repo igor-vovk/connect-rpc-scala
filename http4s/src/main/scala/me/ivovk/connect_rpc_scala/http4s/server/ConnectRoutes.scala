@@ -5,21 +5,27 @@ import cats.effect.Async
 import cats.effect.syntax.all.*
 import cats.implicits.*
 import fs2.{Chunk, Stream}
-import org.http4s.Status.{MethodNotAllowed, Ok, UnsupportedMediaType}
-import org.http4s.headers.{Allow, Connection}
-import org.http4s.{HttpRoutes, HttpVersion, MediaType, Method, Request, Response, Uri}
+import me.ivovk.connect_rpc_scala.*
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http.headers.`Connect-Timeout-Ms`
-import me.ivovk.connect_rpc_scala.*
-
-object ConnectRoutes {
-  // A rejected request may have unread body bytes. Tell HTTP/1 clients that the connection cannot be reused.
-  extension [F[_]](response: Response[F]) {
-    private[http4s] def closeIfHttp1(version: HttpVersion): Response[F] =
-      if (version.major == 1) response.putHeaders(Connection.close) else response
-  }
+import me.ivovk.connect_rpc_scala.http4s.HttpRoutesSyntax.closeIfHttp1
+import org.http4s.Status.{MethodNotAllowed, Ok, UnsupportedMediaType}
+import org.http4s.headers.{`Accept-Encoding`, Allow}
+import org.http4s.{
+  ContentCoding,
+  Header,
+  Headers,
+  HttpRoutes,
+  HttpVersion,
+  MediaType,
+  Method,
+  QValue,
+  Request,
+  Response,
+  Uri,
 }
+import org.typelevel.ci.*
 
 private[http4s] final class ConnectRoutes[F[_]: Async](
   services: Seq[ServiceDefinition[F]],
@@ -27,26 +33,27 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
   pathPrefix: Uri.Path,
   unaryHandler: UnaryHandler[F],
 ) {
-  import ConnectRoutes.*
-
   private enum RoutedMethod {
     case Unary(method: UnaryMethod[F])
     case ServerStreaming(method: ServerStreamingMethod[F])
   }
 
   private val methodsByPath: Map[(String, String), RoutedMethod] = {
-    val unaryMethods = services.flatMap(service => service.unaryMethods.map(method => (service.name, method)))
-    val serverStreamingMethods =
-      services.flatMap(service => service.serverStreamingMethods.map(method => (service.name, method)))
-    val entries = unaryMethods.map { (serviceName, method) =>
-      (serviceName -> method.descriptor.methodName) -> RoutedMethod.Unary(method)
-    } ++ serverStreamingMethods.map { (serviceName, method) =>
-      (serviceName -> method.descriptor.methodName) -> RoutedMethod.ServerStreaming(method)
-    }
-    val result = entries.toMap
+    val unaryMethods = services
+      .flatMap(_.unaryMethods)
+      .map { method =>
+        (method.descriptor.serviceName -> method.descriptor.methodName) -> RoutedMethod.Unary(method)
+      }
 
-    require(result.size == entries.size, "Duplicate Connect service or method definition")
-    result
+    val serverStreamingMethods = services
+      .flatMap(_.serverStreamingMethods)
+      .map { method =>
+        (method.descriptor.serviceName -> method.descriptor.methodName) -> RoutedMethod.ServerStreaming(
+          method
+        )
+      }
+
+    (unaryMethods ++ serverStreamingMethods).toMap
   }
 
   val routes: HttpRoutes[F] =
@@ -95,7 +102,15 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
               .getOrElse("")
           } else request.body
 
-        val entity = EntityToDecode(message, request.headers)
+        val entity   = EntityToDecode(message, request.headers)
+        val encoding = responseEncoding(
+          request.headers,
+          if isGet then
+            request.uri.query.params.get("compression")
+              .flatMap(ContentCoding.fromString(_).toOption)
+              .getOrElse(ContentCoding.identity)
+          else entity.encoding,
+        )
 
         entity.decodeOne(method.descriptor.requestCompanion, codec)
           .adaptError {
@@ -104,11 +119,36 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
           .attempt
           .flatMap {
             case Left(error) =>
-              unaryHandler.errorResponse(error).map(_.closeIfHttp1(request.httpVersion))
+              unaryHandler.errorResponse(error, encoding).map(_.closeIfHttp1(request.httpVersion))
             case Right(message) =>
-              Async[F].defer(unaryHandler.invokeAndEncode(method, message, entity.headers, codec))
-                .handleErrorWith(unaryHandler.errorResponse)
+              Async[F].defer(unaryHandler.invokeAndEncode(method, message, entity.headers, codec, encoding))
+                .handleErrorWith(error => unaryHandler.errorResponse(error, encoding))
           }
+          .map(varyByCompression(_, isGet))
+    }
+  }
+
+  private def responseEncoding(headers: Headers, requestEncoding: => ContentCoding): ContentCoding = {
+    val accepted = headers.getWithWarnings[`Accept-Encoding`] match {
+      case Some(result) => result.toOption.toList.flatMap(_.values.toList)
+      case None         => List(requestEncoding)
+    }
+
+    accepted.iterator
+      .filter(_.qValue != QValue.Zero)
+      .flatMap(coding => Compressor.supportedCompressions.find(_.matches(coding)))
+      .nextOption()
+      .getOrElse(ContentCoding.identity)
+  }
+
+  private def varyByCompression(response: Response[F], isGet: Boolean): Response[F] = {
+    val vary = response.headers.get(ci"Vary").toList.flatMap(_.toList)
+      .flatMap(_.value.split(',').iterator.map(value => CIString(value.trim)))
+    if vary.contains(ci"*") then response
+    else {
+      val fields =
+        if isGet then List(ci"Accept-Encoding") else List(ci"Accept-Encoding", ci"Content-Encoding")
+      response.putHeaders(Header.Raw(ci"Vary", (vary ++ fields).distinct.mkString(", ")))
     }
   }
 
