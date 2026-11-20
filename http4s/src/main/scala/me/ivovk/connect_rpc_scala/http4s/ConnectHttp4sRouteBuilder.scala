@@ -5,6 +5,7 @@ import cats.effect.{Async, Resource}
 import cats.implicits.*
 import org.http4s.{HttpApp, HttpRoutes, Uri}
 import me.ivovk.connect_rpc_scala.http.codec.{JsonSerdes, JsonSerdesBuilder}
+import me.ivovk.connect_rpc_scala.http4s.HttpRoutesSyntax.orNotFoundClosingOnUnreadBody
 import me.ivovk.connect_rpc_scala.http4s.server.{ConnectRoutes, Routes, TranscodingRoutes, UnaryHandler}
 import me.ivovk.connect_rpc_scala.service.ServiceDefinition
 
@@ -68,7 +69,7 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
 
   def build: Resource[F, HttpApp[F]] =
     buildRoutes.map { routes =>
-      additionalRoutes.fold(routes.routes)(routes.routes <+> _).orNotFound
+      additionalRoutes.fold(routes.routes)(routes.routes <+> _).orNotFoundClosingOnUnreadBody
     }
 
   def buildRoutes: Resource[F, Routes[F]] = {

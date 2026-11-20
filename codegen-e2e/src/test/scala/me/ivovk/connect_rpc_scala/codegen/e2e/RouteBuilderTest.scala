@@ -11,6 +11,7 @@ import org.http4s.headers.{Allow, Connection}
 import org.http4s.implicits.*
 import org.http4s.{Header, HttpRoutes, HttpVersion, Method, Request, Response, Status, Uri}
 import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sRouteBuilder
+import me.ivovk.connect_rpc_scala.http4s.HttpRoutesSyntax.orNotFoundClosingOnUnreadBody
 import me.ivovk.connect_rpc_scala.service.{ConnectRequestContext, ConnectResponse}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -76,6 +77,29 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
+  test("close HTTP/1 connections when the fallback 404 leaves a request body unread") {
+    val request     = Request[IO](Method.POST, uri"/unknown.Service/UnknownMethod")
+    val chunked     = request.putHeaders(Header.Raw(ci"Transfer-Encoding", "chunked"))
+    val fixedLength = request.withEntity("unread body")
+
+    ConnectHttp4sRouteBuilder.forService(service).build
+      .use { app =>
+        for {
+          empty          <- app.run(request)
+          chunked404     <- app.run(chunked)
+          fixedLength404 <- app.run(fixedLength)
+          http2          <- app.run(fixedLength.withHttpVersion(HttpVersion.`HTTP/2`))
+        } yield {
+          all(List(empty, chunked404, fixedLength404, http2).map(_.status)) shouldBe Status.NotFound
+          empty.headers.get[Connection] shouldBe None
+          chunked404.headers.get[Connection] shouldBe Some(Connection.close)
+          fixedLength404.headers.get[Connection] shouldBe Some(Connection.close)
+          http2.headers.get[Connection] shouldBe None
+        }
+      }
+      .unsafeRunSync()
+  }
+
   test("return a Connect error for invalid JSON") {
     ConnectHttp4sRouteBuilder.forService(service).build
       .use { app =>
@@ -137,7 +161,7 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
   test("compose Connect and transcoding routes") {
     ConnectHttp4sRouteBuilder.forService(service).buildRoutes
       .use { routes =>
-        val client = Client.fromHttpApp(routes.routes.orNotFound)
+        val client = Client.fromHttpApp(routes.routes.orNotFoundClosingOnUnreadBody)
 
         for {
           connect <- response(
