@@ -4,9 +4,9 @@ import cats.Endo
 import cats.effect.Async
 import org.http4s.Uri
 import org.http4s.client.Client
-import me.ivovk.connect_rpc_scala.http.codec.{CodecRegistry, JsonSerdesBuilder, MessageEncoding}
+import me.ivovk.connect_rpc_scala.http.codec.{CodecRegistry, JsonSerdesBuilder}
 import me.ivovk.connect_rpc_scala.http4s.client.Transport
-import me.ivovk.connect_rpc_scala.ConnectTransport
+import me.ivovk.connect_rpc_scala.{ConnectTransport, MessageEncoding}
 
 object ConnectHttp4sClientBuilder {
 

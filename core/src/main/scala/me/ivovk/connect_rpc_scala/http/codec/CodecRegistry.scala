@@ -1,13 +1,9 @@
 package me.ivovk.connect_rpc_scala.http.codec
 
 import cats.effect.Async
+import me.ivovk.connect_rpc_scala.MessageEncoding
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import org.http4s.MediaType
-
-enum MessageEncoding {
-  case Json
-  case Protobuf
-}
 
 private[connect_rpc_scala] object CodecRegistry {
   def create[F[_]: Async](jsonSerdes: JsonSerdes[F]): CodecRegistry[F] = {
