@@ -18,6 +18,17 @@ sbt "benchmarks/Jmh/run -wi 3 -i 5 -f 1 -t 1"
 Run comparisons on the same machine and JVM while other system load is low. Compare commits using identical JMH
 arguments; absolute timings from different environments are not directly comparable.
 
+## Message codecs
+
+`MessageCodecBenchmark` measures unary body encoding and decoding separately for JSON and protobuf, with
+compression disabled. It uses the same 3-, 12-, and 30-field messages as the round-trip benchmark. The
+encoding benchmark produces an HTTP entity containing the serialized bytes. The decoding benchmark reads
+an entity encoded and checked during setup. Both run in memory.
+
+```shell
+sbt 'benchmarks/Jmh/run -t 1 .*MessageCodecBenchmark.*'
+```
+
 ## Client-server round trips
 
 `ClientServerBenchmark` measures the average time for one unary Connect RPC over loopback HTTP using an
