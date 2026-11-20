@@ -76,13 +76,21 @@ class StreamingMessageCodecTest extends AnyFunSuite with Matchers {
     decodedFailure.trailers.get(ci"x-error").map(_.toList.map(_.value)) shouldBe Some(List("trailer"))
   }
 
-  test("rejects truncated envelopes") {
-    val result = jsonCodec.decodeRequest[connectrpc.Error](
-      Stream.emits(Array[Byte](0, 0, 0)),
-      Headers.empty,
-    ).compile.drain.attempt.unsafeRunSync()
+  test("reports truncated request and response envelopes with direction-specific errors") {
+    val truncatedHeader  = Array[Byte](0, 0, 0)
+    val truncatedPayload = Array[Byte](0, 0, 0, 0, 2, 'x'.toByte)
 
-    result.swap.toOption.get.asInstanceOf[ConnectException].code shouldBe
-      connectrpc.Code.InvalidArgument
+    for (bytes <- List(truncatedHeader, truncatedPayload)) {
+      val body    = Stream.emits(bytes)
+      val request = intercept[ConnectException] {
+        jsonCodec.decodeRequest[connectrpc.Error](body, Headers.empty).compile.drain.unsafeRunSync()
+      }
+      val response = intercept[ConnectException] {
+        jsonCodec.decodeResponse[connectrpc.Error](body, Headers.empty).events.compile.drain.unsafeRunSync()
+      }
+
+      request.code shouldBe connectrpc.Code.InvalidArgument
+      response.code shouldBe connectrpc.Code.Internal
+    }
   }
 }

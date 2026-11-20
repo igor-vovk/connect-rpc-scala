@@ -58,7 +58,7 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
   )(using companion: GeneratedMessageCompanion[A]): Stream[F, A] = {
     val coding = contentEncoding(headers)
 
-    decodeEnvelopes(body).evalMap { envelope =>
+    decodeEnvelopes(body, connectrpc.Code.InvalidArgument).evalMap { envelope =>
       if envelope.endStream then
         ConnectException(
           connectrpc.Code.InvalidArgument,
@@ -118,7 +118,7 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
             .flatMap(message => ConnectStream.output1(message) >> go(tail))
       }
 
-    ConnectStream.fromPull(go(decodeEnvelopes(body)))
+    ConnectStream.fromPull(go(decodeEnvelopes(body, connectrpc.Code.Internal)))
   }
 
   private def encodeMessage(message: GeneratedMessage): Stream[F, Byte] =
@@ -260,13 +260,16 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
     Stream.chunk(Chunk.array(header)) ++ Stream.chunk(payload)
   }
 
-  private def decodeEnvelopes(body: Stream[F, Byte]): Stream[F, Envelope] = {
+  private def decodeEnvelopes(
+    body: Stream[F, Byte],
+    malformedEnvelopeCode: connectrpc.Code,
+  ): Stream[F, Envelope] = {
     def go(remaining: Stream[F, Byte]): Pull[F, Envelope, Unit] =
       remaining.pull.unconsN(EnvelopeHeaderSize, allowFewer = true).flatMap {
         case None                                                  => Pull.done
         case Some((header, _)) if header.size < EnvelopeHeaderSize =>
           Pull.raiseError(
-            ConnectException(connectrpc.Code.InvalidArgument, "Truncated streaming envelope header")
+            ConnectException(malformedEnvelopeCode, "Truncated streaming envelope header")
           )
         case Some((header, afterHeader)) =>
           val flags         = header(0) & 0xff
@@ -274,7 +277,7 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
           if reservedFlags != 0 then
             Pull.raiseError(
               ConnectException(
-                connectrpc.Code.InvalidArgument,
+                malformedEnvelopeCode,
                 f"Streaming envelope used reserved flags 0x$reservedFlags%02x",
               )
             )
@@ -292,11 +295,11 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
                 case None if length == 0 => Pull.output1(Envelope(flags, Chunk.empty)) >> go(Stream.empty)
                 case None                =>
                   Pull.raiseError(
-                    ConnectException(connectrpc.Code.InvalidArgument, "Truncated streaming envelope payload")
+                    ConnectException(malformedEnvelopeCode, "Truncated streaming envelope payload")
                   )
                 case Some((payload, _)) if payload.size != length.toInt =>
                   Pull.raiseError(
-                    ConnectException(connectrpc.Code.InvalidArgument, "Truncated streaming envelope payload")
+                    ConnectException(malformedEnvelopeCode, "Truncated streaming envelope payload")
                   )
                 case Some((payload, tail)) => Pull.output1(Envelope(flags, payload)) >> go(tail)
               }
