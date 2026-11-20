@@ -76,6 +76,29 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
+  test("close HTTP/1 connections when the fallback 404 leaves a request body unread") {
+    val request     = Request[IO](Method.POST, uri"/unknown.Service/UnknownMethod")
+    val chunked     = request.putHeaders(Header.Raw(ci"Transfer-Encoding", "chunked"))
+    val fixedLength = request.withEntity("unread body")
+
+    ConnectHttp4sRouteBuilder.forService(service).build
+      .use { app =>
+        for {
+          empty          <- app.run(request)
+          chunked404     <- app.run(chunked)
+          fixedLength404 <- app.run(fixedLength)
+          http2          <- app.run(fixedLength.withHttpVersion(HttpVersion.`HTTP/2`))
+        } yield {
+          all(List(empty, chunked404, fixedLength404, http2).map(_.status)) shouldBe Status.NotFound
+          empty.headers.get[Connection] shouldBe None
+          chunked404.headers.get[Connection] shouldBe Some(Connection.close)
+          fixedLength404.headers.get[Connection] shouldBe Some(Connection.close)
+          http2.headers.get[Connection] shouldBe None
+        }
+      }
+      .unsafeRunSync()
+  }
+
   test("return a Connect error for invalid JSON") {
     ConnectHttp4sRouteBuilder.forService(service).build
       .use { app =>

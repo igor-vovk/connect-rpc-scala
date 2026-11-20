@@ -3,8 +3,9 @@ package me.ivovk.connect_rpc_scala.http4s
 import cats.Endo
 import cats.effect.{Async, Resource}
 import cats.implicits.*
-import org.http4s.{HttpApp, HttpRoutes, Uri}
+import org.http4s.{HttpApp, HttpRoutes, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.codec.{JsonSerdes, JsonSerdesBuilder}
+import me.ivovk.connect_rpc_scala.http4s.server.ConnectRoutes.closeIfHttp1
 import me.ivovk.connect_rpc_scala.http4s.server.{ConnectRoutes, Routes, TranscodingRoutes, UnaryHandler}
 import me.ivovk.connect_rpc_scala.service.ServiceDefinition
 
@@ -68,7 +69,15 @@ final class ConnectHttp4sRouteBuilder[F[_]: Async] private[http4s] (
 
   def build: Resource[F, HttpApp[F]] =
     buildRoutes.map { routes =>
-      additionalRoutes.fold(routes.routes)(routes.routes <+> _).orNotFound
+      val combined = additionalRoutes.fold(routes.routes)(routes.routes <+> _)
+      HttpApp[F] { request =>
+        combined(request).getOrElse {
+          val notFound = Response.notFound[F]
+          if (request.isChunked || request.contentLength.exists(_ > 0L))
+            notFound.closeIfHttp1(request.httpVersion)
+          else notFound
+        }
+      }
     }
 
   def buildRoutes: Resource[F, Routes[F]] = {
