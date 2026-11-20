@@ -39,8 +39,8 @@ private[http4s] final class TranscodingRoutes[F[_]: Async](
     val method                                                     = matched.method
     given scalapb.GeneratedMessageCompanion[method.RequestMessage] = method.descriptor.requestCompanion
 
-    val codec   = jsonSerdes.codec.withDecodingJsonTransform(matched.reqBodyTransform)
-    val headers = request.headers
+    val codec    = jsonSerdes.codec.withDecodingJsonTransform(matched.reqBodyTransform)
+    val headers  = request.headers
     val encoding = ContentCoding.identity
 
     EntityToDecode[F](request.body, headers).decodeOne(method.descriptor.requestCompanion, codec)
