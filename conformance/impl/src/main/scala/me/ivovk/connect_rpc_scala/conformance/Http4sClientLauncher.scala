@@ -10,7 +10,6 @@ import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import org.http4s.{Headers, Uri}
 import org.http4s.ember.client.EmberClientBuilder
 import me.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, ScodecProto}
-import me.ivovk.connect_rpc_scala.http.codec.MessageEncoding
 import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sClientBuilder
 import me.ivovk.connect_rpc_scala.*
 import org.slf4j.LoggerFactory

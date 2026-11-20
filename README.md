@@ -194,7 +194,7 @@ val result: Resource[IO, ConnectResponse[AddResponse]] =
 ```
 
 The client uses binary protobuf by default for unary and server-streaming calls. To select JSON,
-import `me.ivovk.connect_rpc_scala.http.codec.MessageEncoding` and call
+import `me.ivovk.connect_rpc_scala.MessageEncoding` and call
 `.withMessageEncoding(MessageEncoding.Json)` on the client builder.
 Use `.withMessageEncoding(MessageEncoding.Protobuf)` to select protobuf explicitly.
 See the [JSON and protobuf benchmark results](docs/json-and-protobuf-performance.md) for latency,

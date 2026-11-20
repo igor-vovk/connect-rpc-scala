@@ -17,7 +17,6 @@ import org.http4s.headers.{`Content-Type`, Connection}
 import org.http4s.implicits.*
 import org.http4s.{Header, Headers, HttpApp, HttpVersion, Method, Request, Response, Status}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
-import me.ivovk.connect_rpc_scala.http.codec.MessageEncoding
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
 import me.ivovk.connect_rpc_scala.*

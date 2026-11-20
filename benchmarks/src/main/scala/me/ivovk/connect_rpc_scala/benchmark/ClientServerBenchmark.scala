@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.IORuntime
 import com.comcast.ip4s.*
 import fs2.io.net.SocketOption
+import me.ivovk.connect_rpc_scala.MessageEncoding
 import me.ivovk.connect_rpc_scala.benchmark.EchoPayloads.{large, medium, small}
 import me.ivovk.connect_rpc_scala.benchmark.v1.echo.{
   EchoServiceConnect,
@@ -11,7 +12,6 @@ import me.ivovk.connect_rpc_scala.benchmark.v1.echo.{
   MediumPayload,
   SmallPayload,
 }
-import me.ivovk.connect_rpc_scala.http.codec.MessageEncoding
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.ember.server.EmberServerBuilder
