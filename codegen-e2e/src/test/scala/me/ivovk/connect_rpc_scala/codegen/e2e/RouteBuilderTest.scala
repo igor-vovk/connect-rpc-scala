@@ -3,6 +3,7 @@ package me.ivovk.connect_rpc_scala.codegen.e2e
 import cats.data.OptionT
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import fs2.Stream
 import codegen.e2e.calculator.CalculatorServiceConnect
 import codegen.e2e.calculator.TranscodingServiceConnect
 import codegen.e2e.calculator.{AddRequest, AddResponse, GetRequest, GetResponse, NestedAddRequest}
@@ -113,6 +114,27 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
       .map { case (status, _) => status shouldBe Status.BadRequest }
       .unsafeRunSync()
   }
+
+  for (contentType <- List("application/json", "application/proto"))
+    test(s"reject $contentType requests with unsupported compression before reading the body") {
+      val request = Request[IO](Method.POST, uri"/codegen.e2e.CalculatorService/Add")
+        .putHeaders(Header.Raw(ci"Content-Type", contentType), Header.Raw(ci"Content-Encoding", "br"))
+        .withBodyStream(Stream.raiseError[IO](new IllegalStateException("request body was read")))
+
+      ConnectHttp4sRouteBuilder.forService(service).build
+        .use { app =>
+          for {
+            response <- app.run(request)
+            body     <- response.bodyText.compile.string
+          } yield {
+            response.status shouldBe Status.NotImplemented
+            response.headers.get[Connection] shouldBe Some(Connection.close)
+            body should include("\"code\":\"unimplemented\"")
+            body should include("Unsupported compression br. Supported encodings are identity and gzip.")
+          }
+        }
+        .unsafeRunSync()
+    }
 
   test("close HTTP/1 connections when rejecting a Connect request with an unread body") {
     val request = Request[IO](Method.DELETE, uri"/codegen.e2e.CalculatorService/Add")

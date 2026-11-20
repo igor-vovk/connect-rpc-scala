@@ -1,8 +1,7 @@
 package me.ivovk.connect_rpc_scala.http.codec
 
-import cats.Endo
 import cats.effect.Sync
-import fs2.Pipe
+import fs2.{Pipe, Stream}
 import fs2.compression.Compression
 import org.http4s.ContentCoding
 import org.http4s.headers.{`Content-Encoding`, `Content-Length`}
@@ -19,22 +18,30 @@ class Compressor[F[_]: Sync] {
       case ContentCoding.identity =>
         in
       case other =>
-        throw ConnectException(connectrpc.Code.InvalidArgument, s"Unsupported encoding: $other")
+        Stream.raiseError[F](unsupportedCompression(other))
     }
 
-  def compress(encoding: ContentCoding): Endo[EncodedEntity[F]] = entity =>
+  def compress(encoding: ContentCoding)(entity: EncodedEntity[F]): F[EncodedEntity[F]] =
     encoding match {
       case ContentCoding.gzip =>
-        EncodedEntity(
-          headers = entity.headers
-            .transform(_.filterNot(_.name == `Content-Length`.name))
-            .put(`Content-Encoding`(ContentCoding.gzip)),
-          body = entity.body.through(Compression[F].gzip()),
+        Sync[F].pure(
+          EncodedEntity(
+            headers = entity.headers
+              .transform(_.filterNot(_.name == `Content-Length`.name))
+              .put(`Content-Encoding`(ContentCoding.gzip)),
+            body = entity.body.through(Compression[F].gzip()),
+          )
         )
       case ContentCoding.identity =>
-        entity
+        Sync[F].pure(entity)
       case other =>
-        throw ConnectException(connectrpc.Code.InvalidArgument, s"Unsupported encoding: $other")
+        Sync[F].raiseError(unsupportedCompression(other))
     }
+
+  private def unsupportedCompression(encoding: ContentCoding): ConnectException =
+    ConnectException(
+      connectrpc.Code.Unimplemented,
+      s"Unsupported compression ${encoding.coding}. Supported encodings are identity and gzip.",
+    )
 
 }

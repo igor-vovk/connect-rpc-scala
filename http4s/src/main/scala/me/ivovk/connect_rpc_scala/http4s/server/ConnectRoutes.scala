@@ -7,7 +7,7 @@ import cats.implicits.*
 import fs2.{Chunk, Stream}
 import org.http4s.Status.{MethodNotAllowed, Ok, UnsupportedMediaType}
 import org.http4s.headers.{Allow, Connection}
-import org.http4s.{ContentCoding, HttpRoutes, HttpVersion, MediaType, Method, Request, Response, Uri}
+import org.http4s.{HttpRoutes, HttpVersion, MediaType, Method, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http.headers.`Connect-Timeout-Ms`
@@ -97,21 +97,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
 
         val entity = EntityToDecode(message, request.headers)
 
-        Async[F].defer {
-          val encoding = message match {
-            case _: String => ContentCoding.identity
-            case _         => entity.encoding
-          }
-          encoding match {
-            case ContentCoding.identity | ContentCoding.gzip =>
-              entity.decodeOne(method.descriptor.requestCompanion, codec)
-            case unsupported =>
-              ConnectException(
-                connectrpc.Code.Unimplemented,
-                s"Unsupported compression ${unsupported.coding}. Supported encodings are identity and gzip.",
-              ).raiseError[F, method.RequestMessage]
-          }
-        }
+        entity.decodeOne(method.descriptor.requestCompanion, codec)
           .adaptError {
             case error if !error.isInstanceOf[ConnectException] => unaryHandler.decodeError(error)
           }

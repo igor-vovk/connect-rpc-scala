@@ -5,6 +5,7 @@ import cats.implicits.*
 import fs2.{Chunk, Stream}
 import org.http4s.headers.`Content-Type`
 import org.http4s.{Headers, InvalidMessageBodyFailure, MediaType}
+import me.ivovk.connect_rpc_scala.ConnectException
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
@@ -42,7 +43,11 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
           msg
         }
       }
-      .adaptError(e => InvalidMessageBodyFailure(e.getMessage, e.some))
+      .adaptError {
+        case e: ConnectException => e
+        case error               =>
+          InvalidMessageBodyFailure(error.getMessage, error.some)
+      }
   }
 
   private[codec] override def encodeChunk(message: Message, _charset: Charset): Chunk[Byte] = {
@@ -56,9 +61,7 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
   override def encode[A <: Message](message: A, options: EncodeOptions)(
     using F: Sync[F]
   ): F[EncodedEntity[F]] =
-    F.delay {
-      EncodedEntity.fromChunk[F](headersToEncode, encodeChunk(message, options.charset))
-        .pipe(compressor.compress(options.encoding))
-    }
+    F.delay(EncodedEntity.fromChunk[F](headersToEncode, encodeChunk(message, options.charset)))
+      .flatMap(compressor.compress(options.encoding))
 
 }
