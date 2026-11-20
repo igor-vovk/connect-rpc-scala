@@ -110,15 +110,14 @@ private[http4s] final class Transport[F[_]: Async](
     request: RequestMessage,
     ctx: ConnectRequestContext,
   ): Resource[F, ConnectStreamingResponse[F, ResponseMessage]] = {
+    val headers = streamingHeaders ++ Headers(ctx.timeout.map(`Connect-Timeout-Ms`.apply)) ++ ctx.headers
+
     val httpRequest = Resource.eval(streamingCodec.encodeRequest(Stream.emit(request), compression))
       .map { entity =>
         Request[F](
           method = Method.POST,
           uri = baseUri / descriptor.serviceName / descriptor.methodName,
-          headers = streamingHeaders ++ Headers(
-            `User-Agent`(ProductId(userAgent)),
-            ctx.timeout.map(`Connect-Timeout-Ms`.apply),
-          ) ++ ctx.headers ++ entity.headers,
+          headers = headers ++ entity.headers,
           body = entity.body,
         )
       }
