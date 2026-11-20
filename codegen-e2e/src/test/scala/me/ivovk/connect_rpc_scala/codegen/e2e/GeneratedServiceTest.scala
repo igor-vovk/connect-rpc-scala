@@ -17,6 +17,7 @@ import org.http4s.headers.{`Content-Type`, Connection}
 import org.http4s.implicits.*
 import org.http4s.{Header, Headers, HttpApp, HttpVersion, Method, Request, Response, Status}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
+import me.ivovk.connect_rpc_scala.http.codec.MessageEncoding
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
 import me.ivovk.connect_rpc_scala.*
@@ -219,7 +220,10 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     }
   }
 
-  List("JSON", "Protobuf").foreach { encoding =>
+  List(
+    MessageEncoding.Json     -> MediaTypes.`application/json`,
+    MessageEncoding.Protobuf -> MediaTypes.`application/proto`,
+  ).foreach { (encoding, mediaType) =>
     test(s"$encoding unary requests and responses use the encoded body length") {
       val metadata = Headers(
         Header.Raw(ci"content-length", "999"),
@@ -235,6 +239,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
 
       def checkFraming(headers: Headers, body: Stream[IO, Byte]): IO[Chunk[Byte]] =
         body.compile.to(Chunk).map { bytes =>
+          headers.get[`Content-Type`].map(_.mediaType) shouldBe Some(mediaType)
           headers.get(ci"content-length").map(_.toList.map(_.value)) shouldBe Some(List(bytes.size.toString))
           headers.get(ci"transfer-encoding") shouldBe None
           bytes
@@ -248,10 +253,11 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
             responseBody <- checkFraming(response.headers, response.body)
           } yield response.withBodyStream(Stream.chunk(responseBody))
         }
-        val builder  = ConnectHttp4sClientBuilder(Client.fromHttpApp(checkedApp))
-        val selected = if encoding == "Protobuf" then builder.enableBinaryFormat() else builder
-        val client   = CalculatorServiceConnect.Client(selected.build(uri"http://localhost"))
-        val context  = ConnectRequestContext()
+        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(checkedApp))
+          .withMessageEncoding(encoding)
+          .build(uri"http://localhost")
+        val client  = CalculatorServiceConnect.Client(transport)
+        val context = ConnectRequestContext()
 
         for {
           response <- client.add(AddRequest(20, 22), context)
@@ -259,7 +265,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         } yield {
           response.message shouldBe AddResponse(42)
           zero.message shouldBe AddResponse.defaultInstance
-          if encoding == "Protobuf" then
+          if encoding == MessageEncoding.Protobuf then
             zero.headers.get(ci"content-length").map(_.head.value) shouldBe Some("0")
         }
       }.unsafeRunSync()
@@ -273,8 +279,8 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .use { app =>
         val builder = ConnectHttp4sClientBuilder(Client.fromHttpApp(app))
         val clients = List(
-          builder                      -> MediaTypes.`application/connect+json`,
-          builder.enableBinaryFormat() -> MediaTypes.`application/connect+proto`,
+          builder.withMessageEncoding(MessageEncoding.Json) -> MediaTypes.`application/connect+json`,
+          builder                                           -> MediaTypes.`application/connect+proto`,
         )
 
         clients.traverse_ { (configured, mediaType) =>
@@ -442,36 +448,35 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
-  test("generated client supports protobuf encoding without a gRPC runtime") {
+  test("generated unary client uses protobuf by default without a gRPC runtime") {
     ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(CalculatorServiceImpl)).build
       .use { app =>
-        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app))
-          .enableBinaryFormat()
-          .build(uri"http://localhost")
-        val client = CalculatorServiceConnect.Client[IO](transport)
+        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
+        val client    = CalculatorServiceConnect.Client[IO](transport)
 
         client.add(AddRequest(20, 22), ConnectRequestContext()).map { response =>
+          response.headers.get[`Content-Type`].map(_.mediaType) shouldBe Some(MediaTypes.`application/proto`)
           response.message shouldBe AddResponse(42)
         }
       }
       .unsafeRunSync()
   }
 
-  test("configuring JSON does not replace the selected protobuf encoding") {
+  test("configuring the JSON codec preserves the explicit JSON encoding") {
     val service = new CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
       override def add(
         request: AddRequest,
         ctx: ConnectRequestContext,
       ): IO[ConnectResponse[AddResponse]] =
         IO {
-          headerValues(ctx.headers, ci"content-type") shouldBe List("application/proto")
+          ctx.headers.get[`Content-Type`].map(_.mediaType) shouldBe Some(MediaTypes.`application/json`)
           ConnectResponse(AddResponse(request.left + request.right))
         }
     }
 
     ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(service)).build.use { app =>
       val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app))
-        .enableBinaryFormat()
+        .withMessageEncoding(MessageEncoding.Json)
         .withJsonCodecConfigurator(identity)
         .build(uri"http://localhost")
 
@@ -514,9 +519,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
           .putHeaders(Header.Raw(ci"Content-Type", "application/json"))
       )
     )
-    val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(errorApp))
-      .enableBinaryFormat()
-      .build(uri"http://localhost")
+    val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(errorApp)).build(uri"http://localhost")
 
     val error = intercept[ConnectException] {
       CalculatorServiceConnect.Client[IO](transport)

@@ -10,9 +10,9 @@ import fs2.interop.scodec.{StreamDecoder, StreamEncoder}
 import org.http4s.{Headers, Uri}
 import org.http4s.ember.client.EmberClientBuilder
 import me.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, ScodecProto}
+import me.ivovk.connect_rpc_scala.http.codec.MessageEncoding
 import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sClientBuilder
 import me.ivovk.connect_rpc_scala.*
-import me.ivovk.connect_rpc_scala.util.PipeSyntax.pipeIf
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
@@ -42,7 +42,7 @@ object Http4sClientLauncher extends IOApp.Simple {
               .registerType[conformance.IdempotentUnaryRequest]
               .registerType[conformance.ServerStreamRequest]
           )
-          .pipeIf(spec.codec.isProto)(_.enableBinaryFormat())
+          .withMessageEncoding(if spec.codec.isProto then MessageEncoding.Protobuf else MessageEncoding.Json)
           .build(baseUri)
 
         resources.use(transport => runTestCase(transport, spec))

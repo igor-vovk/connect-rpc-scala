@@ -11,6 +11,7 @@ import me.ivovk.connect_rpc_scala.benchmark.v1.echo.{
   MediumPayload,
   SmallPayload,
 }
+import me.ivovk.connect_rpc_scala.http.codec.MessageEncoding
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.ember.server.EmberServerBuilder
@@ -65,12 +66,12 @@ class ClientServerBenchmark {
         .withHttpApp(app)
         .build
       httpClient <- EmberClientBuilder.default[IO].withAdditionalSocketOptions(socketOptions).build
-      builder   = ConnectHttp4sClientBuilder(httpClient)
-      transport = codec match {
-        case "json"     => builder.build(server.baseUri)
-        case "protobuf" => builder.enableBinaryFormat().build(server.baseUri)
+      encoding = codec match {
+        case "json"     => MessageEncoding.Json
+        case "protobuf" => MessageEncoding.Protobuf
         case other      => throw new IllegalArgumentException(s"Unknown codec: $other")
       }
+      transport = ConnectHttp4sClientBuilder(httpClient).withMessageEncoding(encoding).build(server.baseUri)
       rpcClient = EchoServiceConnect.SimpleClient(transport)
       _ <- verifyEcho("small", small)(rpcClient.echoSmall).toResource
       _ <- verifyEcho("medium", medium)(rpcClient.echoMedium).toResource

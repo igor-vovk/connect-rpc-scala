@@ -17,7 +17,7 @@ object ConnectHttp4sClientBuilder {
     new ConnectHttp4sClientBuilder(
       client = client,
       codecs = CodecRegistry.create(jsonSerdes),
-      encoding = MessageEncoding.Json,
+      encoding = MessageEncoding.Protobuf,
       userAgent = DefaultUserAgent,
     )
   }
@@ -47,8 +47,8 @@ final class ConnectHttp4sClientBuilder[F[_]: Async] private (
   def withUserAgent(userAgent: String): ConnectHttp4sClientBuilder[F] =
     copy(userAgent = userAgent)
 
-  def enableBinaryFormat(): ConnectHttp4sClientBuilder[F] =
-    copy(encoding = MessageEncoding.Protobuf)
+  def withMessageEncoding(encoding: MessageEncoding): ConnectHttp4sClientBuilder[F] =
+    copy(encoding = encoding)
 
   def build(baseUri: Uri): ConnectTransport[F] =
     Transport(

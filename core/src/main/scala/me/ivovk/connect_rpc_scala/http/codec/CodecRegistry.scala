@@ -4,7 +4,7 @@ import cats.effect.Async
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import org.http4s.MediaType
 
-private[connect_rpc_scala] enum MessageEncoding {
+enum MessageEncoding {
   case Json
   case Protobuf
 }
