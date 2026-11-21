@@ -48,7 +48,7 @@ class CompressorTest extends AnyFunSuite with Matchers {
       codecs.foreach { codec =>
         val roundTrip = for {
           encoded <- codec.encode(message, options)
-          decoded <- EntityToDecode(encoded.body, encoded.headers).decodeOne(Error, codec)
+          decoded <- codec.decode[Error](encoded.body, DecodeOptions.fromHeaders(encoded.headers))
         } yield {
           encoded.headers.get[`Content-Length`] shouldBe None
           encoded.headers.get[`Content-Encoding`] shouldBe Some(`Content-Encoding`(encoding))

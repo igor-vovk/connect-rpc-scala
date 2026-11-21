@@ -102,17 +102,17 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
               .getOrElse("")
           } else request.body
 
-        val entity   = EntityToDecode(message, request.headers)
-        val encoding = responseEncoding(
+        val decodeOptions = DecodeOptions.fromHeaders(request.headers)
+        val encoding      = responseEncoding(
           request.headers,
           if isGet then
             request.uri.query.params.get("compression")
-              .flatMap(ContentCoding.fromString(_).toOption)
+              .flatMap(ContentCoding.parse(_).toOption)
               .getOrElse(ContentCoding.identity)
-          else entity.encoding,
+          else decodeOptions.encoding,
         )
 
-        entity.decodeOne(method.descriptor.requestCompanion, codec)
+        codec.decode(message, decodeOptions)(using method.descriptor.requestCompanion)
           .adaptError {
             case error if !error.isInstanceOf[ConnectException] => unaryHandler.decodeError(error)
           }
@@ -121,7 +121,7 @@ private[http4s] final class ConnectRoutes[F[_]: Async](
             case Left(error) =>
               unaryHandler.errorResponse(error, encoding).map(_.closeIfHttp1(request.httpVersion))
             case Right(message) =>
-              Async[F].defer(unaryHandler.invokeAndEncode(method, message, entity.headers, codec, encoding))
+              Async[F].defer(unaryHandler.invokeAndEncode(method, message, request.headers, codec, encoding))
                 .handleErrorWith(error => unaryHandler.errorResponse(error, encoding))
           }
           .map(varyByCompression(_, isGet))

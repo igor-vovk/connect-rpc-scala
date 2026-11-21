@@ -58,12 +58,12 @@ private[http4s] final class Transport[F[_]: Async](
 
     val response = httpResponse.use { response =>
       val (headers, trailers) = response.headers.splitTrailers
-      val responseEntity      = EntityToDecode[F](response.body, headers)
 
       if (response.status.isSuccess) {
         val mediaType = response.contentType.map(_.mediaType)
         if (mediaType.exists(_.satisfies(unaryCodec.mediaType))) {
-          responseEntity.decodeOne(descriptor.responseCompanion, unaryCodec)
+          val options = DecodeOptions.fromHeaders(headers)
+          unaryCodec.decode(response.body, options)(using descriptor.responseCompanion)
             .map(message => ConnectResponse(message, headers, trailers))
             .adaptError { case error =>
               ConnectException(
@@ -152,8 +152,7 @@ private[http4s] final class Transport[F[_]: Async](
   private def decodeHttpError[A](response: Response[F]): F[A] = {
     val (headers, trailers) = response.headers.splitTrailers
 
-    EntityToDecode[F](response.body, headers)
-      .decodeOne(connectrpc.Error, codecs.json)
+    codecs.json.decode[connectrpc.Error](response.body, DecodeOptions.fromHeaders(headers))
       .attempt
       .flatMap {
         case Right(error) =>
