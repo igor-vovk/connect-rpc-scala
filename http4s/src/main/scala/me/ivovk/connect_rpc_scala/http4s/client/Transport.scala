@@ -5,12 +5,12 @@ import cats.effect.syntax.all.*
 import cats.implicits.*
 import fs2.Stream
 import org.http4s.client.Client
-import org.http4s.headers.`User-Agent`
-import org.http4s.{ContentCoding, Headers, Method, ProductId, Request, Response, Uri}
+import org.http4s.headers.{`Accept-Encoding`, `User-Agent`}
+import org.http4s.{ContentCoding, Headers, HttpVersion, Method, ProductId, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.{ConnectHttpStatus, MediaTypes}
 import me.ivovk.connect_rpc_scala.http.codec.*
 import me.ivovk.connect_rpc_scala.http.headers.UnaryTrailers.*
-import me.ivovk.connect_rpc_scala.http.headers.`Connect-Timeout-Ms`
+import me.ivovk.connect_rpc_scala.http.headers.{`Connect-Accept-Encoding`, `Connect-Timeout-Ms`}
 import me.ivovk.connect_rpc_scala.*
 import scalapb.GeneratedMessage
 
@@ -20,12 +20,22 @@ private[http4s] final class Transport[F[_]: Async](
   httpClient: Client[F],
   codecs: CodecRegistry[F],
   encoding: MessageEncoding,
+  compression: ContentCoding,
   baseUri: Uri,
   userAgent: String,
 ) extends ConnectTransport[F] {
 
   private val unaryCodec     = codecs.unary(encoding)
   private val streamingCodec = codecs.streaming(encoding)
+
+  private val unaryHeaders = Headers(
+    `User-Agent`(ProductId(userAgent)),
+    `Accept-Encoding`(Compressor.supportedCompressions),
+  )
+  private val streamingHeaders = Headers(
+    `User-Agent`(ProductId(userAgent)),
+    `Connect-Accept-Encoding`(Compressor.supportedCompressions),
+  )
 
   override def unary[
     RequestMessage <: GeneratedMessage,
@@ -35,21 +45,14 @@ private[http4s] final class Transport[F[_]: Async](
     request: RequestMessage,
     ctx: ConnectRequestContext,
   ): F[ConnectResponse[ResponseMessage]] = {
-    val uri         = baseUri / descriptor.serviceName / descriptor.methodName
-    val httpRequest = Request[F](
-      method = Method.POST,
-      uri = uri,
-      headers = Headers(
-        `User-Agent`(ProductId(userAgent)),
-        ctx.timeout.map(`Connect-Timeout-Ms`.apply),
-      ) ++ ctx.headers,
-    )
+    val uri     = baseUri / descriptor.serviceName / descriptor.methodName
+    val headers = unaryHeaders ++ Headers(ctx.timeout.map(`Connect-Timeout-Ms`.apply)) ++ ctx.headers
 
-    val encodeOptions = EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity)
+    val encodeOptions = EncodeOptions(StandardCharsets.UTF_8, compression)
 
     val httpResponse = Resource.eval(unaryCodec.encode(request, encodeOptions))
       .map { entity =>
-        httpRequest.withBodyStream(entity.body).transformHeaders(_ ++ entity.headers)
+        Request[F](Method.POST, uri, HttpVersion.`HTTP/1.1`, headers ++ entity.headers, entity.body)
       }
       .flatMap(httpClient.run)
 
@@ -107,18 +110,19 @@ private[http4s] final class Transport[F[_]: Async](
     request: RequestMessage,
     ctx: ConnectRequestContext,
   ): Resource[F, ConnectStreamingResponse[F, ResponseMessage]] = {
-    val entity      = streamingCodec.encodeRequest(Stream.emit(request))
-    val httpRequest = Request[F](
-      method = Method.POST,
-      uri = baseUri / descriptor.serviceName / descriptor.methodName,
-      headers = Headers(
-        `User-Agent`(ProductId(userAgent)),
-        ctx.timeout.map(`Connect-Timeout-Ms`.apply),
-      ) ++ ctx.headers ++ entity.headers,
-      body = entity.body,
-    )
+    val headers = streamingHeaders ++ Headers(ctx.timeout.map(`Connect-Timeout-Ms`.apply)) ++ ctx.headers
 
-    httpClient.run(httpRequest).evalMap { response =>
+    val httpRequest = Resource.eval(streamingCodec.encodeRequest(Stream.emit(request), compression))
+      .map { entity =>
+        Request[F](
+          method = Method.POST,
+          uri = baseUri / descriptor.serviceName / descriptor.methodName,
+          headers = headers ++ entity.headers,
+          body = entity.body,
+        )
+      }
+
+    httpRequest.flatMap(httpClient.run).evalMap { response =>
       if !response.status.isSuccess then decodeHttpError(response)
       else if !response.contentType.exists(_.mediaType.satisfies(streamingCodec.mediaType)) then
         ConnectException(

@@ -15,20 +15,7 @@ import me.ivovk.connect_rpc_scala.benchmark.v1.echo.{
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.ember.server.EmberServerBuilder
-import org.openjdk.jmh.annotations.{
-  Benchmark,
-  BenchmarkMode,
-  Fork,
-  Measurement,
-  Mode,
-  OutputTimeUnit,
-  Param,
-  Scope,
-  Setup,
-  State,
-  TearDown,
-  Warmup,
-}
+import org.openjdk.jmh.annotations.*
 
 import java.util.concurrent.TimeUnit
 

@@ -11,6 +11,7 @@ import org.http4s.{Headers, Uri}
 import org.http4s.ember.client.EmberClientBuilder
 import me.ivovk.connect_rpc_scala.conformance.util.{ConformanceHeadersConv, ScodecProto}
 import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sClientBuilder
+import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sClientBuilder.RequestCompression
 import me.ivovk.connect_rpc_scala.*
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
@@ -42,6 +43,12 @@ object Http4sClientLauncher extends IOApp.Simple {
               .registerType[conformance.ServerStreamRequest]
           )
           .withMessageEncoding(if spec.codec.isProto then MessageEncoding.Protobuf else MessageEncoding.Json)
+          .withRequestCompression(spec.compression match {
+            case Compression.Gzip                               => RequestCompression.Gzip
+            case Compression.Deflate                            => RequestCompression.Deflate
+            case Compression.Identity | Compression.Unspecified => RequestCompression.Identity
+            case other => throw new IllegalArgumentException(s"Unsupported conformance compression: $other")
+          })
           .build(baseUri)
 
         resources.use(transport => runTestCase(transport, spec))

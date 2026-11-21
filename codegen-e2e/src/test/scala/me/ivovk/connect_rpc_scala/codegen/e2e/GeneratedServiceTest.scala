@@ -18,6 +18,7 @@ import org.http4s.implicits.*
 import org.http4s.{Header, Headers, HttpApp, HttpVersion, Method, Request, Response, Status}
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
+import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sClientBuilder.RequestCompression
 import me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
 import me.ivovk.connect_rpc_scala.*
 import org.scalatest.funsuite.AnyFunSuite
@@ -219,6 +220,74 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     }
   }
 
+  test("advertises all response compressions independently of request compression") {
+    ConnectHttp4sRouteBuilder.forServices(
+      CalculatorServiceConnect.bind(CalculatorServiceImpl),
+      StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl),
+    ).build.use { app =>
+      List(
+        RequestCompression.Identity -> None,
+        RequestCompression.Gzip     -> Some("gzip"),
+        RequestCompression.Deflate  -> Some("deflate"),
+      ).traverse_ { (compression, expectedCoding) =>
+        val checkedApp: HttpApp[IO] = Kleisli { request =>
+          val streaming = request.contentType.exists(_.mediaType == MediaTypes.`application/connect+proto`)
+          val accept    = if streaming then ci"Connect-Accept-Encoding" else ci"Accept-Encoding"
+          val content   = if streaming then ci"Connect-Content-Encoding" else ci"Content-Encoding"
+
+          IO {
+            request.headers.get(accept).map(_.head.value) shouldBe Some("gzip, deflate")
+            request.headers.get(content).map(_.head.value) shouldBe expectedCoding
+          }.flatMap(_ => app.run(request))
+        }
+        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(checkedApp))
+          .withRequestCompression(compression)
+          .build(uri"http://localhost")
+        val unary     = CalculatorServiceConnect.Client(transport)
+        val streaming = StreamingCalculatorServiceConnect.Client(transport)
+        val request   = AddRequest(20, 22)
+        val context   = ConnectRequestContext()
+
+        unary.add(request, context).flatMap { _ =>
+          streaming.addMany(request, context).use(_.stream.events.compile.drain)
+        }
+      }
+    }.unsafeRunSync()
+  }
+
+  test("negotiates unary response compression independently of the request coding") {
+    val scenarios = List(
+      Some("br, gzip, deflate") -> Some("gzip"),
+      Some("deflate, gzip")     -> Some("deflate"),
+      Some("gzip;q=0, deflate") -> Some("deflate"),
+      Some("br")                -> None,
+      None                      -> Some("deflate"),
+    )
+
+    ConnectHttp4sRouteBuilder.forService(CalculatorServiceConnect.bind(CalculatorServiceImpl)).build.use {
+      app =>
+        scenarios.traverse_ { (accept, expectedCoding) =>
+          val customAccept: HttpApp[IO] = Kleisli { request =>
+            app.run(request.transformHeaders { headers =>
+              headers.transform(_.filterNot(_.name == ci"Accept-Encoding")) ++
+                Headers(accept.map(Header.Raw(ci"Accept-Encoding", _)))
+            })
+          }
+          val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(customAccept))
+            .withRequestCompression(RequestCompression.Deflate)
+            .build(uri"http://localhost")
+
+          CalculatorServiceConnect.Client(transport).add(AddRequest(20, 22), ConnectRequestContext()).map {
+            response =>
+              response.message shouldBe AddResponse(42)
+              headerValues(response.headers, ci"Content-Encoding") shouldBe expectedCoding.toList
+              headerValues(response.headers, ci"Vary") shouldBe List("Accept-Encoding, Content-Encoding")
+              if expectedCoding.nonEmpty then headerValues(response.headers, ci"Content-Length") shouldBe Nil
+          }
+        }
+    }.unsafeRunSync()
+  }
+
   List(
     MessageEncoding.Json     -> MediaTypes.`application/json`,
     MessageEncoding.Protobuf -> MediaTypes.`application/proto`,
@@ -256,7 +325,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
           .withMessageEncoding(encoding)
           .build(uri"http://localhost")
         val client  = CalculatorServiceConnect.Client(transport)
-        val context = ConnectRequestContext()
+        val context = ConnectRequestContext(headers = Headers(Header.Raw(ci"Accept-Encoding", "identity")))
 
         for {
           response <- client.add(AddRequest(20, 22), context)
@@ -575,7 +644,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
-  test("generated client decodes Connect errors without a gRPC runtime") {
+  test("generated client decodes compressed Connect errors without a gRPC runtime") {
     val error = intercept[ConnectException] {
       ConnectHttp4sRouteBuilder.forService(
         CalculatorServiceConnect.bind(FailingCalculatorServiceImpl)
@@ -590,6 +659,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
 
     error.code shouldBe connectrpc.Code.InvalidArgument
     error.getMessage shouldBe "Cannot add 20 and 22"
+    headerValues(error.headers, ci"Content-Encoding") shouldBe List("gzip")
     headerValues(error.headers, ci"x-error-metadata") shouldBe List("header", "trailer")
   }
 

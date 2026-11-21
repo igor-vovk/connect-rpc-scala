@@ -2,28 +2,9 @@ package me.ivovk.connect_rpc_scala.benchmark
 
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
-import me.ivovk.connect_rpc_scala.http.codec.{
-  EncodedEntity,
-  EncodeOptions,
-  EntityToDecode,
-  JsonSerdesBuilder,
-  MessageCodec,
-  ProtoMessageCodec,
-}
+import me.ivovk.connect_rpc_scala.http.codec.*
 import org.http4s.ContentCoding
-import org.openjdk.jmh.annotations.{
-  Benchmark,
-  BenchmarkMode,
-  Fork,
-  Measurement,
-  Mode,
-  OutputTimeUnit,
-  Param,
-  Scope,
-  Setup,
-  State,
-  Warmup,
-}
+import org.openjdk.jmh.annotations.*
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 
 import java.nio.charset.StandardCharsets

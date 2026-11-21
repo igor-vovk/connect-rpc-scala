@@ -3,7 +3,7 @@ package me.ivovk.connect_rpc_scala.http4s.server
 import cats.data.OptionT
 import cats.effect.Async
 import cats.implicits.*
-import org.http4s.{HttpRoutes, Request, Response, Uri}
+import org.http4s.{ContentCoding, HttpRoutes, Request, Response, Uri}
 import me.ivovk.connect_rpc_scala.http.codec.{EntityToDecode, JsonSerdes}
 import me.ivovk.connect_rpc_scala.transcoding.MergingBuilder.*
 import me.ivovk.connect_rpc_scala.ServiceDefinition
@@ -39,8 +39,9 @@ private[http4s] final class TranscodingRoutes[F[_]: Async](
     val method                                                     = matched.method
     given scalapb.GeneratedMessageCompanion[method.RequestMessage] = method.descriptor.requestCompanion
 
-    val codec   = jsonSerdes.codec.withDecodingJsonTransform(matched.reqBodyTransform)
-    val headers = request.headers
+    val codec    = jsonSerdes.codec.withDecodingJsonTransform(matched.reqBodyTransform)
+    val headers  = request.headers
+    val encoding = ContentCoding.identity
 
     EntityToDecode[F](request.body, headers).decodeOne(method.descriptor.requestCompanion, codec)
       .map { bodyMessage =>
@@ -49,7 +50,9 @@ private[http4s] final class TranscodingRoutes[F[_]: Async](
         bodyMessage.merge(pathMessage).merge(queryMessage).build
       }
       .adaptError { case error => unaryHandler.decodeError(error) }
-      .flatMap(message => unaryHandler.invokeAndEncode(method, message, headers, jsonSerdes.codec))
-      .handleErrorWith(unaryHandler.errorResponse)
+      .flatMap { message =>
+        unaryHandler.invokeAndEncode(method, message, headers, jsonSerdes.codec, encoding)
+      }
+      .handleErrorWith(error => unaryHandler.errorResponse(error, encoding))
   }
 }

@@ -5,7 +5,8 @@ import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.*
-import org.http4s.{Header, Headers}
+import me.ivovk.connect_rpc_scala.http.headers.`Connect-Content-Encoding`
+import org.http4s.{ContentCoding, Header, Headers}
 import org.typelevel.ci.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -38,22 +39,25 @@ class StreamingMessageCodecTest extends AnyFunSuite with Matchers {
     )
   }
 
-  test("round-trips protobuf streaming requests across arbitrary chunks") {
-    val codec = new StreamingMessageCodec(
-      new ProtoMessageCodec[IO],
-      jsonSerdes,
-      MediaTypes.`application/connect+proto`,
-    )
-    val expected = Seq(
-      connectrpc.Error(connectrpc.Code.InvalidArgument, Some("first")),
-      connectrpc.Error(connectrpc.Code.Unavailable, Some("second")),
-    )
-    val encoded    = codec.encodeRequest(Stream.emits(expected))
-    val fragmented = encoded.body.chunkN(1).unchunks
+  for (coding <- List(ContentCoding.identity, ContentCoding.gzip, ContentCoding.deflate))
+    test(s"round-trips ${coding.coding} protobuf streaming requests across arbitrary chunks") {
+      val codec = new StreamingMessageCodec(
+        new ProtoMessageCodec[IO],
+        jsonSerdes,
+        MediaTypes.`application/connect+proto`,
+      )
+      val expected = Seq(
+        connectrpc.Error(connectrpc.Code.InvalidArgument, Some("first")),
+        connectrpc.Error(connectrpc.Code.Unavailable, Some("second")),
+      )
+      val encoded    = codec.encodeRequest(Stream.emits(expected), coding).unsafeRunSync()
+      val fragmented = encoded.body.chunkN(1).unchunks
 
-    codec.decodeRequest[connectrpc.Error](fragmented, Headers.empty)
-      .compile.toList.unsafeRunSync() shouldBe expected
-  }
+      encoded.headers.get[`Connect-Content-Encoding`] shouldBe
+        Option.when(coding != ContentCoding.identity)(`Connect-Content-Encoding`(coding))
+      codec.decodeRequest[connectrpc.Error](fragmented, encoded.headers)
+        .compile.toList.unsafeRunSync() shouldBe expected
+    }
 
   test("turns a failure after emitted messages into an error end-stream envelope") {
     val expected = connectrpc.Error(connectrpc.Code.InvalidArgument, Some("first"))

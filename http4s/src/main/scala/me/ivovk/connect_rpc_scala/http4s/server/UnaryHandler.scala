@@ -25,9 +25,10 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     request: method.RequestMessage,
     headers: Headers,
     codec: MessageCodec[F],
+    encoding: ContentCoding,
   ): F[Response[F]] =
     invoke(method, request, ConnectRequestContext(headers.removePayloadHeaders, timeout(headers)))
-      .flatMap(encodeResult(_, codec))
+      .flatMap(encodeResult(_, codec, encoding))
 
   def decodeError(error: Throwable): ConnectException =
     ConnectException(
@@ -35,7 +36,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
       Option(error.getMessage).getOrElse("Unable to decode the request"),
     ).withCause(error)
 
-  def errorResponse(error: Throwable): F[Response[F]] = {
+  def errorResponse(error: Throwable, encoding: ContentCoding): F[Response[F]] = {
     val exception = error match {
       case connect: ConnectException => connect
       case other                     =>
@@ -54,7 +55,7 @@ private[http4s] final class UnaryHandler[F[_]: Async](
       details = exception.details,
     )
 
-    encodeResponse(status, headers, body, jsonCodec)
+    encodeResponse(status, headers, body, jsonCodec, encoding)
   }
 
   private def invoke(
@@ -74,11 +75,12 @@ private[http4s] final class UnaryHandler[F[_]: Async](
   private def encodeResult(
     result: ConnectResponse[? <: GeneratedMessage],
     codec: MessageCodec[F],
+    encoding: ContentCoding,
   ): F[Response[F]] = {
     val trailerHeaders  = result.trailers.pipeIf(!treatTrailersAsHeaders)(_.withTrailerPrefix)
     val responseHeaders = result.headers ++ trailerHeaders
 
-    encodeResponse(Status.Ok, responseHeaders, result.message, codec)
+    encodeResponse(Status.Ok, responseHeaders, result.message, codec, encoding)
   }
 
   private def encodeResponse(
@@ -86,8 +88,9 @@ private[http4s] final class UnaryHandler[F[_]: Async](
     headers: Headers,
     message: GeneratedMessage,
     codec: MessageCodec[F],
+    encoding: ContentCoding,
   ): F[Response[F]] =
-    codec.encode(message, EncodeOptions(StandardCharsets.UTF_8, ContentCoding.identity)).map { entity =>
+    codec.encode(message, EncodeOptions(StandardCharsets.UTF_8, encoding)).map { entity =>
       Response[F](
         status = status,
         headers = headers.removePayloadHeaders ++ entity.headers,

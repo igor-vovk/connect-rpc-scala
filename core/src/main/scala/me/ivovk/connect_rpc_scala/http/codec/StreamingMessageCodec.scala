@@ -46,11 +46,23 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
 
   private val encodedEntityHeaders = Headers(`Content-Type`(mediaType))
 
-  def encodeRequest[A <: GeneratedMessage](messages: Stream[F, A]): EncodedEntity[F] =
-    EncodedEntity(
-      headers = encodedEntityHeaders,
-      body = messages.flatMap(encodeMessage),
-    )
+  def encodeRequest[A <: GeneratedMessage](
+    messages: Stream[F, A],
+    coding: ContentCoding,
+  ): F[EncodedEntity[F]] =
+    if coding == ContentCoding.identity then
+      Async[F].pure(EncodedEntity(encodedEntityHeaders, messages.flatMap(encodeMessage)))
+    else
+      Async[F].fromEither(compressor.compressionPipe(coding)).map { compress =>
+        val payloads: Stream[F, Chunk[Byte]] = messages.evalMap { message =>
+          val payload = messageCodec.encodeChunk(message, StandardCharsets.UTF_8)
+          compress(Stream.chunk(payload)).compile.to(Chunk)
+        }
+        EncodedEntity(
+          encodedEntityHeaders.put(`Connect-Content-Encoding`(coding)),
+          payloads.flatMap(envelope(CompressedFlag, _)),
+        )
+      }
 
   def decodeRequest[A <: GeneratedMessage](
     body: Stream[F, Byte],

@@ -3,11 +3,11 @@ package me.ivovk.connect_rpc_scala.http4s
 import cats.Endo
 import cats.effect.{Async, Resource}
 import cats.implicits.*
-import org.http4s.{HttpApp, HttpRoutes, Uri}
+import me.ivovk.connect_rpc_scala.ServiceDefinition
 import me.ivovk.connect_rpc_scala.http.codec.{CodecRegistry, JsonSerdes, JsonSerdesBuilder}
 import me.ivovk.connect_rpc_scala.http4s.HttpRoutesSyntax.orNotFoundClosingOnUnreadBody
 import me.ivovk.connect_rpc_scala.http4s.server.{ConnectRoutes, Routes, TranscodingRoutes, UnaryHandler}
-import me.ivovk.connect_rpc_scala.ServiceDefinition
+import org.http4s.{HttpApp, HttpRoutes, Uri}
 
 object ConnectHttp4sRouteBuilder {
 

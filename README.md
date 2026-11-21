@@ -15,7 +15,9 @@ the unary and server-streaming methods in the same service.
 - Server-streaming Connect endpoints with terminal trailers and streaming errors.
 - Generated effect-polymorphic service interfaces, binders, and clients.
 - Connect request and response headers, trailers, timeouts, and structured errors.
-- Identity and gzip request decompression; responses currently use identity encoding.
+- Identity, gzip, and deflate request decompression and unary response compression. Clients advertise gzip
+  and deflate for responses and can pass a `ConnectHttp4sClientBuilder.RequestCompression` value to
+  `withRequestCompression`.
 - HTTP transcoding from `google.api.http` annotations, including GET, POST, PUT, DELETE, PATCH, path parameters,
   repeated query parameters, `body: "*"`, and request-body field mappings.
 - An http4s server and client implementation.

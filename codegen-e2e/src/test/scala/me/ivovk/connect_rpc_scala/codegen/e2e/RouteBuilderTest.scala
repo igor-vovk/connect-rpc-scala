@@ -130,7 +130,9 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
             response.status shouldBe Status.NotImplemented
             response.headers.get[Connection] shouldBe Some(Connection.close)
             body should include("\"code\":\"unimplemented\"")
-            body should include("Unsupported compression br. Supported encodings are identity and gzip.")
+            body should include(
+              "Unsupported compression br. Supported encodings are identity, gzip, and deflate."
+            )
           }
         }
         .unsafeRunSync()
