@@ -22,6 +22,8 @@ private object StreamingMessageCodec {
   private val CompressedFlag     = 0x01
   private val EndStreamFlag      = 0x02
   private val KnownFlags         = CompressedFlag | EndStreamFlag
+
+  private val PayloadDecodeOptions = DecodeOptions(StandardCharsets.UTF_8, ContentCoding.identity)
 }
 
 private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
@@ -188,12 +190,7 @@ private[connect_rpc_scala] final class StreamingMessageCodec[F[_]: Async](
     coding: ContentCoding,
   )(using companion: GeneratedMessageCompanion[A]): F[A] =
     decodedPayload(envelope, coding).flatMap { payload =>
-      messageCodec.decode[A](
-        EntityToDecode(
-          Stream.chunk(payload),
-          Headers(`Content-Type`(messageCodec.mediaType)),
-        )
-      ).compile.onlyOrError
+      messageCodec.decode[A](Stream.chunk(payload), PayloadDecodeOptions)
     }
 
   private def decodeEndStream(envelope: Envelope, coding: ContentCoding): F[EndStream] =

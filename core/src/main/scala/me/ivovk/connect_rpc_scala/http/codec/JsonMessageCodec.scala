@@ -42,13 +42,16 @@ class JsonMessageCodec[F[_]: Sync](
 
   private val headersToEncode = Headers(`Content-Type`(mediaType))
 
-  override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
-    val stream = entity.message match {
+  override def decode[A <: Message](
+    message: Stream[F, Byte] | String,
+    options: DecodeOptions,
+  )(using cmp: Companion[A]): F[A] = {
+    val decoded = message match {
       case str: String if str.isEmpty =>
-        Stream.emit(cmp.defaultInstance)
+        Sync[F].delay(cmp.defaultInstance)
       case s: String =>
-        Stream.eval(Sync[F].delay {
-          val str = URLDecoder.decode(s, entity.charset)
+        Sync[F].delay {
+          val str = URLDecoder.decode(s, options.charset)
 
           if (logger.isTraceEnabled) {
             logger.trace(s">>> JSON: $str")
@@ -56,27 +59,28 @@ class JsonMessageCodec[F[_]: Sync](
 
           val json = parse(str).fold(throw _, identity)
           parser.fromJson(decodingTransform(json))
-        })
+        }
       case stream: Stream[F, Byte] =>
         stream
-          .through(compressor.decompress(entity.encoding))
-          .chunkAll
-          .evalMap { chunk =>
-            if !chunk.isEmpty then
-              Sync[F].delay {
+          .through(compressor.decompress(options.encoding))
+          .compile.to(Chunk)
+          .flatMap { chunk =>
+            Sync[F].delay {
+              if chunk.isEmpty then cmp.defaultInstance
+              else {
                 if (logger.isTraceEnabled) {
-                  val str = entity.charset.decode(chunk.toByteBuffer).toString
+                  val str = options.charset.decode(chunk.toByteBuffer).toString
                   logger.trace(s">>> JSON: $str")
                 }
 
-                val json = CirceJsonParser.parse(chunk, entity.charset)
+                val json = CirceJsonParser.parse(chunk, options.charset)
                 parser.fromJson(decodingTransform(json))
               }
-            else Sync[F].pure(cmp.defaultInstance)
+            }
           }
     }
 
-    stream.adaptError {
+    decoded.adaptError {
       case e: ConnectException => e
       case error               =>
         InvalidMessageBodyFailure(error.getMessage, error.some)

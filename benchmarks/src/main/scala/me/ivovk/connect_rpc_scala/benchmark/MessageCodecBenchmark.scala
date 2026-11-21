@@ -54,7 +54,7 @@ class MessageCodecBenchmark {
   )(using companion: GeneratedMessageCompanion[A]): Unit = {
     message = payload
     val encoded = serializeBody()
-    decodeBody = EntityToDecode(encoded.body, encoded.headers).decodeOne(companion, messageCodec)
+    decodeBody = messageCodec.decode[A](encoded.body, DecodeOptions.fromHeaders(encoded.headers))
     require(parseBody() == payload, s"The $payloadSize $codec payload failed to round-trip")
   }
 

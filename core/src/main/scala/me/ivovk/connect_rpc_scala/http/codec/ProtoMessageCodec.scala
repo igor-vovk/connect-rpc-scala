@@ -7,7 +7,6 @@ import org.http4s.headers.`Content-Type`
 import org.http4s.{Headers, InvalidMessageBodyFailure, MediaType}
 import me.ivovk.connect_rpc_scala.ConnectException
 import me.ivovk.connect_rpc_scala.http.MediaTypes
-import me.ivovk.connect_rpc_scala.util.PipeSyntax.*
 import org.slf4j.LoggerFactory
 import scalapb.{GeneratedMessage as Message, GeneratedMessageCompanion as Companion}
 
@@ -24,30 +23,32 @@ class ProtoMessageCodec[F[_]: Async] extends MessageCodec[F] {
 
   private val headersToEncode = Headers(`Content-Type`(mediaType))
 
-  override def decode[A <: Message](entity: EntityToDecode[F])(using cmp: Companion[A]): Stream[F, A] = {
-    val messages = entity.message match {
-      case str: String =>
-        Stream.eval(Async[F].delay(cmp.parseFrom(base64dec.decode(str.getBytes(entity.charset)))))
-      case stream: Stream[F, Byte] =>
-        stream.through(compressor.decompress(entity.encoding))
-          .chunkAll
-          .evalMap { chunk =>
-            Async[F].delay(cmp.parseFrom(chunk.toArray))
-          }
+  override def decode[A <: Message](
+    message: Stream[F, Byte] | String,
+    options: DecodeOptions,
+  )(using cmp: Companion[A]): F[A] = {
+    def parse(bytes: Array[Byte]): A = {
+      val parsed = cmp.parseFrom(bytes)
+      if (logger.isTraceEnabled) {
+        logger.trace(s">>> Proto: ${parsed.toProtoString}")
+      }
+      parsed
     }
 
-    messages
-      .pipeIf(logger.isTraceEnabled) {
-        _.map { msg =>
-          logger.trace(s">>> Proto: ${msg.toProtoString}")
-          msg
-        }
-      }
-      .adaptError {
-        case e: ConnectException => e
-        case error               =>
-          InvalidMessageBodyFailure(error.getMessage, error.some)
-      }
+    val decoded = message match {
+      case str: String =>
+        Async[F].delay(parse(base64dec.decode(str.getBytes(options.charset))))
+      case stream: Stream[F, Byte] =>
+        stream.through(compressor.decompress(options.encoding))
+          .compile.to(Chunk)
+          .flatMap(chunk => Async[F].delay(parse(chunk.toArray)))
+    }
+
+    decoded.adaptError {
+      case e: ConnectException => e
+      case error               =>
+        InvalidMessageBodyFailure(error.getMessage, error.some)
+    }
   }
 
   private[codec] override def encodeChunk(message: Message, _charset: Charset): Chunk[Byte] = {
