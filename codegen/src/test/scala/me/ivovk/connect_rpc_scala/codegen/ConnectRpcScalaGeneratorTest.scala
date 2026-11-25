@@ -41,7 +41,7 @@ class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
     response.hasError shouldBe false
     response.getFileCount shouldBe 1
     response.getFile(0).getContent should include("object ExampleServiceConnect")
-    response.getFile(0).getContent should include("trait Service[F[_], Context]")
+    response.getFile(0).getContent should include("trait Service[F[_]]")
     response.getFile(0).getContent should include("UnaryMethodDescriptor")
     response.getFile(0).getContent should not include "io.grpc"
   }
@@ -58,6 +58,8 @@ class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
     response.getFile(0).getContent should include("METHOD_CALL")
     response.getFile(0).getContent should include("METHOD_SERVERSTREAM")
     response.getFile(0).getContent should include("ServerStreamingMethodDescriptor")
+    response.getFile(0).getContent should include("interceptor: UnaryInterceptor[F]")
+    response.getFile(0).getContent should include("streamingInterceptor: ServerStreamingInterceptor[F]")
     response.getFile(0).getContent should not include "ClientStream"
   }
 
@@ -67,6 +69,8 @@ class ConnectRpcScalaGeneratorTest extends AnyFunSuite with Matchers {
     response.hasError shouldBe false
     response.getFileCount shouldBe 1
     response.getFile(0).getContent should include("ServerStreamingMethod")
+    response.getFile(0).getContent should include("streamingInterceptor: ServerStreamingInterceptor[F]")
+    response.getFile(0).getContent should not include "UnaryInterceptor"
   }
 
   test("does not generate a service that contains only streaming methods") {

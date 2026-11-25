@@ -1,8 +1,9 @@
 # Unary interceptors example
 
-The generated Echo client uses `UnaryInterceptor.transformContext` to turn a request ID into a
-Connect header. The server composes `OpenTelemetryServerInterceptor` and `ErrorLoggingInterceptor`
-with `andThen` and passes the result to the generated service binder.
+The generated Echo client uses `UnaryInterceptor.transformContext` to copy a typed request ID
+attribute into a Connect header. The server composes OpenTelemetry metrics, error logging, and
+an interceptor that stores the incoming request ID as a typed attribute. The handler reads it
+with `context.attribute[RequestId]`.
 
 Run from the repository root.
 

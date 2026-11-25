@@ -50,8 +50,8 @@ object ErrorLoggingInterceptor {
     def withCodeFilter(shouldLog: Code => Boolean): Builder[F] =
       copy(shouldLog = shouldLog)
 
-    def build[Context](): UnaryInterceptor[F, Context, Context] =
-      UnaryInterceptor.tapError[F, Context] { (descriptor, error) =>
+    def build(): UnaryInterceptor[F] =
+      UnaryInterceptor.tapError[F] { (descriptor, error) =>
         val log = F.catchNonFatal {
           val code = error match {
             case exception: ConnectException => exception.code

@@ -3,7 +3,12 @@ package me.ivovk.connect_rpc_scala.interceptors
 import cats.effect.{IO, Ref}
 import cats.effect.unsafe.implicits.global
 import connectrpc.Code
-import me.ivovk.connect_rpc_scala.{ConnectException, ConnectResponse, UnaryMethodDescriptor}
+import me.ivovk.connect_rpc_scala.{
+  ConnectException,
+  ConnectRequestContext,
+  ConnectResponse,
+  UnaryMethodDescriptor,
+}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.slf4j.event.Level
@@ -21,7 +26,7 @@ class ErrorLoggingInterceptorTest extends AnyFunSuite with Matchers {
     val events  = Ref.of[IO, Vector[(String, Throwable)]](Vector.empty).unsafeRunSync()
     val logging = ErrorLoggingInterceptor.builder[IO]
       .withLogger((message, error) => events.update(_ :+ (message -> error)))
-      .build[Unit]()
+      .build()
 
     val clientCodes = List(
       Code.Canceled,
@@ -39,7 +44,7 @@ class ErrorLoggingInterceptorTest extends AnyFunSuite with Matchers {
     val unexpected = IllegalStateException("unexpected failure")
 
     def run(next: => IO[ConnectResponse[connectrpc.Error]]) =
-      logging.intercept(descriptor, request, (), _ => next).attempt.unsafeRunSync()
+      logging.intercept(descriptor, request, ConnectRequestContext(), _ => next).attempt.unsafeRunSync()
 
     run(IO.pure(ConnectResponse(request))) shouldBe Right(ConnectResponse(request))
     clientCodes.foreach { code =>
@@ -61,11 +66,11 @@ class ErrorLoggingInterceptorTest extends AnyFunSuite with Matchers {
     val error   = ConnectException(Code.Canceled, "call canceled")
 
     def run(filter: Code => Boolean) = {
-      val logging = builder.withCodeFilter(filter).build[Unit]()
+      val logging = builder.withCodeFilter(filter).build()
       logging.intercept[connectrpc.Error, connectrpc.Error](
         descriptor,
         request,
-        (),
+        ConnectRequestContext(),
         _ => IO.raiseError(error),
       )
         .attempt.unsafeRunSync()
@@ -78,13 +83,13 @@ class ErrorLoggingInterceptorTest extends AnyFunSuite with Matchers {
 
   test("an SLF4J logger receives the failure at ERROR level") {
     val loggers = new SubstituteLoggerFactory
-    val logging = ErrorLoggingInterceptor.builder[IO].withLogger(loggers.getLogger("test")).build[Unit]()
+    val logging = ErrorLoggingInterceptor.builder[IO].withLogger(loggers.getLogger("test")).build()
     val error   = ConnectException(Code.Unavailable, "unavailable")
 
     val result = logging.intercept[connectrpc.Error, connectrpc.Error](
       descriptor,
       request,
-      (),
+      ConnectRequestContext(),
       _ => IO.raiseError(error),
     ).attempt.unsafeRunSync()
 
@@ -107,9 +112,14 @@ class ErrorLoggingInterceptorTest extends AnyFunSuite with Matchers {
     val error   = ConnectException(Code.Unavailable, "unavailable")
     val logging = ErrorLoggingInterceptor.builder[Result]
       .withLogger((_, _) => Left(IllegalStateException("logging failed")))
-      .build[Unit]()
+      .build()
 
-    logging.intercept[connectrpc.Error, connectrpc.Error](descriptor, request, (), _ => Left(error)) shouldBe
+    logging.intercept[connectrpc.Error, connectrpc.Error](
+      descriptor,
+      request,
+      ConnectRequestContext(),
+      _ => Left(error),
+    ) shouldBe
       Left(error)
   }
 }

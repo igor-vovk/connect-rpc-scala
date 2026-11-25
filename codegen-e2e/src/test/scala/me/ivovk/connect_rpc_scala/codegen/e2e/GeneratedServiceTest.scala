@@ -1,7 +1,7 @@
 package me.ivovk.connect_rpc_scala.codegen.e2e
 
 import cats.data.Kleisli
-import cats.effect.{IO, Resource}
+import cats.effect.{IO, Resource, SyncIO}
 import cats.effect.unsafe.implicits.global
 import cats.syntax.foldable.*
 import codegen.e2e.calculator.{
@@ -19,19 +19,19 @@ import org.http4s.{Header, Headers, HttpApp, HttpVersion, Method, Request, Respo
 import me.ivovk.connect_rpc_scala.http.MediaTypes
 import me.ivovk.connect_rpc_scala.http4s.{ConnectHttp4sClientBuilder, ConnectHttp4sRouteBuilder}
 import me.ivovk.connect_rpc_scala.http4s.ConnectHttp4sClientBuilder.RequestCompression
-import me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
+import me.ivovk.connect_rpc_scala.interceptors.{ServerStreamingInterceptor, UnaryInterceptor}
 import me.ivovk.connect_rpc_scala.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.ci.*
+import org.typelevel.vault.Key
 import scalapb.GeneratedMessage
 
 import scala.concurrent.duration.*
 
 class GeneratedServiceTest extends AnyFunSuite with Matchers {
 
-  private object StreamingCalculatorServiceImpl
-      extends StreamingCalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+  private object StreamingCalculatorServiceImpl extends StreamingCalculatorServiceConnect.Service[IO] {
     override def addMany(
       request: AddRequest,
       _ctx: ConnectRequestContext,
@@ -45,8 +45,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     }
   }
 
-  private object FailingStreamingCalculatorServiceImpl
-      extends StreamingCalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+  private object FailingStreamingCalculatorServiceImpl extends StreamingCalculatorServiceConnect.Service[IO] {
     override def addMany(
       request: AddRequest,
       _ctx: ConnectRequestContext,
@@ -70,7 +69,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       IO.pure(AddResponse(request.left + request.right))
   }
 
-  private object CalculatorServiceImpl extends CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+  private object CalculatorServiceImpl extends CalculatorServiceConnect.Service[IO] {
     override def add(
       request: AddRequest,
       _ctx: ConnectRequestContext,
@@ -78,8 +77,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       IO.pure(ConnectResponse(AddResponse(request.left + request.right)))
   }
 
-  private object FailingCalculatorServiceImpl
-      extends CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+  private object FailingCalculatorServiceImpl extends CalculatorServiceConnect.Service[IO] {
     override def add(
       request: AddRequest,
       ctx: ConnectRequestContext,
@@ -94,8 +92,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       )
   }
 
-  private object SlowCalculatorServiceImpl
-      extends CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+  private object SlowCalculatorServiceImpl extends CalculatorServiceConnect.Service[IO] {
     override def add(
       request: AddRequest,
       ctx: ConnectRequestContext,
@@ -103,12 +100,15 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       IO.pure(request).flatMap(_ => IO.never)
   }
 
-  private final case class AuthenticatedContext(connect: ConnectRequestContext, user: String)
+  private final case class Principal(user: String)
+  private final case class RequestId(value: String)
 
-  private final case class ServiceContext(authenticated: AuthenticatedContext, requestId: String)
+  private val principalKey                 = Key.newKey[SyncIO, Principal].unsafeRunSync()
+  private val requestIdKey                 = Key.newKey[SyncIO, RequestId].unsafeRunSync()
+  private given AttributeReader[Principal] = AttributeReader.fromKey(principalKey)
+  private given AttributeReader[RequestId] = AttributeReader.fromKey(requestIdKey)
 
-  private object AuthenticationInterceptor
-      extends UnaryInterceptor[IO, ConnectRequestContext, AuthenticatedContext] {
+  private object AuthenticationInterceptor extends UnaryInterceptor[IO] {
 
     override def intercept[
       Request <: GeneratedMessage,
@@ -117,11 +117,11 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       _descriptor: UnaryMethodDescriptor[Request, Response],
       _request: Request,
       context: ConnectRequestContext,
-      next: AuthenticatedContext => IO[ConnectResponse[Response]],
+      next: ConnectRequestContext => IO[ConnectResponse[Response]],
     ): IO[ConnectResponse[Response]] =
       context.headers.get(ci"authorization").map(_.head.value) match {
         case Some(user) =>
-          next(AuthenticatedContext(context, user)).map { response =>
+          next(context.withAttribute(principalKey, Principal(user))).map { response =>
             response.copy(headers = response.headers.put(Header.Raw(ci"x-authenticated-user", user)))
           }
         case None =>
@@ -129,7 +129,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       }
   }
 
-  private object RequestIdInterceptor extends UnaryInterceptor[IO, AuthenticatedContext, ServiceContext] {
+  private object RequestIdInterceptor extends UnaryInterceptor[IO] {
 
     override def intercept[
       Request <: GeneratedMessage,
@@ -137,11 +137,11 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     ](
       descriptor: UnaryMethodDescriptor[Request, Response],
       _request: Request,
-      context: AuthenticatedContext,
-      next: ServiceContext => IO[ConnectResponse[Response]],
+      context: ConnectRequestContext,
+      next: ConnectRequestContext => IO[ConnectResponse[Response]],
     ): IO[ConnectResponse[Response]] = {
-      val requestId = context.connect.headers.get(ci"x-request-id").map(_.head.value).getOrElse("missing")
-      next(ServiceContext(context, requestId)).map { response =>
+      val requestId = context.headers.get(ci"x-request-id").map(_.head.value).getOrElse("missing")
+      next(context.withAttribute(requestIdKey, RequestId(requestId))).map { response =>
         response.copy(
           headers = response.headers.put(
             Header.Raw(ci"x-request-id", requestId),
@@ -152,9 +152,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     }
   }
 
-  private final case class ClientContext(user: String, requestId: String)
-
-  private object ClientContextInterceptor extends UnaryInterceptor[IO, ClientContext, ConnectRequestContext] {
+  private object SendRequestId extends UnaryInterceptor[IO] {
 
     override def intercept[
       Request <: GeneratedMessage,
@@ -162,30 +160,32 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
     ](
       descriptor: UnaryMethodDescriptor[Request, Response],
       _request: Request,
-      context: ClientContext,
+      context: ConnectRequestContext,
       next: ConnectRequestContext => IO[ConnectResponse[Response]],
     ): IO[ConnectResponse[Response]] =
-      next(
-        ConnectRequestContext(
-          headers = Headers(
-            Header.Raw(ci"authorization", context.user),
-            Header.Raw(ci"x-request-id", context.requestId),
-          )
-        )
-      ).map { response =>
+      next(withRequestIdHeader(context)).map { response =>
         response.copy(headers = response.headers.put(Header.Raw(ci"x-client-method", descriptor.method)))
       }
   }
 
-  private object ContextualCalculatorServiceImpl
-      extends CalculatorServiceConnect.Service[IO, ServiceContext] {
+  private def withRequestIdHeader(context: ConnectRequestContext): ConnectRequestContext =
+    context.attribute[RequestId].fold(context) { id =>
+      context.copy(headers = context.headers.put(Header.Raw(ci"x-request-id", id.value)))
+    }
+
+  private def requirePrincipal(context: ConnectRequestContext): IO[Principal] =
+    IO.fromOption(context.attribute[Principal])(
+      ConnectException(connectrpc.Code.Unauthenticated, "Missing authenticated principal")
+    )
+
+  private object AuthenticatedCalculatorService extends CalculatorServiceConnect.Service[IO] {
     override def add(
       request: AddRequest,
-      ctx: ServiceContext,
+      ctx: ConnectRequestContext,
     ): IO[ConnectResponse[AddResponse]] =
-      IO {
-        ctx.authenticated.user shouldBe "alice"
-        ctx.requestId shouldBe "request-1"
+      requirePrincipal(ctx).map { principal =>
+        principal.user shouldBe "alice"
+        ctx.attribute[RequestId] shouldBe Some(RequestId("request-1"))
         ConnectResponse(AddResponse(request.left + request.right))
       }
   }
@@ -297,7 +297,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
         Header.Raw(ci"content-length", "999"),
         Header.Raw(ci"transfer-encoding", "chunked"),
       )
-      val service = new CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+      val service = new CalculatorServiceConnect.Service[IO] {
         override def add(
           request: AddRequest,
           _ctx: ConnectRequestContext,
@@ -341,8 +341,27 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
   }
 
   test("generated server-streaming client receives messages and terminal trailers") {
+    val service = new StreamingCalculatorServiceConnect.Service[IO] {
+      override def addMany(
+        request: AddRequest,
+        ctx: ConnectRequestContext,
+      ): Resource[IO, ConnectStreamingResponse[IO, AddResponse]] =
+        Resource.eval(IO {
+          ctx.attribute[RequestId] shouldBe Some(RequestId("stream-1"))
+        }).flatMap(_ => StreamingCalculatorServiceImpl.addMany(request, ctx))
+    }
+    val readRequestId = ServerStreamingInterceptor.transformContext[IO] { ctx =>
+      IO {
+        val id = ctx.headers.get(ci"x-request-id").map(_.head.value).getOrElse("missing")
+        ctx.withAttribute(requestIdKey, RequestId(id))
+      }
+    }
+    val sendRequestId =
+      ServerStreamingInterceptor.transformContext[IO](ctx => IO.pure(withRequestIdHeader(ctx)))
+    val context = ConnectRequestContext().withAttribute(requestIdKey, RequestId("stream-1"))
+
     ConnectHttp4sRouteBuilder
-      .forService(StreamingCalculatorServiceConnect.bind(StreamingCalculatorServiceImpl))
+      .forService(StreamingCalculatorServiceConnect.bind(service, readRequestId))
       .build
       .use { app =>
         val builder = ConnectHttp4sClientBuilder(Client.fromHttpApp(app))
@@ -353,8 +372,9 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
 
         clients.traverse_ { (configured, mediaType) =>
           val client = StreamingCalculatorServiceConnect.Client[IO](configured.build(uri"http://localhost"))
+            .withInterceptor(sendRequestId)
 
-          client.addMany(AddRequest(11, 31), ConnectRequestContext()).use { response =>
+          client.addMany(AddRequest(11, 31), context).use { response =>
             response.stream.events.compile.toList.map { events =>
               response.headers.get[`Content-Type`].map(_.mediaType) shouldBe Some(mediaType)
               events shouldBe List(
@@ -459,17 +479,18 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
-  test("typed unary interceptors transform server and client contexts") {
-    val serverInterceptor = AuthenticationInterceptor.andThen(RequestIdInterceptor)
+  test("unary interceptors compose with typed attributes on the server and client") {
+    val serverInterceptor = RequestIdInterceptor.andThen(AuthenticationInterceptor)
 
     ConnectHttp4sRouteBuilder.forService(
-      CalculatorServiceConnect.bind(ContextualCalculatorServiceImpl, serverInterceptor)
+      CalculatorServiceConnect.bind(AuthenticatedCalculatorService, serverInterceptor)
     ).build
       .use { app =>
         val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
         val client    = CalculatorServiceConnect.Client[IO](transport)
-          .withInterceptor(ClientContextInterceptor)
-        val context = ClientContext("alice", "request-1")
+          .withInterceptor(SendRequestId)
+        val context = ConnectRequestContext(headers = Headers(Header.Raw(ci"authorization", "alice")))
+          .withAttribute(requestIdKey, RequestId("request-1"))
 
         client.add(AddRequest(11, 31), context).map { response =>
           response.message shouldBe AddResponse(42)
@@ -479,6 +500,24 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
           headerValues(response.headers, ci"x-client-method") shouldBe List(
             "codegen.e2e.CalculatorService/Add"
           )
+        }
+      }
+      .unsafeRunSync()
+  }
+
+  test("a client attribute cannot satisfy a server handler's required principal") {
+    ConnectHttp4sRouteBuilder.forService(
+      CalculatorServiceConnect.bind(AuthenticatedCalculatorService)
+    ).build
+      .use { app =>
+        val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
+        val client    = CalculatorServiceConnect.Client[IO](transport)
+        val context   = ConnectRequestContext(headers = Headers(Header.Raw(ci"authorization", "alice")))
+          .withAttribute(principalKey, Principal("alice"))
+
+        client.add(AddRequest(11, 31), context).attempt.map {
+          case Left(error: ConnectException) => error.code shouldBe connectrpc.Code.Unauthenticated
+          case result                        => fail(s"Expected an unauthenticated error, got $result")
         }
       }
       .unsafeRunSync()
@@ -497,7 +536,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .unsafeRunSync()
   }
 
-  test("typed unary interceptors apply to simple services") {
+  test("unary interceptors apply to simple services") {
     ConnectHttp4sRouteBuilder.forService(
       CalculatorServiceConnect.bind(SimpleCalculatorServiceImpl, AuthenticationInterceptor)
     ).build
@@ -531,7 +570,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
   }
 
   test("configuring the JSON codec preserves the explicit JSON encoding") {
-    val service = new CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+    val service = new CalculatorServiceConnect.Service[IO] {
       override def add(
         request: AddRequest,
         ctx: ConnectRequestContext,
@@ -604,7 +643,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
 
   test("client sends the configured user agent as a standard header") {
     val userAgent = "connect-rpc-scala-test/1.0"
-    val service   = new CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+    val service   = new CalculatorServiceConnect.Service[IO] {
       override def add(
         request: AddRequest,
         ctx: ConnectRequestContext,

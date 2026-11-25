@@ -20,8 +20,7 @@ private case class UnaryHandlerResponse(
   trailers: Headers,
 )
 
-class ConformanceServiceImpl[F[_]: Async]
-    extends ConformanceServiceConnect.Service[F, ConnectRequestContext] {
+class ConformanceServiceImpl[F[_]: Async] extends ConformanceServiceConnect.Service[F] {
 
   override def unary(
     request: UnaryRequest,

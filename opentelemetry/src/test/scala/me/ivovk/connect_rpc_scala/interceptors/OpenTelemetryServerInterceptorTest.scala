@@ -8,7 +8,12 @@ import io.opentelemetry.sdk.common.CompletableResultCode
 import io.opentelemetry.sdk.metrics.{InstrumentType, SdkMeterProvider}
 import io.opentelemetry.sdk.metrics.data.{AggregationTemporality, MetricData}
 import io.opentelemetry.sdk.metrics.`export`.{CollectionRegistration, MetricReader}
-import me.ivovk.connect_rpc_scala.{ConnectException, ConnectResponse, UnaryMethodDescriptor}
+import me.ivovk.connect_rpc_scala.{
+  ConnectException,
+  ConnectRequestContext,
+  ConnectResponse,
+  UnaryMethodDescriptor,
+}
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 
@@ -25,14 +30,15 @@ class OpenTelemetryServerInterceptorTest extends AnyFunSuite with Matchers {
   )
 
   private val request  = connectrpc.Error()
-  private val response = ConnectResponse(request.withMessage("context"))
+  private val context  = ConnectRequestContext()
+  private val response = ConnectResponse(request)
 
   test("records a start before completion and a duration for each outcome") {
     val reader = new TestReader
     Using.resource(SdkMeterProvider.builder().registerMetricReader(reader).build()) { provider =>
       val interceptor = OpenTelemetryServerInterceptor.builder
         .meter(provider.get("test"))
-        .build[IO, String]()
+        .build[IO]()
       val rejected = ConnectException(Code.PermissionDenied, "access denied")
       val failed   = IllegalStateException("unexpected failure")
 
@@ -41,7 +47,7 @@ class OpenTelemetryServerInterceptorTest extends AnyFunSuite with Matchers {
         fiber   <- interceptor.intercept[connectrpc.Error, connectrpc.Error](
           descriptor,
           request,
-          "context",
+          context,
           _ => entered.complete(()) *> IO.never,
         ).start
         _      <- entered.get
@@ -50,19 +56,23 @@ class OpenTelemetryServerInterceptorTest extends AnyFunSuite with Matchers {
         ok     <- interceptor.intercept(
           descriptor,
           request,
-          "context",
-          ctx => IO.pure(ConnectResponse(request.withMessage(ctx))),
+          context,
+          ctx =>
+            IO {
+              ctx should be theSameInstanceAs context
+              response
+            },
         )
         denied <- interceptor.intercept[connectrpc.Error, connectrpc.Error](
           descriptor,
           request,
-          "context",
+          context,
           _ => IO.raiseError(rejected),
         ).attempt
         internal <- interceptor.intercept[connectrpc.Error, connectrpc.Error](
           descriptor,
           request,
-          "context",
+          context,
           _ => throw failed,
         ).attempt
       } yield (before, ok, denied, internal)

@@ -20,7 +20,7 @@ import org.typelevel.ci.*
 
 class RouteBuilderTest extends AnyFunSuite with Matchers {
 
-  private object CalculatorServiceImpl extends CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+  private object CalculatorServiceImpl extends CalculatorServiceConnect.Service[IO] {
     override def add(
       request: AddRequest,
       _ctx: ConnectRequestContext,
@@ -30,7 +30,7 @@ class RouteBuilderTest extends AnyFunSuite with Matchers {
 
   private val service = CalculatorServiceConnect.bind(CalculatorServiceImpl)
 
-  private object TranscodingServiceImpl extends TranscodingServiceConnect.Service[IO, ConnectRequestContext] {
+  private object TranscodingServiceImpl extends TranscodingServiceConnect.Service[IO] {
     override def get(
       request: GetRequest,
       _ctx: ConnectRequestContext,

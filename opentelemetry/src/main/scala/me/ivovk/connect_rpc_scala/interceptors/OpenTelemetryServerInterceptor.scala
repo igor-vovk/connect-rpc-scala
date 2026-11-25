@@ -6,7 +6,12 @@ import connectrpc.Code
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.{AttributeKey, Attributes}
 import io.opentelemetry.api.metrics.Meter
-import me.ivovk.connect_rpc_scala.{ConnectException, ConnectResponse, UnaryMethodDescriptor}
+import me.ivovk.connect_rpc_scala.{
+  ConnectException,
+  ConnectRequestContext,
+  ConnectResponse,
+  UnaryMethodDescriptor,
+}
 import scalapb.GeneratedMessage
 
 import scala.jdk.CollectionConverters.*
@@ -40,7 +45,7 @@ object OpenTelemetryServerInterceptor {
     def meter(meter: Meter): Builder = copy(selectedMeter = meter)
 
     /** Builds an interceptor that records starts and outcomes for unary server calls. */
-    def build[F[_]: Sync, Context](): OpenTelemetryServerInterceptor[F, Context] =
+    def build[F[_]: Sync](): OpenTelemetryServerInterceptor[F] =
       new OpenTelemetryServerInterceptor(selectedMeter)
   }
 
@@ -55,8 +60,8 @@ object OpenTelemetryServerInterceptor {
   }
 }
 
-final class OpenTelemetryServerInterceptor[F[_], Context] private (meter: Meter)(using F: Sync[F])
-    extends UnaryInterceptor[F, Context, Context] {
+final class OpenTelemetryServerInterceptor[F[_]] private (meter: Meter)(using F: Sync[F])
+    extends UnaryInterceptor[F] {
   import OpenTelemetryServerInterceptor.*
 
   private val started = meter.counterBuilder("connectrpc.server.call.started")
@@ -70,11 +75,14 @@ final class OpenTelemetryServerInterceptor[F[_], Context] private (meter: Meter)
     .setExplicitBucketBoundariesAdvice(LatencyBuckets)
     .build()
 
-  override def intercept[Request <: GeneratedMessage, Response <: GeneratedMessage](
+  override def intercept[
+    Request <: GeneratedMessage,
+    Response <: GeneratedMessage,
+  ](
     descriptor: UnaryMethodDescriptor[Request, Response],
     request: Request,
-    context: Context,
-    next: Context => F[ConnectResponse[Response]],
+    context: ConnectRequestContext,
+    next: ConnectRequestContext => F[ConnectResponse[Response]],
   ): F[ConnectResponse[Response]] = {
     val attributes = Attributes.of(MethodKey, s"${descriptor.serviceName}/${descriptor.methodName}")
 
