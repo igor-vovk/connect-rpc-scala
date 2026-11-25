@@ -30,17 +30,17 @@ object ExampleServiceConnect {
     def healthCheck(request: test.example.Request): F[test.example.Response]
   }
 
-  trait Service[F[_], Context] {
-    def call(request: test.example.Request, ctx: Context): F[ConnectResponse[test.example.Response]]
-    def healthCheck(request: test.example.Request, ctx: Context): F[ConnectResponse[test.example.Response]]
+  trait Service[F[_]] {
+    def call(request: test.example.Request, ctx: ConnectRequestContext): F[ConnectResponse[test.example.Response]]
+    def healthCheck(request: test.example.Request, ctx: ConnectRequestContext): F[ConnectResponse[test.example.Response]]
   }
 
   def bind[F[_]: _root_.cats.Functor](service: SimpleService[F]): ServiceDefinition[F] =
-    bind(service, UnaryInterceptor.identity[F, ConnectRequestContext])
+    bind(service, UnaryInterceptor.identity[F])
 
-  def bind[F[_]: _root_.cats.Functor, Context](
+  def bind[F[_]: _root_.cats.Functor](
     service: SimpleService[F],
-    interceptor: UnaryInterceptor[F, ConnectRequestContext, Context],
+    interceptor: UnaryInterceptor[F],
   ): ServiceDefinition[F] =
     ServiceDefinition(
       name = serviceName,
@@ -68,12 +68,12 @@ object ExampleServiceConnect {
       ),
     )
 
-  def bind[F[_]](service: Service[F, ConnectRequestContext]): ServiceDefinition[F] =
-    bind(service, UnaryInterceptor.identity[F, ConnectRequestContext])
+  def bind[F[_]](service: Service[F]): ServiceDefinition[F] =
+    bind(service, UnaryInterceptor.identity[F])
 
-  def bind[F[_], Context](
-    service: Service[F, Context],
-    interceptor: UnaryInterceptor[F, ConnectRequestContext, Context],
+  def bind[F[_]](
+    service: Service[F],
+    interceptor: UnaryInterceptor[F],
   ): ServiceDefinition[F] =
     ServiceDefinition(
       name = serviceName,
@@ -116,7 +116,7 @@ object ExampleServiceConnect {
   }
 
   final class Client[F[_]](transport: UnaryTransport[F])
-      extends Service[F, ConnectRequestContext] {
+      extends Service[F] {
     override def call(
       request: test.example.Request,
       ctx: ConnectRequestContext,
@@ -129,13 +129,13 @@ object ExampleServiceConnect {
     ): F[ConnectResponse[test.example.Response]] =
       transport.unary(METHOD_HEALTHCHECK, request, ctx)
 
-    def withInterceptor[Context](
-      interceptor: UnaryInterceptor[F, Context, ConnectRequestContext]
-    ): Service[F, Context] =
-      new Service[F, Context] {
+    def withInterceptor(
+      interceptor: UnaryInterceptor[F]
+    ): Service[F] =
+      new Service[F] {
         override def call(
           request: test.example.Request,
-          ctx: Context,
+          ctx: ConnectRequestContext,
         ): F[ConnectResponse[test.example.Response]] =
           interceptor.intercept(
             METHOD_CALL,
@@ -146,7 +146,7 @@ object ExampleServiceConnect {
 
         override def healthCheck(
           request: test.example.Request,
-          ctx: Context,
+          ctx: ConnectRequestContext,
         ): F[ConnectResponse[test.example.Response]] =
           interceptor.intercept(
             METHOD_HEALTHCHECK,

@@ -18,6 +18,7 @@ object Versions {
   val scalapbCommonProtos   = s"$googleCommonProtos-1"
   val slf4j                 = "2.0.20"
   val scalatest             = "3.2.20"
+  val vault                 = "3.7.0"
   val zio                   = "2.1.27"
   val zioInteropCats        = "23.1.0.14"
 }

@@ -135,6 +135,7 @@ lazy val core = project
       "io.github.scalapb-json" %% "scalapb-circe"   % "0.17.0",
       "co.fs2"                 %% "fs2-core"        % Versions.fs2,
       "org.http4s"             %% "http4s-core"     % Versions.http4s,
+      "org.typelevel"          %% "vault"           % Versions.vault,
     ),
   )
 
@@ -280,7 +281,7 @@ lazy val example_interceptors = project.in(file("examples/interceptors"))
         (Compile / sourceManaged).value / "connect",
     ),
     libraryDependencies ++= Seq(
-      "me.ivovk"        %% "cedi"                     % Versions.cedi,
+      "me.ivovk"        %% "cedi"                      % Versions.cedi,
       "io.opentelemetry" % "opentelemetry-sdk-metrics" % Versions.opentelemetry,
       "ch.qos.logback"   % "logback-classic"           % Versions.logback % Runtime,
     ),

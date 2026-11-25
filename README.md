@@ -92,13 +92,13 @@ message AddResponse {
 }
 ```
 
-the generator creates `CalculatorServiceConnect.Service[F, Context]`, `bind`, method descriptors, and
+the generator creates `CalculatorServiceConnect.Service[F]`, `bind`, method descriptors, and
 `CalculatorServiceConnect.Client[F]`:
 
 ```scala
 import me.ivovk.connect_rpc_scala.{ConnectRequestContext, ConnectResponse}
 
-object Calculator extends CalculatorServiceConnect.Service[IO, ConnectRequestContext] {
+object Calculator extends CalculatorServiceConnect.Service[IO] {
   override def add(
     request: AddRequest,
     ctx: ConnectRequestContext,
@@ -136,20 +136,44 @@ Use `buildRoutes` when the Connect routes need to be combined with other routes 
 Unary services can also expose Kubernetes health endpoints through transcoding; see
 [Kubernetes health checks](docs/kubernetes-health-checks.md).
 
-## Unary interceptors
+## Interceptors
 
 Import interceptors from `me.ivovk.connect_rpc_scala.interceptors`.
-`UnaryInterceptor[F, In, Out]` wraps a unary call and can transform its context from `In` to `Out`.
-Pass an interceptor to the generated server's `bind(service, interceptor)` or to the generated
-client's `withInterceptor(interceptor)`. Use `first.andThen(second)` to run `first` before `second`,
-passing the first interceptor's output context to the second.
+`UnaryInterceptor[F]` wraps a unary call, and `ServerStreamingInterceptor[F]` wraps a
+server-streaming call. Pass the interceptors for the service's method types to the generated
+server's `bind` or the generated client's `withInterceptor`. Use `first.andThen(second)` to run
+`first` before `second`, passing its updated `ConnectRequestContext` along.
 
-The `UnaryInterceptor` companion provides these helpers.
+Both companions provide `identity` to forward the context unchanged and `transformContext` to
+update it effectfully. `UnaryInterceptor.tapError` observes a failure with its method descriptor
+and propagates the original error if the callback succeeds.
 
-- `identity` forwards the context as-is.
-- `transformContext` runs an effectful function to produce the downstream context.
-- `tapError` runs a callback with the method descriptor and exception when a call fails. If the
-  callback succeeds, the call propagates its original exception.
+### Typed request attributes
+
+Interceptors can store values under independent typed keys. Allocate each key once and reuse it
+for writes and reads. A given `AttributeReader[A]` enables `context.attribute[A]`, which returns
+an `Option[A]`.
+
+```scala
+import cats.effect.SyncIO
+import me.ivovk.connect_rpc_scala.{AttributeReader, ConnectRequestContext}
+import org.typelevel.vault.Key
+
+final case class RequestId(value: String)
+val requestIdKey = Key.newKey[SyncIO, RequestId].unsafeRunSync()
+given AttributeReader[RequestId] = AttributeReader.fromKey(requestIdKey)
+
+val context = ConnectRequestContext().withAttribute(requestIdKey, RequestId("request-1"))
+val requestId = context.attribute[RequestId]
+```
+
+Attributes stay local to the client or server call. To send a value across the wire, write it to
+a header and read that header on the receiving side. For required attributes such as an
+authenticated principal, handle `None` at the point of use by returning the appropriate Connect
+error.
+
+Regenerate service definitions when upgrading from typed contexts. Generated handlers now
+implement `Service[F]` with a `ConnectRequestContext` parameter.
 
 ### RPC error logging
 
@@ -162,7 +186,7 @@ any effect that has a Cats `MonadThrow` instance.
 ```scala
 import me.ivovk.connect_rpc_scala.interceptors.ErrorLoggingInterceptor
 
-val logging = ErrorLoggingInterceptor.builder[IO].build[ConnectRequestContext]()
+val logging = ErrorLoggingInterceptor.builder[IO].build()
 val service = CalculatorServiceConnect.bind(Calculator, logging)
 ```
 
@@ -172,7 +196,7 @@ Use `withCodeFilter` to choose which Connect codes to log. A log4cats logger can
 ```scala
 val logging = ErrorLoggingInterceptor.builder[IO]
   .withLogger((message, cause) => appLogger.error(cause)(message))
-  .build[ConnectRequestContext]()
+  .build()
 ```
 
 ### OpenTelemetry metrics
@@ -181,8 +205,9 @@ val logging = ErrorLoggingInterceptor.builder[IO]
 `connect-rpc-scala-opentelemetry` and supply an OpenTelemetry SDK or `Meter` to its builder.
 For configuration and metric names, see the [OpenTelemetry module README](opentelemetry/README.md).
 
-Bind `metrics.andThen(logging)` to use both interceptors on a service. The runnable example also
-uses `transformContext` on the client to send a request ID. [Interceptor example](examples/interceptors/README.md)
+Bind `metrics.andThen(logging)` to use both interceptors on a service. The runnable example uses
+typed attributes and a header to pass a request ID from the client to the handler.
+[Interceptor example](examples/interceptors/README.md)
 
 ## http4s client
 

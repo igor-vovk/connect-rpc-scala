@@ -1,10 +1,14 @@
 package me.ivovk.connect_rpc_scala.interceptors
 
 import cats.effect.Resource
-import me.ivovk.connect_rpc_scala.{ConnectStreamingResponse, ServerStreamingMethodDescriptor}
+import me.ivovk.connect_rpc_scala.{
+  ConnectRequestContext,
+  ConnectStreamingResponse,
+  ServerStreamingMethodDescriptor,
+}
 import scalapb.GeneratedMessage
 
-trait ServerStreamingInterceptor[F[_], In, Out] { self =>
+trait ServerStreamingInterceptor[F[_]] { self =>
 
   def intercept[
     Request <: GeneratedMessage,
@@ -12,22 +16,22 @@ trait ServerStreamingInterceptor[F[_], In, Out] { self =>
   ](
     descriptor: ServerStreamingMethodDescriptor[Request, Response],
     request: Request,
-    context: In,
-    next: Out => Resource[F, ConnectStreamingResponse[F, Response]],
+    context: ConnectRequestContext,
+    next: ConnectRequestContext => Resource[F, ConnectStreamingResponse[F, Response]],
   ): Resource[F, ConnectStreamingResponse[F, Response]]
 
-  final def andThen[Next](
-    interceptor: ServerStreamingInterceptor[F, Out, Next]
-  ): ServerStreamingInterceptor[F, In, Next] =
-    new ServerStreamingInterceptor[F, In, Next] {
+  final def andThen(
+    interceptor: ServerStreamingInterceptor[F]
+  ): ServerStreamingInterceptor[F] =
+    new ServerStreamingInterceptor[F] {
       override def intercept[
         Request <: GeneratedMessage,
         Response <: GeneratedMessage,
       ](
         descriptor: ServerStreamingMethodDescriptor[Request, Response],
         request: Request,
-        context: In,
-        next: Next => Resource[F, ConnectStreamingResponse[F, Response]],
+        context: ConnectRequestContext,
+        next: ConnectRequestContext => Resource[F, ConnectStreamingResponse[F, Response]],
       ): Resource[F, ConnectStreamingResponse[F, Response]] =
         self.intercept(
           descriptor,
@@ -40,32 +44,32 @@ trait ServerStreamingInterceptor[F[_], In, Out] { self =>
 
 object ServerStreamingInterceptor {
 
-  def identity[F[_], Context]: ServerStreamingInterceptor[F, Context, Context] =
-    new ServerStreamingInterceptor[F, Context, Context] {
+  def identity[F[_]]: ServerStreamingInterceptor[F] =
+    new ServerStreamingInterceptor[F] {
       override def intercept[
         Request <: GeneratedMessage,
         Response <: GeneratedMessage,
       ](
         descriptor: ServerStreamingMethodDescriptor[Request, Response],
         request: Request,
-        context: Context,
-        next: Context => Resource[F, ConnectStreamingResponse[F, Response]],
+        context: ConnectRequestContext,
+        next: ConnectRequestContext => Resource[F, ConnectStreamingResponse[F, Response]],
       ): Resource[F, ConnectStreamingResponse[F, Response]] =
         next(context)
     }
 
-  def transformContext[F[_], In, Out](
-    transform: In => F[Out]
-  ): ServerStreamingInterceptor[F, In, Out] =
-    new ServerStreamingInterceptor[F, In, Out] {
+  def transformContext[F[_]](
+    transform: ConnectRequestContext => F[ConnectRequestContext]
+  ): ServerStreamingInterceptor[F] =
+    new ServerStreamingInterceptor[F] {
       override def intercept[
         Request <: GeneratedMessage,
         Response <: GeneratedMessage,
       ](
         descriptor: ServerStreamingMethodDescriptor[Request, Response],
         request: Request,
-        context: In,
-        next: Out => Resource[F, ConnectStreamingResponse[F, Response]],
+        context: ConnectRequestContext,
+        next: ConnectRequestContext => Resource[F, ConnectStreamingResponse[F, Response]],
       ): Resource[F, ConnectStreamingResponse[F, Response]] =
         Resource.eval(transform(context)).flatMap(next)
     }
