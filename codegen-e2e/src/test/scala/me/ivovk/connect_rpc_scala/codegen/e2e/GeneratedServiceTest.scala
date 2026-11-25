@@ -480,7 +480,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
   }
 
   test("unary interceptors compose with typed attributes on the server and client") {
-    val serverInterceptor = RequestIdInterceptor.andThen(AuthenticationInterceptor)
+    val serverInterceptor = UnaryInterceptor.chain(RequestIdInterceptor, AuthenticationInterceptor)
 
     ConnectHttp4sRouteBuilder.forService(
       CalculatorServiceConnect.bind(AuthenticatedCalculatorService, serverInterceptor)
@@ -488,7 +488,7 @@ class GeneratedServiceTest extends AnyFunSuite with Matchers {
       .use { app =>
         val transport = ConnectHttp4sClientBuilder(Client.fromHttpApp(app)).build(uri"http://localhost")
         val client    = CalculatorServiceConnect.Client[IO](transport)
-          .withInterceptor(SendRequestId)
+          .withInterceptor(UnaryInterceptor.chain(SendRequestId))
         val context = ConnectRequestContext(headers = Headers(Header.Raw(ci"authorization", "alice")))
           .withAttribute(requestIdKey, RequestId("request-1"))
 

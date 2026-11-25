@@ -71,7 +71,7 @@ object Main extends IOApp.Simple {
         .meter(meterProvider.get("interceptors-example"))
         .build[IO]()
       val logging = ErrorLoggingInterceptor.builder[IO].build()
-      val service = EchoServiceConnect.bind(Echo, metrics.andThen(logging).andThen(readRequestId))
+      val service = EchoServiceConnect.bind(Echo, UnaryInterceptor.chain(metrics, logging, readRequestId))
       ConnectHttp4sRouteBuilder.forService(service).build
 
     lazy val client: EchoServiceConnect.Service[IO] = {
