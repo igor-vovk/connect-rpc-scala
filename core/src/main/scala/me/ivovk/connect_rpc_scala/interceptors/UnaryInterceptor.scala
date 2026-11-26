@@ -40,6 +40,13 @@ trait UnaryInterceptor[F[_]] { self =>
 
 object UnaryInterceptor {
 
+  /**
+   * Composes a stack that handles requests in order and responses and errors in reverse order. An empty stack
+   * forwards the call unchanged.
+   */
+  def chain[F[_]](interceptors: UnaryInterceptor[F]*): UnaryInterceptor[F] =
+    interceptors.reduceRightOption(_.andThen(_)).getOrElse(identity[F])
+
   def identity[F[_]]: UnaryInterceptor[F] =
     new UnaryInterceptor[F] {
       override def intercept[

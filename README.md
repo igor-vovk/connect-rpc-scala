@@ -148,6 +148,29 @@ Both companions provide `identity` to forward the context unchanged and `transfo
 update it effectfully. `UnaryInterceptor.tapError` observes a failure with its method descriptor
 and propagates the original error if the callback succeeds.
 
+### Unary interceptor stacks
+
+Use `UnaryInterceptor.chain` to declare a stack at a generated service binding or pass it to
+the generated client's `withInterceptor`. An empty chain forwards the call unchanged.
+
+```scala
+import me.ivovk.connect_rpc_scala.interceptors.UnaryInterceptor
+
+UserServiceConnect.bind(
+  service,
+  UnaryInterceptor.chain(
+    errorLoggingInterceptor,
+    internalApiKeyInterceptor,
+    RequesterUserIdInterceptor,
+  ),
+)
+```
+
+Requests enter in the listed order. Responses and errors unwind in reverse, so the logging
+interceptor sees failures from authentication, requester validation, and the handler. For
+`ErrorLoggingInterceptor`, use `withCodeFilter` to include the client error codes you want to log.
+Connect Go uses the same ordering. [Connect Go WithInterceptors](https://pkg.go.dev/connectrpc.com/connect#WithInterceptors)
+
 ### Typed request attributes
 
 Interceptors can store values under independent typed keys. Allocate each key once and reuse it
